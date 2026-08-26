@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit Coverage &amp; Quality Governance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#1B2430;
+    --ink-soft:#4A5568;
+    --paper:#F6F4EE;
+    --surface:#FFFFFF;
+    --surface-2:#FBFAF6;
+    --line:#E4DFD1;
+    --line-strong:#D3CCB8;
+    --accent:#0E6B5C;
+    --accent-ink:#0A4E43;
+    --accent-soft:#E2F0EA;
+    --accent-soft-line:#BFDCCE;
+    --good:#2E7D46;
+    --good-soft:#E5F3E7;
+    --warn:#A8650F;
+    --warn-soft:#FBEEDA;
+    --crit:#AE2E20;
+    --crit-soft:#FBE7E2;
+    --shadow: 0 1px 2px rgba(27,36,48,.06), 0 6px 20px -8px rgba(27,36,48,.10);
+    --font-display:'Fraunces', Georgia, 'Iowan Old Style', serif;
+    --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EDE9DE; --ink-soft:#AFA890; --paper:#181A16; --surface:#212319; --surface-2:#1D1F17;
+      --line:#34362A; --line-strong:#43452F; --accent:#4FBFA3; --accent-ink:#8FDCC6;
+      --accent-soft:#1C2E28; --accent-soft-line:#2E4A3F; --good:#5FBF7A; --good-soft:#1B2A1E;
+      --warn:#E0A64B; --warn-soft:#332711; --crit:#E37060; --crit-soft:#341C17;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#EDE9DE; --ink-soft:#AFA890; --paper:#181A16; --surface:#212319; --surface-2:#1D1F17;
+    --line:#34362A; --line-strong:#43452F; --accent:#4FBFA3; --accent-ink:#8FDCC6;
+    --accent-soft:#1C2E28; --accent-soft-line:#2E4A3F; --good:#5FBF7A; --good-soft:#1B2A1E;
+    --warn:#E0A64B; --warn-soft:#332711; --crit:#E37060; --crit-soft:#341C17;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  html{background:var(--paper)}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-body); font-size:14px; line-height:1.5;
+    padding:28px clamp(14px,3vw,36px) 60px; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent-ink)}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font-family:inherit}
+  button:focus-visible, a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ===== Header ===== */
+  .top{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap;
+    padding-bottom:18px; margin-bottom:22px; border-bottom:1px solid var(--line-strong); }
+  .top-id{display:flex;align-items:center;gap:14px}
+  .mark{ font-family:var(--font-mono); font-weight:600; font-size:12.5px; letter-spacing:.06em;
+    background:var(--accent); color:var(--surface); padding:7px 10px; border-radius:5px; white-space:nowrap; }
+  .top-title h1{ font-family:var(--font-display); font-weight:600; font-size:26px; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+  .top-title p{ margin:3px 0 0; color:var(--ink-soft); font-size:12.5px; letter-spacing:.02em; }
+  .top-meta{ text-align:right; font-size:12px; color:var(--ink-soft); display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+  .top-meta b{color:var(--ink);font-weight:600}
+  .status-chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft);
+    border:1px solid var(--accent-soft-line); color:var(--accent-ink);
+    padding:4px 10px 4px 8px; border-radius:99px; font-size:11px; font-weight:600; letter-spacing:.02em;
+    cursor:default;
+  }
+  .status-chip.stale{background:var(--warn-soft);border-color:#E4C68A;color:var(--warn)}
+  .status-chip.off{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-soft)}
+  .status-chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .status-chip.stale .dot{background:var(--warn)}
+  .status-chip.off .dot{background:var(--ink-soft)}
+  .refresh-btn{
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-soft);
+    font-size:10.5px; font-weight:600; letter-spacing:.03em; padding:3px 8px; border-radius:6px; cursor:pointer;
+  }
+  .refresh-btn:hover{color:var(--ink); border-color:var(--accent)}
+
+  /* ===== Section labels ===== */
+  .section-label{ font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-soft); display:flex; align-items:center; gap:8px; margin:0 0 12px; }
+  .section-label .n{color:var(--accent-ink)}
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  /* ===== KPI strip ===== */
+  .kpi-row{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:30px; }
+  .panel .kpi-row{grid-template-columns:repeat(3,1fr);margin-bottom:0}
+  .panel .kpi .val{font-size:20px}
+  .kpi{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 15px 13px; box-shadow:var(--shadow); position:relative; }
+  .kpi .lbl{ font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:8px; }
+  .kpi .val{ font-family:var(--font-mono); font-size:26px; font-weight:600; letter-spacing:-.01em; }
+  .kpi .val.good{color:var(--good)} .kpi .val.warn{color:var(--warn)} .kpi .val.crit{color:var(--crit)}
+  .kpi .sub{font-size:11px;color:var(--ink-soft);margin-top:5px}
+
+  /* ===== Layout grid ===== */
+  main{ display:grid; grid-template-columns:1.55fr 1fr; gap:16px; align-items:start; }
+  .col{display:flex;flex-direction:column;gap:16px}
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; box-shadow:var(--shadow); }
+  .panel h2{ font-family:var(--font-display); font-size:16px; font-weight:600; margin:0 0 3px; }
+  .panel .desc{font-size:12px;color:var(--ink-soft);margin:0 0 16px}
+
+  /* ===== Audit type stage tiles ===== */
+  .stage-row{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .stage{ border:1px solid var(--line); border-radius:9px; padding:11px 10px; background:var(--surface-2); border-top:3px solid var(--accent); }
+  .stage.flag{border-top-color:var(--warn)}
+  .stage.empty{border-top-color:var(--line-strong)}
+  .stage .nm{font-size:11px;font-weight:600;color:var(--ink-soft);letter-spacing:.02em;min-height:28px}
+  .stage .ct{font-family:var(--font-mono);font-size:21px;font-weight:600;margin-top:6px}
+  .stage .meter{height:5px;border-radius:3px;background:var(--line);margin-top:9px;overflow:hidden}
+  .stage .meter i{display:block;height:100%;background:var(--good)}
+  .stage .meter i.warn{background:var(--warn)}
+  .stage .pct{font-size:10.5px;color:var(--ink-soft);margin-top:5px;font-family:var(--font-mono)}
+
+  /* ===== Service line cards ===== */
+  .svc{ border:1px solid var(--line); border-radius:10px; padding:14px 16px 16px; background:var(--surface-2); margin-bottom:10px; }
+  .svc:last-child{margin-bottom:0}
+  .svc-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .svc-head .nm{font-weight:600;font-size:14.5px}
+  .svc-head .vol{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft)}
+  .svc-compare{display:flex;gap:14px;margin-top:10px;font-size:11px;flex-wrap:wrap}
+  .svc-compare div{display:flex;flex-direction:column;gap:2px}
+  .svc-compare .k{color:var(--ink-soft);letter-spacing:.03em}
+  .svc-compare .v{font-family:var(--font-mono);font-weight:600;font-size:14px}
+  .svc-bars{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+  .svc-bar{display:grid;grid-template-columns:150px 1fr 44px;align-items:center;gap:8px;font-size:11px}
+  .svc-bar .nm{color:var(--ink)}
+  .svc-bar .track{height:7px;background:var(--line);border-radius:4px;overflow:hidden}
+  .svc-bar .track i{display:block;height:100%;background:var(--accent)}
+  .svc-bar .v{text-align:right;font-family:var(--font-mono);font-weight:600}
+  .svc-note{ margin-top:11px; font-size:11px; color:var(--ink-soft); background:var(--paper);
+    border:1px dashed var(--line-strong); border-radius:6px; padding:7px 10px; }
+
+  /* ===== Tables ===== */
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{ text-align:left; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft);
+    font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line-strong); white-space:nowrap; }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+  tr:last-child td{border-bottom:none}
+  td.num, th.num{text-align:right;font-family:var(--font-mono)}
+  .score-bar{display:inline-flex;align-items:center;gap:7px}
+  .score-bar .track{width:56px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .score-bar .track i{display:block;height:100%;background:var(--good)}
+  .score-bar.warn .track i{background:var(--warn)}
+  .empty-note{font-size:12px;color:var(--ink-soft);padding:6px 2px}
+
+  /* ===== Doctor coverage bars ===== */
+  .dc-row{display:grid;grid-template-columns:150px 1fr 96px;align-items:center;gap:10px;font-size:12px;padding:7px 0}
+  .dc-row + .dc-row{border-top:1px solid var(--line)}
+  .dc-row .track{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+  .dc-row .track i{display:block;height:100%;background:var(--accent)}
+  .dc-row .figs{text-align:right;font-family:var(--font-mono);color:var(--ink-soft)}
+  .dc-row .figs b{color:var(--ink)}
+
+  /* ===== Taxonomy reference ===== */
+  .tax-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .tax-col h3{ font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-ink);
+    margin:0 0 9px; padding-bottom:7px; border-bottom:1px solid var(--line-strong); }
+  .tax-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;max-height:420px;overflow-y:auto;padding-right:6px}
+  .tax-list li{display:flex;gap:8px;font-size:11.5px;line-height:1.45;color:var(--ink-soft)}
+  .tax-list b{ font-family:var(--font-mono); color:var(--ink); background:var(--surface-2); border:1px solid var(--line);
+    border-radius:5px; width:19px;height:19px; flex:none; display:flex;align-items:center;justify-content:center; font-size:10px; font-weight:600; }
+
+  /* ===== Footer ===== */
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-soft);
+    display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  footer code{ font-family:var(--font-mono); background:var(--surface-2); border:1px solid var(--line); padding:1px 5px; border-radius:4px; }
+
+  /* ===== Date filter bar ===== */
+  .filter-bar{ display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; margin-bottom:16px;
+    padding:12px 16px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; }
+  .filter-bar .fb-lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{ font-family:inherit; font-size:11px; font-weight:600; padding:5px 11px; border-radius:99px;
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-soft); cursor:pointer; letter-spacing:.01em; }
+  .chip:hover{border-color:var(--accent);color:var(--ink)}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .filter-dates{display:flex;align-items:center;gap:7px}
+  .filter-dates input[type=date]{ font-family:var(--font-mono); font-size:11.5px; border:1px solid var(--line-strong);
+    border-radius:6px; padding:4px 7px; background:var(--surface); color:var(--ink); }
+  .filter-dates span{color:var(--ink-soft);font-size:11px}
+  .filter-range{margin-left:auto;font-size:11.5px;color:var(--ink-soft);text-align:right}
+  .filter-range b{color:var(--ink);font-family:var(--font-mono)}
+
+  /* ===== MTD banner ===== */
+  .mtd-banner{ display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap;
+    background:var(--accent-soft); border:1px solid var(--accent-soft-line); border-radius:12px;
+    padding:14px 20px; margin-bottom:24px; }
+  .mtd-banner .mtd-head{min-width:150px}
+  .mtd-banner .mtd-head .t{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--accent-ink)}
+  .mtd-banner .mtd-head .s{font-size:11px;color:var(--ink-soft);margin-top:2px}
+  .mtd-stats{display:flex;gap:22px;flex-wrap:wrap}
+  .mtd-stat{text-align:right}
+  .mtd-stat .k{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);white-space:nowrap}
+  .mtd-stat .v{font-family:var(--font-mono);font-weight:600;font-size:16px;margin-top:1px}
+
+  /* ===== Reason mix / genuine split ===== */
+  .gc-split{display:flex;gap:12px;margin-bottom:14px}
+  .gc-pill{flex:1;text-align:center;border-radius:8px;padding:9px 6px;border:1px solid var(--line)}
+  .gc-pill .v{font-family:var(--font-mono);font-weight:600;font-size:19px}
+  .gc-pill .k{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+  .gc-pill.yes{background:var(--good-soft);border-color:var(--accent-soft-line)}
+  .gc-pill.no{background:var(--crit-soft);border-color:#f0c6bd}
+  .reason-row{display:grid;grid-template-columns:1fr 90px 34px;align-items:center;gap:8px;font-size:11.5px;padding:5px 0}
+  .reason-row .nm{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .reason-row .track{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+  .reason-row .track i{display:block;height:100%;background:var(--accent)}
+  .reason-row .v{text-align:right;font-family:var(--font-mono);font-weight:600}
+
+  @media (max-width:980px){
+    .kpi-row{grid-template-columns:repeat(3,1fr)}
+    main{grid-template-columns:1fr}
+    .stage-row{grid-template-columns:repeat(3,1fr)}
+    .tax-cols{grid-template-columns:1fr}
+    .mtd-stats{gap:14px}
+  }
+  @media (max-width:560px){
+    .kpi-row{grid-template-columns:repeat(2,1fr)}
+    .stage-row{grid-template-columns:repeat(2,1fr)}
+    .svc-compare{flex-wrap:wrap}
+    .filter-range{margin-left:0;text-align:left;width:100%}
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="top-id">
+    <span class="mark">APOLLO 24|7</span>
+    <div class="top-title">
+      <h1>Audit Coverage &amp; Quality Governance</h1>
+      <p>Overall Audit Summary &middot; Project &amp; Auditor allocation &middot; CS ticket volumes &middot; critical-error register</p>
+    </div>
+  </div>
+  <div class="top-meta">
+    <span class="status-chip off" id="statusChip"><span class="dot"></span><span id="statusText">Loading&hellip;</span></span>
+    <span>Data through: <b id="periodLabel">&mdash;</b></span>
+    <span id="asOfLine">Snapshot: <b id="asOfLabel">&mdash;</b> <button class="refresh-btn" id="refreshBtn" type="button" style="display:none">Refresh</button></span>
+  </div>
+</div>
+
+<div class="mtd-banner" id="mtdBanner">
+  <div class="mtd-head">
+    <div class="t">Month to Date (MTD) Summary</div>
+    <div class="s" id="mtdRangeLabel">&mdash;</div>
+  </div>
+  <div class="mtd-stats" id="mtdStats"></div>
+</div>
+
+<p class="section-label"><span class="n">01</span> Overall Audit Summary</p>
+<div class="filter-bar">
+  <span class="fb-lbl">Range</span>
+  <div class="chip-row" id="chipRow"></div>
+  <div class="filter-dates">
+    <input type="date" id="filterStart"><span>&ndash;</span><input type="date" id="filterEnd">
+  </div>
+  <div class="filter-range" id="filterRangeLabel"></div>
+</div>
+<div class="kpi-row" id="overallKpiRow"></div>
+
+<div class="panel" style="margin-bottom:24px">
+  <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Audit Type</th><th class="num">Total Volume</th><th class="num">Total Audits Populated</th><th class="num">Allocated Audits</th><th class="num">% Audits from Total Volume</th><th class="num">% Allocated Audits</th><th class="num">Avg Audit Score</th></tr></thead>
+      <tbody id="projectTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;margin-bottom:30px" id="auditorCancelGrid">
+  <div class="panel">
+    <p class="section-label" style="margin-bottom:4px"><span class="n">03</span> Auditor&#8209;wise Allocation Summary</p>
+    <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. audit <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th></tr></thead>
+        <tbody id="auditorTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>PDS Cancellation &mdash; reason mix</h2>
+    <p class="desc" id="cancelDesc">Genuine-cancellation review, selected range.</p>
+    <div class="gc-split" id="gcSplit"></div>
+    <div id="reasonList"></div>
+    <h2 style="margin-top:18px;font-size:14px">Auditor working time</h2>
+    <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. PDS Cancellation reviews only for now.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg Time/Day</th></tr></thead>
+        <tbody id="cancelTimeBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:30px" id="dailyTimePanel">
+  <h2>Daily Working Time &mdash; by auditor &amp; date</h2>
+  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent on cancellation reviews, day by day, in the selected range (from Audit Start/End Time). Sorted newest date first.</p>
+  <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+    <table>
+      <thead><tr><th>Date</th><th>Auditor</th><th class="num">Reviews</th><th class="num">Time Spent</th></tr></thead>
+      <tbody id="dailyTimeBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<main>
+  <div class="col">
+
+    <div class="panel">
+      <p class="section-label" style="margin-bottom:4px"><span class="n">04</span> Latest Audited Day Snapshot</p>
+      <p class="desc" style="margin-bottom:16px" id="snapshotNote">Note : Please find the Audited Data Dated : &mdash;</p>
+      <div class="kpi-row" id="kpiRow" style="margin-bottom:18px"></div>
+      <p class="section-label" style="margin-bottom:16px;font-size:10px">Auto&#8209;scored volume by audit type</p>
+      <div class="stage-row" id="stageRow"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Service lines &mdash; CS ticket volume</h2>
+      <p class="desc">Month-to-date vs. the same date last month and the month before, from the CS ticketing sheet.</p>
+      <div id="svcContainer"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Critical-error definitions</h2>
+      <p class="desc">Reference rubric behind the zero-score flags above &mdash; Pharma consults vs. DC 2.0 (video) clinics. Static reference &mdash; changes rarely.</p>
+      <div class="tax-cols">
+        <div class="tax-col">
+          <h3>Pharma consults</h3>
+          <ul class="tax-list">
+            <li><b>1</b>Doctor issues a prescription without calling the patient / eliciting details.</li>
+            <li><b>2</b>GP issues meds for ED, OCP, premature ejaculation, antipsychotics, immunosuppressants, anabolic/oral steroids, anti-cancer, anti-HIV, warfarin, disulfiram or other addiction/TB medication without a specialist screening.</li>
+            <li><b>3</b>Prescription written for stockpiling &mdash; especially antibiotics and other high-risk drugs.</li>
+            <li><b>4</b>Proxy doctor conducts the consultation.</li>
+            <li><b>5</b>Doctor shares a personal contact number with the patient.</li>
+            <li><b>6</b>Doctor issues an empty prescription.</li>
+            <li><b>7</b>Prescription issued with the wrong route of administration.</li>
+            <li><b>8</b>Prescription issued for multiple patients on a single script.</li>
+            <li><b>9</b>GP issues a prescription for injectables.</li>
+            <li><b>10</b>Prescription issued for veterinary use.</li>
+            <li><b>11</b>Prescription issued for veterinary use (duplicate entry in source).</li>
+          </ul>
+        </div>
+        <div class="tax-col">
+          <h3>Non&#8209;Pharma &middot; DC 2.0 clinics</h3>
+          <ul class="tax-list">
+            <li><b>1</b>Doctor issues a prescription without calling the patient / eliciting details.</li>
+            <li><b>2</b>Doctor doesn't consistently dress in professional attire on video, or the call background/audio is informal.</li>
+            <li><b>3</b>Doctor shares a personal mobile number, or collects the patient's.</li>
+            <li><b>4</b>Prescription issued on a personal clinic letterhead via photo, bypassing the platform.</li>
+            <li><b>5</b>Proxy protocol not followed.</li>
+            <li><b>6</b>Empty prescription sent, or notes irrelevant to the consult.</li>
+            <li><b>7</b>Proxy doctor conducts the consultation.</li>
+            <li><b>8</b>IM/IV injectables approved without proper guidance in general advice.</li>
+            <li><b>9</b>MTP kits prescribed over video consult.</li>
+            <li><b>10</b>Prescription issued with the wrong route of administration.</li>
+            <li><b>11</b>Consultation conducted off-platform &mdash; WhatsApp, Google Meet, Zoom, LinkedIn, etc.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col">
+
+    <div class="panel">
+      <h2>Auditor Quality Score &mdash; leaderboard</h2>
+      <p class="desc" id="leaderboardDesc">Manually reviewed audits this period, across GLP / PDS Audit / Non Pharma / WLP.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Auditor</th><th class="num">Audits</th><th>Weighted score</th></tr></thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Doctor coverage by network</h2>
+      <p class="desc" id="doctorDesc">Doctors audited this period.</p>
+      <div id="doctorCoverage"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Project Wise Audit report</h2>
+      <p class="desc">Score&#8209;band distribution by audit type, latest audited day.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Row Labels</th><th class="num">&lt;90%</th><th class="num">90&ndash;94%</th><th class="num">95&ndash;100%</th><th class="num">Zero(0)</th><th class="num">Grand Total</th></tr></thead>
+          <tbody id="scoreBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <span>Sources: <code>Review of Audit Coverage.xlsx</code> (Project_Input, Auditor_Input &mdash; live, date&#8209;filterable) &middot; <code>PDS Cancellations &ndash; Audit Sheet_updated</code> (reason mix &amp; working time &mdash; live) &middot; fetched directly from Google on every page load and every 10 minutes after, straight from your browser &mdash; no Claude involved once this page is open, works on any web host. Score leaderboard, doctor coverage &amp; CS ticket panels below are a periodic snapshot, not yet live.</span>
+  <span id="fetchNote">&nbsp;</span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var FILE_AUDIT   = "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA";
+  var FILE_CS      = "19utnwA01R-poW79N2RlkzbzrTHdozns6Jo8TQjGMjqw";
+  var FILE_PROJECT = "1p4Q-Ta5ektvKsg0GSY377v1IOMmHwzVX"; /* Review of Audit Coverage.xlsx — Project_Input / Auditor_Input */
+  var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"; /* PDS Cancellations – Audit Sheet_updated */
+  var SERVER = "Google Drive";
+  var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
+
+  /* ---------- last-published static snapshot (fallback / initial paint) ---------- */
+  var STATIC_SNAPSHOT = {
+    fetchedAt: null,
+    period: "1–26 Aug 2026 (MTD)",
+    score: {
+      byType: [
+        {name:"GLP", zero:0, s95:3909, s90:230, sub90:0, total:4139},
+        {name:"PDS Audit", zero:111, s95:2245, s90:1409, sub90:0, total:3765},
+        {name:"PDS WLP", zero:3, s95:3439, s90:108, sub90:0, total:3550},
+        {name:"Non Pharma Audit", zero:90, s95:1103, s90:519, sub90:0, total:1712},
+        {name:"PDS Cancellation", zero:0, s95:0, s90:0, sub90:0, total:0}
+      ]
+    },
+    auditors: [
+      {auditor:"Dr. Yogitha", count:67, avgScore:94.4},
+      {auditor:"Dt. Mubaraka", count:67, avgScore:86.3},
+      {auditor:"Dt. Shravya", count:66, avgScore:92.9},
+      {auditor:"Dr. Preethi", count:65, avgScore:94.9},
+      {auditor:"Dr. Divya", count:64, avgScore:89.1},
+      {auditor:"Dr. Priyanka", count:62, avgScore:90.3},
+      {auditor:"Dr. Abhishek", count:10, avgScore:100}
+    ],
+    doctors: [
+      {type:"CLINIC_247", doctors:52, audits:64},
+      {type:"CLINIC_247_FRANCHISE", doctors:34, audits:43},
+      {type:"DOCTOR_CONNECT", doctors:28, audits:43},
+      {type:"ATHS_PHARMA", doctors:25, audits:37},
+      {type:"PAYROLL", doctors:6, audits:8}
+    ],
+    cs: {
+      Pharma: {mtd:8903, lmtd:9224, llmtd:8736, high:6878, medium:2025, avgRes:24543.9, avgFrt:43.6,
+        issues:[
+          {name:"Received wrong/different items", count:6608},
+          {name:"Dead on arrival (DOA)", count:1936},
+          {name:"Received expired items", count:248},
+          {name:"Quality issue", count:62},
+          {name:"Manufacturing defect/error", count:27},
+          {name:"Cold chain", count:9},
+          {name:"Adverse event", count:5}
+        ]},
+      Diagnostic: {mtd:1, lmtd:944, llmtd:1302, topIssue:"Report challenge"},
+      Consultation: {mtd:0, lmtd:159, llmtd:211, high:44, medium:115}
+    }
+  };
+
+  /* ---------- static fallback: Project_Input / Auditor_Input / cancellation reason mix ---------- */
+  /* rows: [dateISO, auditType, totalVolume, totalPopulated, allocatedAudits, avgScoreFraction|null] */
+  var STATIC_PROJECT_ROWS = [["2026-05-16","PDS",10506,165,150,0.84],["2026-05-16","PDS- Mounjaro",45,45,45,0.99],["2026-05-16","PDS Cancellation",69,14,14,0.79],["2026-05-16","Non Pharma",580,116,60,0.72],["2026-05-16","WLP - Non Pharma",15,15,15,1.0],["2026-05-18","PDS",12386,167,113,0.88],["2026-05-18","PDS- Mounjaro",120,120,120,0.97],["2026-05-18","PDS Cancellation",118,19,19,0.69],["2026-05-18","Non Pharma",800,119,48,0.89],["2026-05-18","WLP - Non Pharma",20,20,20,0.99],["2026-05-19","PDS",10730,172,160,0.88],["2026-05-19","PDS- Mounjaro",65,65,65,0.98],["2026-05-19","PDS Cancellation",53,24,24,0.83],["2026-05-19","Non Pharma",678,116,61,0.94],["2026-05-19","WLP - Non Pharma",6,6,6,1.0],["2026-05-20","PDS",11854,169,131,0.87],["2026-05-20","PDS- Mounjaro",59,59,59,0.98],["2026-05-20","PDS Cancellation",60,17,17,0.88],["2026-05-20","Non Pharma",674,114,45,0.98],["2026-05-21","PDS",11937,184,130,0.85],["2026-05-21","PDS- Mounjaro",73,73,73,0.99],["2026-05-21","PDS Cancellation",70,17,17,0.88],["2026-05-21","Non Pharma",641,123,60,0.85],["2026-05-21","WLP - Non Pharma",16,16,16,0.99],["2026-05-22","PDS",11574,178,78,0.81],["2026-05-22","PDS- Mounjaro",74,74,74,0.99],["2026-05-22","PDS Cancellation",71,15,15,0.87],["2026-05-22","Non Pharma",661,111,62,0.95],["2026-05-22","WLP - Non Pharma",7,7,7,0.98],["2026-05-23","PDS",10881,167,111,0.85],["2026-05-23","PDS- Mounjaro",51,51,51,0.99],["2026-05-23","PDS Cancellation",52,18,18,1.0],["2026-05-23","Non Pharma",598,106,74,0.96],["2026-05-23","WLP - Non Pharma",13,13,13,0.98],["2026-05-25","PDS",11837,164,100,0.87],["2026-05-25","PDS- Mounjaro",153,153,153,0.98],["2026-05-25","PDS Cancellation",100,19,19,0.79],["2026-05-25","Non Pharma",722,111,45,0.97],["2026-05-25","WLP - Non Pharma",38,38,38,0.99],["2026-05-26","PDS",11285,175,93,0.87],["2026-05-26","PDS- Mounjaro",71,71,71,1.0],["2026-05-26","PDS Cancellation",47,10,10,0.9],["2026-05-26","Non Pharma",725,115,65,0.93],["2026-05-26","WLP - Non Pharma",16,16,16,0.99],["2026-05-27","PDS",11325,170,104,0.84],["2026-05-27","PDS- Mounjaro",50,50,50,0.97],["2026-05-27","PDS Cancellation",64,29,29,0.93],["2026-05-27","Non Pharma",635,115,36,0.88],["2026-05-27","WLP - Non Pharma",5,5,5,1.0],["2026-05-28","PDS",11346,164,115,0.83],["2026-05-28","PDS- Mounjaro",63,63,63,0.99],["2026-05-28","PDS Cancellation",87,34,34,0.38],["2026-05-28","Non Pharma",672,108,51,0.87],["2026-05-28","WLP - Non Pharma",8,8,8,1.0],["2026-05-29","PDS",11477,149,122,0.87],["2026-05-29","PDS- Mounjaro",63,63,63,0.98],["2026-05-29","PDS Cancellation",61,16,16,0.63],["2026-05-29","Non Pharma",655,103,41,0.82],["2026-05-29","WLP - Non Pharma",11,11,11,1.0],["2026-05-30","PDS",11288,163,131,0.8],["2026-05-30","PDS- Mounjaro",77,77,77,0.99],["2026-05-30","PDS Cancellation",65,14,14,0.93],["2026-05-30","Non Pharma",618,100,56,0.91],["2026-05-30","WLP - Non Pharma",15,15,15,1.0],["2026-06-01","PDS",13376,151,136,0.83],["2026-06-01","PDS- Mounjaro",146,146,146,0.98],["2026-06-01","PDS Cancellation",129,49,49,0.93],["2026-06-01","Non Pharma",794,115,103,0.88],["2026-06-01","WLP - Non Pharma",23,23,23,1.0],["2026-06-02","PDS- Mounjaro",70,70,70,0.99],["2026-06-03","PDS",12238,163,163,0.89],["2026-06-03","PDS- Mounjaro",70,70,70,0.99],["2026-06-03","PDS Cancellation",75,12,12,0.91],["2026-06-03","Non Pharma",720,105,73,0.87],["2026-06-03","WLP - Non Pharma",23,23,23,1.0],["2026-06-04","PDS",12032,169,169,0.86],["2026-06-04","PDS- Mounjaro",65,65,65,0.99],["2026-06-04","PDS Cancellation",72,15,15,0.67],["2026-06-04","Non Pharma",674,102,45,0.94],["2026-06-04","WLP - Non Pharma",5,5,5,1.0],["2026-06-05","PDS",11710,172,172,0.87],["2026-06-05","PDS- Mounjaro",59,59,59,0.99],["2026-06-05","PDS Cancellation",61,19,19,0.95],["2026-06-05","Non Pharma",595,157,111,0.9],["2026-06-05","WLP - Non Pharma",6,6,6,1.0],["2026-06-06","PDS",11378,183,169,0.88],["2026-06-06","PDS- Mounjaro",65,65,65,0.99],["2026-06-06","PDS Cancellation",69,16,16,0.93],["2026-06-06","Non Pharma",644,106,74,0.88],["2026-06-06","WLP - Non Pharma",5,5,5,1.0],["2026-06-08","PDS",11144,158,119,0.89],["2026-06-08","PDS- Mounjaro",151,151,151,0.99],["2026-06-08","PDS Cancellation",137,28,28,0.92],["2026-06-08","Non Pharma",756,108,55,0.86],["2026-06-08","WLP - Non Pharma",12,12,12,1.0],["2026-06-09","PDS",12385,170,195,0.9],["2026-06-09","PDS- Mounjaro",77,77,77,0.99],["2026-06-09","PDS Cancellation",72,16,16,0.87],["2026-06-09","Non Pharma",786,123,110,0.9],["2026-06-09","WLP - Non Pharma",10,10,10,0.99],["2026-06-10","PDS",12200,163,141,0.88],["2026-06-10","PDS- Mounjaro",75,75,75,0.99],["2026-06-10","PDS Cancellation",70,13,13,0.84],["2026-06-10","Non Pharma",739,120,72,0.85],["2026-06-10","WLP - Non Pharma",27,27,27,1.0],["2026-06-11","PDS",12131,171,158,0.89],["2026-06-11","PDS- Mounjaro",82,82,82,0.99],["2026-06-11","PDS Cancellation",86,11,11,1.0],["2026-06-11","Non Pharma",674,107,60,0.89],["2026-06-11","WLP - Non Pharma",36,36,36,1.0],["2026-06-12","PDS",12253,179,214,0.87],["2026-06-12","PDS- Mounjaro",65,65,65,0.99],["2026-06-12","PDS Cancellation",92,35,35,0.85],["2026-06-12","Non Pharma",589,107,79,0.85],["2026-06-12","WLP - Non Pharma",30,30,30,0.99],["2026-06-13","PDS",11384,181,197,0.89],["2026-06-13","PDS- Mounjaro",74,74,74,0.99],["2026-06-13","PDS Cancellation",56,11,11,0.9],["2026-06-13","Non Pharma",646,115,100,0.9],["2026-06-13","WLP - Non Pharma",42,42,42,0.99],["2026-06-15","PDS",13112,174,117,0.93],["2026-06-15","PDS- Mounjaro",132,132,132,0.97],["2026-06-15","PDS Cancellation",151,30,30,0.93],["2026-06-15","Non Pharma",700,107,46,0.9],["2026-06-15","WLP - Non Pharma",57,57,57,1.0],["2026-06-16","PDS",11867,183,206,0.89],["2026-06-16","PDS- Mounjaro",64,64,64,0.98],["2026-06-16","PDS Cancellation",87,16,16,1.0],["2026-06-16","Non Pharma",700,111,103,0.92],["2026-06-16","WLP - Non Pharma",24,24,24,1.0],["2026-06-17","PDS",12101,186,139,0.89],["2026-06-17","PDS- Mounjaro",70,70,70,0.99],["2026-06-17","PDS Cancellation",83,17,17,0.82],["2026-06-17","Non Pharma",727,105,24,0.97],["2026-06-17","WLP - Non Pharma",33,33,33,1.0],["2026-06-18","PDS",11443,189,213,0.91],["2026-06-18","PDS- Mounjaro",63,63,63,0.99],["2026-06-18","PDS Cancellation",69,10,10,1.0],["2026-06-18","Non Pharma",690,118,60,0.94],["2026-06-18","WLP - Non Pharma",62,62,62,0.99],["2026-06-19","PDS",11751,187,207,0.91],["2026-06-19","PDS- Mounjaro",82,82,82,0.97],["2026-06-19","PDS Cancellation",63,17,17,0.82],["2026-06-19","Non Pharma",739,123,66,0.93],["2026-06-20","PDS",11083,186,209,0.91],["2026-06-20","PDS- Mounjaro",58,58,58,0.99],["2026-06-20","PDS Cancellation",92,37,37,0.89],["2026-06-20","Non Pharma",707,114,113,0.92],["2026-06-20","WLP - Non Pharma",18,18,18,0.99],["2026-06-21","WLP - Non Pharma",101,101,101,0.99],["2026-06-22","PDS",12546,181,125,0.92],["2026-06-22","PDS- Mounjaro",148,148,148,0.99],["2026-06-22","PDS Cancellation",181,45,45,0.8],["2026-06-22","Non Pharma",727,101,60,0.93],["2026-06-22","WLP - Non Pharma",54,54,54,0.99],["2026-06-23","PDS",12446,193,216,0.91],["2026-06-23","PDS- Mounjaro",74,74,74,0.99],["2026-06-23","PDS Cancellation",102,29,29,0.93],["2026-06-23","Non Pharma",751,117,93,0.93],["2026-06-23","WLP - Non Pharma",72,14,14,0.95],["2026-06-24","PDS",11781,191,180,0.92],["2026-06-24","PDS- Mounjaro",72,72,72,0.99],["2026-06-24","PDS Cancellation",104,21,21,0.95],["2026-06-24","Non Pharma",766,116,54,0.94],["2026-06-25","PDS",11481,194,224,0.9],["2026-06-25","PDS- Mounjaro",60,60,60,0.99],["2026-06-25","PDS Cancellation",72,24,24,0.91],["2026-06-25","Non Pharma",743,108,90,0.86],["2026-06-25","WLP - Non Pharma",6,6,6,1.0],["2026-06-26","PDS",11211,199,201,0.92],["2026-06-26","PDS- Mounjaro",71,71,71,0.99],["2026-06-26","PDS Cancellation",75,13,13,0.92],["2026-06-26","Non Pharma",712,109,83,0.93],["2026-06-26","WLP - Non Pharma",10,10,10,1.0],["2026-06-27","PDS",11846,193,165,0.92],["2026-06-27","PDS- Mounjaro",74,74,74,0.99],["2026-06-27","PDS Cancellation",66,17,17,0.94],["2026-06-27","Non Pharma",763,104,78,0.97],["2026-06-27","WLP - Non Pharma",30,30,30,0.96],["2026-06-29","PDS",13579,174,110,0.9],["2026-06-29","PDS- Mounjaro",157,157,157,0.99],["2026-06-29","PDS Cancellation",148,23,23,0.91],["2026-06-29","Non Pharma",764,101,60,0.95],["2026-06-29","WLP - Non Pharma",47,47,47,0.99],["2026-06-30","PDS",12957,197,230,0.91],["2026-06-30","PDS- Mounjaro",67,67,67,0.99],["2026-06-30","PDS Cancellation",83,16,16,0.93],["2026-06-30","Non Pharma",805,110,90,0.92],["2026-06-30","WLP - Non Pharma",69,69,69,0.99],["2026-07-01","PDS",12915,192,193,0.92],["2026-07-01","PDS- Mounjaro",86,86,86,0.99],["2026-07-01","PDS Cancellation",81,17,17,0.94],["2026-07-01","Non Pharma",798,107,107,0.89],["2026-07-01","WLP - Non Pharma",52,52,52,0.99],["2026-07-02","PDS",12101,194,219,0.89],["2026-07-02","PDS- Mounjaro",71,71,71,0.99],["2026-07-02","PDS Cancellation",78,19,19,0.89],["2026-07-02","Non Pharma",706,99,99,0.89],["2026-07-02","WLP - Non Pharma",33,33,33,1.0],["2026-07-03","PDS",13714,200,115,0.9],["2026-07-03","PDS- Mounjaro",96,96,96,0.99],["2026-07-03","PDS Cancellation",81,16,16,0.93],["2026-07-03","Non Pharma",735,106,56,0.93],["2026-07-03","WLP - Non Pharma",54,54,54,0.99],["2026-07-04","PDS",12729,198,186,0.9],["2026-07-04","PDS- Mounjaro",69,69,69,0.99],["2026-07-04","PDS Cancellation",75,21,21,0.95],["2026-07-04","Non Pharma",704,101,47,0.93],["2026-07-04","WLP - Non Pharma",42,42,42,0.99],["2026-07-06","PDS",14537,189,151,0.9],["2026-07-06","PDS- Mounjaro",169,169,169,0.99],["2026-07-06","PDS Cancellation",171,32,32,0.78],["2026-07-06","Non Pharma",825,109,67,0.88],["2026-07-06","WLP - Non Pharma",78,78,78,0.99],["2026-07-07","PDS",13638,195,219,0.9],["2026-07-07","PDS- Mounjaro",102,102,102,0.99],["2026-07-07","PDS Cancellation",83,11,11,1.0],["2026-07-07","Non Pharma",781,119,75,0.88],["2026-07-07","WLP - Non Pharma",36,36,36,1.0],["2026-07-08","PDS",13301,192,197,0.9],["2026-07-08","PDS- Mounjaro",98,98,98,0.99],["2026-07-08","PDS Cancellation",86,18,18,0.94],["2026-07-08","Non Pharma",739,108,90,0.89],["2026-07-08","WLP - Non Pharma",40,40,40,0.99],["2026-07-09","PDS",13485,202,223,0.9],["2026-07-09","PDS- Mounjaro",79,79,79,0.99],["2026-07-09","PDS Cancellation",98,16,16,0.68],["2026-07-09","Non Pharma",813,120,78,0.92],["2026-07-09","WLP - Non Pharma",30,30,30,1.0],["2026-07-10","PDS",13069,202,218,0.84],["2026-07-10","PDS- Mounjaro",75,75,75,0.99],["2026-07-10","PDS Cancellation",83,10,10,0.8],["2026-07-10","Non Pharma",642,107,107,0.91],["2026-07-10","WLP - Non Pharma",25,25,25,0.98],["2026-07-11","PDS",12501,194,137,0.91],["2026-07-11","PDS- Mounjaro",84,84,84,1.0],["2026-07-11","PDS Cancellation",87,41,41,0.9],["2026-07-11","Non Pharma",807,114,47,0.96],["2026-07-11","WLP - Non Pharma",21,21,21,0.99],["2026-07-13","PDS",13885,183,143,0.89],["2026-07-13","PDS- Mounjaro",180,180,180,0.99],["2026-07-13","PDS Cancellation",192,48,48,0.83],["2026-07-13","Non Pharma",829,115,72,0.88],["2026-07-13","WLP - Non Pharma",31,31,31,0.99],["2026-07-14","PDS",13212,202,202,0.9],["2026-07-14","PDS- Mounjaro",106,106,106,0.99],["2026-07-14","PDS Cancellation",89,17,17,0.82],["2026-07-14","Non Pharma",886,125,54,0.9],["2026-07-14","WLP - Non Pharma",12,12,12,0.99],["2026-07-15","PDS",13054,205,236,0.87],["2026-07-15","PDS- Mounjaro",77,77,77,0.99],["2026-07-15","PDS Cancellation",79,19,19,0.89],["2026-07-15","Non Pharma",821,116,90,0.9],["2026-07-15","WLP - Non Pharma",10,10,10,0.97],["2026-07-16","PDS",12721,202,192,0.9],["2026-07-16","PDS- Mounjaro",88,88,88,0.99],["2026-07-16","PDS Cancellation",65,11,11,0.82],["2026-07-16","Non Pharma",792,96,60,0.89],["2026-07-16","WLP - Non Pharma",7,7,7,0.99],["2026-07-17","PDS",12446,205,205,0.9],["2026-07-17","PDS- Mounjaro",63,63,63,0.99],["2026-07-17","PDS Cancellation",124,29,29,0.62],["2026-07-17","Non Pharma",752,107,93,0.91],["2026-07-17","WLP - Non Pharma",18,18,18,0.99],["2026-07-18","PDS",12129,195,226,0.89],["2026-07-18","PDS- Mounjaro",63,63,63,1.0],["2026-07-18","PDS Cancellation",88,18,18,0.77],["2026-07-18","Non Pharma",820,108,108,0.88],["2026-07-18","WLP - Non Pharma",19,19,19,0.95],["2026-07-20","PDS",14206,193,125,0.9],["2026-07-20","PDS- Mounjaro",165,165,165,0.98],["2026-07-20","PDS Cancellation",194,24,24,0.92],["2026-07-20","Non Pharma",819,106,67,0.96],["2026-07-21","PDS",12930,200,200,0.87],["2026-07-21","PDS- Mounjaro",63,63,63,0.99],["2026-07-21","PDS Cancellation",97,11,11,0.91],["2026-07-21","Non Pharma",876,106,90,0.94],["2026-07-21","WLP - Non Pharma",35,35,35,0.99],["2026-07-22","PDS",12313,200,199,0.9],["2026-07-22","PDS- Mounjaro",63,63,63,0.99],["2026-07-22","PDS Cancellation",71,11,11,0.63],["2026-07-22","Non Pharma",798,110,45,0.84],["2026-07-22","WLP - Non Pharma",18,18,18,0.99],["2026-07-23","PDS",12313,202,222,0.9],["2026-07-23","PDS- Mounjaro",55,55,55,0.99],["2026-07-23","PDS Cancellation",73,19,19,0.89],["2026-07-23","Non Pharma",833,119,102,0.94],["2026-07-23","WLP - Non Pharma",15,15,15,1.0],["2026-07-24","PDS",12349,188,196,0.89],["2026-07-24","PDS- Mounjaro",55,55,55,0.99],["2026-07-24","PDS Cancellation",90,13,13,0.84],["2026-07-24","Non Pharma",806,107,90,0.92],["2026-07-24","WLP - Non Pharma",21,21,21,0.99],["2026-07-25","PDS",11898,193,193,0.9],["2026-07-25","PDS- Mounjaro",59,59,59,0.99],["2026-07-25","PDS Cancellation",82,16,16,0.94],["2026-07-25","Non Pharma",785,101,27,0.94],["2026-07-25","WLP - Non Pharma",18,18,18,1.0],["2026-07-26","PDS- Mounjaro",61,61,61,0.97],["2026-07-26","WLP - Non Pharma",9,9,9,1.0],["2026-07-27","PDS",13842,179,179,0.89],["2026-07-27","PDS- Mounjaro",76,76,76,0.99],["2026-07-27","PDS Cancellation",154,29,29,0.72],["2026-07-27","Non Pharma",971,123,69,0.89],["2026-07-28","PDS",12862,196,196,0.9],["2026-07-28","PDS- Mounjaro",77,77,77,0.99],["2026-07-28","PDS Cancellation",73,16,16,0.81],["2026-07-28","Non Pharma",953,112,90,0.89],["2026-07-29","PDS",12877,202,202,0.9],["2026-07-29","PDS- Mounjaro",77,77,77,0.98],["2026-07-29","PDS Cancellation",93,19,19,0.94],["2026-07-29","Non Pharma",952,108,60,0.92],["2026-07-30","PDS",12475,196,223,0.88],["2026-07-30","PDS- Mounjaro",57,57,57,0.99],["2026-07-30","PDS Cancellation",97,14,14,0.85],["2026-07-30","Non Pharma",851,111,108,0.88],["2026-07-30","WLP - Non Pharma",19,19,19,1.0],["2026-07-31","PDS",12735,199,219,0.9],["2026-07-31","PDS- Mounjaro",70,70,70,0.99],["2026-07-31","PDS Cancellation",84,15,15,0.93],["2026-07-31","Non Pharma",913,108,83,0.9],["2026-07-31","WLP - Non Pharma",16,16,16,1.0],["2026-08-01","PDS",12713,198,179,0.91],["2026-08-01","PDS- Mounjaro",73,73,73,0.99],["2026-08-01","PDS Cancellation",73,12,12,0.5],["2026-08-01","Non Pharma",897,117,73,0.99],["2026-08-01","WLP - Non Pharma",12,12,12,1.0],["2026-08-03","PDS",15180,191,231,0.88],["2026-08-03","PDS- Mounjaro",163,163,98,0.99],["2026-08-03","PDS Cancellation",193,36,36,0.82],["2026-08-03","Non Pharma",1071,125,88,0.91],["2026-08-03","WLP - Non Pharma",31,31,31,1.0],["2026-08-04","PDS",14222,199,199,0.9],["2026-08-04","PDS- Mounjaro",55,55,55,0.97],["2026-08-04","Non Pharma",928,121,121,0.89],["2026-08-05","PDS",14224,205,205,0.89],["2026-08-05","Non Pharma",955,113,112,0.9],["2026-08-06","PDS",13367,212,212,0.89],["2026-08-06","PDS Cancellation",79,35,35,0.8],["2026-08-06","Non Pharma",909,112,107,0.93],["2026-08-07","PDS",13587,210,200,0.89],["2026-08-07","PDS- Mounjaro",77,77,77,0.99],["2026-08-07","PDS Cancellation",84,19,19,0.89],["2026-08-07","Non Pharma",932,99,73,0.9],["2026-08-07","WLP - Non Pharma",9,9,9,1.0],["2026-08-08","PDS",13045,215,203,0.89],["2026-08-08","PDS- Mounjaro",52,52,52,0.99],["2026-08-08","PDS Cancellation",92,19,19,1.0],["2026-08-08","Non Pharma",844,103,85,0.9],["2026-08-08","WLP - Non Pharma",21,21,21,1.0],["2026-08-10","PDS",12924,195,195,0.9],["2026-08-10","PDS- Mounjaro",142,142,84,0.98],["2026-08-10","PDS Cancellation",170,170,33,0.75],["2026-08-10","Non Pharma",1087,121,62,0.91],["2026-08-10","WLP - Non Pharma",25,25,25,0.99],["2026-08-11","PDS",13417,201,201,0.9],["2026-08-11","PDS- Mounjaro",73,73,73,0.99],["2026-08-11","PDS Cancellation",109,35,35,0.31],["2026-08-11","Non Pharma",927,123,60,0.89],["2026-08-11","WLP - Non Pharma",21,21,21,1.0],["2026-08-12","PDS",13821,212,279,0.9],["2026-08-12","PDS Cancellation",78,10,10,1.0],["2026-08-12","Non Pharma",946,113,81,0.92],["2026-08-12","WLP - Non Pharma",21,21,21,1.0],["2026-08-13","PDS",12950,221,221,0.89],["2026-08-13","PDS Cancellation",94,17,17,1.0],["2026-08-13","Non Pharma",916,113,86,0.9],["2026-08-13","WLP - Non Pharma",17,17,17,0.99],["2026-08-14","PDS",12957,221,212,0.89],["2026-08-14","PDS- Mounjaro",100,100,78,0.99],["2026-08-14","PDS Cancellation",69,15,15,0.86],["2026-08-14","Non Pharma",917,112,45,0.9],["2026-08-14","WLP - Non Pharma",18,18,18,1.0],["2026-08-15","PDS",11970,212,47,0.85],["2026-08-15","PDS- Mounjaro",22,22,22,0.96],["2026-08-15","PDS Cancellation",64,7,7,1.0],["2026-08-17","PDS",15192,194,186,0.88],["2026-08-17","PDS- Mounjaro",156,156,156,0.99],["2026-08-17","PDS Cancellation",215,31,31,0.87],["2026-08-17","Non Pharma",1085,117,72,0.89],["2026-08-17","WLP - Non Pharma",49,49,49,0.99],["2026-08-18","PDS",13569,211,209,0.88],["2026-08-18","PDS- Mounjaro",61,61,61,0.99],["2026-08-18","PDS Cancellation",93,41,41,0.68],["2026-08-18","Non Pharma",989,119,101,0.9],["2026-08-18","WLP - Non Pharma",22,22,22,1.0],["2026-08-19","PDS",13590,205,205,0.86],["2026-08-19","PDS- Mounjaro",43,43,43,0.99],["2026-08-19","PDS Cancellation",82,39,39,0.76],["2026-08-19","Non Pharma",959,75,75,0.94],["2026-08-19","WLP - Non Pharma",15,15,15,0.99],["2026-08-20","PDS",13363,207,207,0.91],["2026-08-20","PDS- Mounjaro",42,42,42,0.99],["2026-08-20","PDS Cancellation",63,11,11,0.9],["2026-08-20","Non Pharma",885,75,66,0.89],["2026-08-21","PDS",13067,207,119,0.86],["2026-08-21","PDS- Mounjaro",42,42,42,0.99],["2026-08-21","PDS Cancellation",71,9,9,0.44],["2026-08-21","Non Pharma",869,113,27,0.92],["2026-08-21","WLP - Non Pharma",40,40,40,1.0],["2026-08-22","PDS",12365,205,214,0.87],["2026-08-22","PDS- Mounjaro",46,46,46,0.99],["2026-08-22","PDS Cancellation",82,37,37,0.62],["2026-08-22","Non Pharma",862,114,81,0.92],["2026-08-22","WLP - Non Pharma",11,11,11,0.99],["2026-08-24","PDS",14406,202,202,0.88],["2026-08-24","PDS- Mounjaro",89,89,89,0.99],["2026-08-24","PDS Cancellation",158,63,63,0.57],["2026-08-24","Non Pharma",1103,122,75,0.89],["2026-08-24","WLP - Non Pharma",31,31,31,0.99],["2026-08-25","PDS",13275,213,238,0.9],["2026-08-25","PDS- Mounjaro",46,46,46,0.99],["2026-08-25","PDS Cancellation",65,32,32,0.81],["2026-08-25","Non Pharma",893,137,107,0.91],["2026-08-25","WLP - Non Pharma",23,23,10,1.0],["2026-08-26","PDS",13107,209,253,null],["2026-08-26","PDS- Mounjaro",43,43,43,null],["2026-08-26","PDS Cancellation",80,31,31,null],["2026-08-26","Non Pharma",null,null,null,null],["2026-08-26","WLP - Non Pharma",null,null,null,null]];
+  /* rows: [dateISO, auditor, pds, mounjaro, cancellation, nonPharma, wlp, patientTickets, csat, totalAssigned] */
+  var STATIC_AUDITOR_ROWS = [["2026-05-16","Dr. Abhishek",0,0,0,0,15,0,0,15],["2026-05-16","Dr. Divya",35,15,3,15,0,0,3,71],["2026-05-16","Dr. Preethi",35,15,4,15,0,0,0,69],["2026-05-16","Dt.Shravya",50,0,3,15,0,0,0,68],["2026-05-16","Dt. Mubaraka",30,15,4,15,0,0,0,64],["2026-05-18","Dr. Abhishek",0,20,0,0,20,3,0,43],["2026-05-18","Dr. Divya",20,33,7,12,0,0,1,73],["2026-05-18","Dr. Preethi",20,33,6,12,0,0,0,71],["2026-05-18","Dt.Shravya",53,0,0,12,0,0,0,65],["2026-05-18","Dt. Mubaraka",20,33,6,12,0,0,0,71],["2026-05-19","Dr. Abhishek",0,25,0,0,6,2,0,33],["2026-05-19","Dr. Divya",30,12,4,12,0,0,3,61],["2026-05-19","Dr. Preethi",40,12,5,12,0,0,0,69],["2026-05-19","Dt.Shravya",50,2,4,13,0,0,0,69],["2026-05-19","Dt. Mubaraka",40,12,12,10,0,0,0,74],["2026-05-19","Dr. Priyanka",0,2,0,14,0,0,0,16],["2026-05-20","Dr. Abhishek",0,0,0,0,0,0,0,0],["2026-05-20","Dr. Divya",35,15,6,0,15,1,0,72],["2026-05-20","Dr. Preethi",35,15,6,0,15,1,0,72],["2026-05-20","Dt.Shravya",36,14,5,0,15,0,0,70],["2026-05-20","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-05-20","Dr. Priyanka",25,15,0,0,0,1,0,41],["2026-05-21","Dr. Abhishek",0,0,0,0,16,0,0,16],["2026-05-21","Dr. Divya",33,18,4,15,0,0,5,75],["2026-05-21","Dr. Preethi",32,19,4,15,0,0,0,70],["2026-05-21","Dt.Shravya",33,18,4,15,0,0,0,70],["2026-05-21","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-05-21","Dr. Priyanka",32,18,5,15,0,0,0,70],["2026-05-22","Dr. Abhishek",0,0,0,0,7,1,0,8],["2026-05-22","Dr. Divya",0,0,4,26,0,0,3,33],["2026-05-22","Dr. Preethi",18,25,4,12,0,0,0,59],["2026-05-22","Dt.Shravya",30,24,3,12,0,0,0,69],["2026-05-22","Dr. Priyanka",30,25,4,12,0,0,0,71],["2026-05-23","Dr. Abhishek",0,0,0,0,13,0,0,13],["2026-05-23","Dr. Divya",0,14,0,30,0,0,0,44],["2026-05-23","Dr. Preethi",36,13,6,15,0,0,0,70],["2026-05-23","Dt.Shravya",39,11,6,15,0,0,0,71],["2026-05-23","Dr. Priyanka",36,13,6,14,0,0,0,69],["2026-05-25","Dr. Abhishek",0,0,0,0,38,5,0,43],["2026-05-25","Dr. Divya",20,30,4,9,0,0,3,66],["2026-05-25","Dr. Preethi",20,30,4,9,0,0,0,63],["2026-05-25","Dt.Shravya",20,31,4,9,0,0,0,64],["2026-05-25","Dt. Mubaraka",20,31,4,9,0,0,0,64],["2026-05-25","Dr. Priyanka",20,31,3,9,0,0,0,63],["2026-05-26","Dr. Abhishek",0,0,0,0,16,3,0,19],["2026-05-26","Dr. Divya",0,0,0,0,0,0,3,3],["2026-05-26","Dr. Preethi",0,17,2,11,0,0,0,30],["2026-05-26","Dt.Shravya",31,18,2,18,0,0,0,69],["2026-05-26","Dt. Mubaraka",31,18,3,18,0,0,0,70],["2026-05-26","Dr. Priyanka",31,18,3,18,0,0,0,70],["2026-05-27","Dr. Abhishek",0,0,0,0,5,4,0,9],["2026-05-27","Dr. Divya",0,0,0,0,0,0,0,0],["2026-05-27","Dr. Preethi",35,17,9,12,0,0,0,73],["2026-05-27","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-05-27","Dt. Mubaraka",35,17,9,12,0,0,0,73],["2026-05-27","Dr. Priyanka",34,16,11,12,0,0,0,73],["2026-05-28","Dr. Abhishek",0,0,0,0,8,2,0,10],["2026-05-28","Dr. Divya",35,16,9,12,0,0,2,74],["2026-05-28","Dr. Preethi",35,15,9,12,0,0,0,71],["2026-05-28","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-05-28","Dt. Mubaraka",35,16,7,12,0,0,0,70],["2026-05-28","Dr. Priyanka",10,16,9,15,0,0,0,50],["2026-05-29","Dr. Abhishek",0,0,0,0,11,0,0,11],["2026-05-29","Dr. Divya",30,0,0,6,0,0,2,38],["2026-05-29","Dr. Preethi",24,21,6,12,0,0,0,63],["2026-05-29","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-05-29","Dt. Mubaraka",34,21,5,12,0,0,0,72],["2026-05-29","Dr. Priyanka",34,21,5,11,0,0,0,71],["2026-05-30","Dr. Abhishek",0,0,0,0,15,6,0,21],["2026-05-30","Dr. Divya",33,20,3,14,0,0,1,71],["2026-05-30","Dr. Preethi",33,19,4,14,0,0,0,70],["2026-05-30","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-05-30","Dt. Mubaraka",33,19,4,14,0,0,0,70],["2026-05-30","Dr. Priyanka",32,19,3,14,0,0,0,68],["2026-06-01","Dr. Abhishek",0,0,0,0,23,0,0,23],["2026-06-01","Dr. Divya",20,30,8,14,0,0,4,76],["2026-06-01","Dr. Preethi",20,29,9,14,0,0,0,72],["2026-06-01","Dt.Shravya",20,29,8,15,0,0,0,72],["2026-06-01","Dt. Mubaraka",20,29,8,15,0,0,0,72],["2026-06-01","Dr. Priyanka",21,29,8,15,0,0,0,73],["2026-06-01","Dr. Yogitha",35,0,8,30,0,0,0,73],["2026-06-02","Dt. Mubaraka",0,70,0,0,0,0,0,70],["2026-06-03","Dr. Abhishek",0,0,0,0,23,7,0,30],["2026-06-03","Dr. Divya",0,0,0,0,0,0,4,4],["2026-06-03","Dr. Preethi",39,16,3,15,0,0,0,73],["2026-06-03","Dt.Shravya",38,16,3,15,0,0,0,72],["2026-06-03","Dt. Mubaraka",38,16,3,15,0,0,0,72],["2026-06-03","Dr. Priyanka",0,16,0,13,0,0,0,29],["2026-06-03","Dr. Yogitha",48,6,3,15,0,0,0,72],["2026-06-04","Dr. Abhishek",0,0,0,0,5,0,0,5],["2026-06-04","Dr. Divya",0,0,0,0,0,0,0,0],["2026-06-04","Dr. Preethi",24,13,0,0,0,0,0,37],["2026-06-04","Dt.Shravya",40,13,6,15,0,0,0,74],["2026-06-04","Dt. Mubaraka",40,13,3,15,0,0,0,71],["2026-06-04","Dr. Priyanka",24,13,3,0,0,0,0,40],["2026-06-04","Dr. Yogitha",41,13,3,15,0,0,0,72],["2026-06-05","Dr. Abhishek",0,0,0,0,6,5,0,11],["2026-06-05","Dr. Divya",24,10,3,13,0,0,0,50],["2026-06-05","Dr. Preethi",29,10,3,16,0,0,0,58],["2026-06-05","Dt.Shravya",29,9,3,24,0,0,0,65],["2026-06-05","Dt. Mubaraka",29,10,4,24,0,0,0,67],["2026-06-05","Dr. Priyanka",29,10,3,24,0,0,0,66],["2026-06-05","Dr. Yogitha",29,10,3,24,0,0,0,66],["2026-06-06","Dr. Abhishek",0,0,0,0,5,2,0,7],["2026-06-06","Dr. Divya",10,13,3,13,0,0,7,46],["2026-06-06","Dr. Preethi",40,13,3,16,0,0,0,72],["2026-06-06","Dt.Shravya",40,13,3,15,0,0,0,71],["2026-06-06","Dt. Mubaraka",39,13,4,15,0,0,0,71],["2026-06-06","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-06-06","Dr. Yogitha",40,13,3,15,0,0,0,71],["2026-06-08","Dr. Abhishek",0,0,0,0,12,2,0,14],["2026-06-08","Dr. Divya",24,30,6,7,0,0,5,72],["2026-06-08","Dr. Preethi",24,30,6,12,0,0,0,72],["2026-06-08","Dt.Shravya",23,31,6,12,0,0,0,72],["2026-06-08","Dt. Mubaraka",24,30,6,12,0,0,0,72],["2026-06-08","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-06-08","Dr. Yogitha",24,30,6,12,0,0,0,72],["2026-06-09","Dr. Abhishek",0,0,0,0,10,3,0,13],["2026-06-09","Dr. Divya",0,0,0,20,0,0,2,22],["2026-06-09","Dr. Preethi",38,16,4,18,0,0,0,76],["2026-06-09","Dt.Shravya",38,16,4,18,0,0,0,76],["2026-06-09","Dt. Mubaraka",38,15,4,18,0,0,0,75],["2026-06-09","Dr. Priyanka",42,15,0,18,0,0,0,75],["2026-06-09","Dr. Yogitha",39,15,4,18,0,0,0,76],["2026-06-10","Dr. Abhishek",0,0,0,0,27,3,0,30],["2026-06-10","Dr. Divya",0,0,0,0,0,0,4,4],["2026-06-10","Dr. Preethi",0,15,0,18,0,0,0,33],["2026-06-10","Dt.Shravya",42,15,3,18,0,0,0,78],["2026-06-10","Dt. Mubaraka",42,15,7,18,0,0,0,82],["2026-06-10","Dr. Priyanka",15,15,0,0,0,0,0,30],["2026-06-10","Dr. Yogitha",42,15,3,18,0,0,0,78],["2026-06-11","Dr. Abhishek",0,0,0,0,27,2,0,29],["2026-06-11","Dr. Divya",0,0,0,0,0,0,5,5],["2026-06-11","Dr. Preethi",39,16,2,15,0,0,0,72],["2026-06-11","Dt.Shravya",40,17,3,15,0,0,0,75],["2026-06-11","Dt. Mubaraka",39,16,3,15,0,0,0,73],["2026-06-11","Dr. Priyanka",0,17,0,0,0,0,0,17],["2026-06-11","Dr. Yogitha",40,16,3,15,0,0,0,74],["2026-06-12","Dr. Abhishek",0,0,0,0,30,0,0,30],["2026-06-12","Dr. Divya",20,0,0,0,0,0,1,21],["2026-06-12","Dr. Preethi",35,13,5,7,0,0,0,60],["2026-06-12","Dt.Shravya",37,13,5,18,0,0,0,73],["2026-06-12","Dt. Mubaraka",38,13,5,0,0,0,0,56],["2026-06-12","Dr. Priyanka",47,13,5,18,0,0,0,83],["2026-06-12","Dr. Yogitha",37,13,5,18,0,0,0,73],["2026-06-13","Dr. Abhishek",0,0,0,0,42,1,0,43],["2026-06-13","Dr. Divya",30,14,3,18,0,1,0,66],["2026-06-13","Dr. Preethi",26,0,0,10,0,1,0,37],["2026-06-13","Dt.Shravya",36,15,2,18,0,0,0,71],["2026-06-13","Dt. Mubaraka",36,15,2,18,0,0,0,71],["2026-06-13","Dr. Priyanka",33,15,2,18,0,1,0,69],["2026-06-13","Dr. Yogitha",36,15,2,18,0,1,0,72],["2026-06-15","Dr. Abhishek",0,0,0,0,57,4,0,61],["2026-06-15","Dr. Divya",27,33,7,10,0,0,6,83],["2026-06-15","Dr. Preethi",0,0,0,0,0,0,0,0],["2026-06-15","Dt.Shravya",30,33,7,12,0,0,0,82],["2026-06-15","Dt. Mubaraka",30,33,8,12,0,0,0,83],["2026-06-15","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-06-15","Dr. Yogitha",30,33,8,12,0,0,0,83],["2026-06-16","Dr. Abhishek",0,0,0,0,24,0,0,24],["2026-06-16","Dr. Divya",38,12,2,18,0,0,1,71],["2026-06-16","Dr. Preethi",39,10,3,19,0,0,0,71],["2026-06-16","Dt.Shravya",39,10,3,18,0,0,0,70],["2026-06-16","Dt. Mubaraka",14,10,3,12,0,0,0,39],["2026-06-16","Dr. Priyanka",38,10,3,18,0,0,0,69],["2026-06-16","Dr. Yogitha",38,12,2,18,0,0,0,70],["2026-06-17","Dr. Abhishek",0,0,0,0,33,5,0,38],["2026-06-17","Dr. Divya",0,0,0,0,0,0,2,2],["2026-06-17","Dr. Preethi",48,18,4,12,0,0,0,82],["2026-06-17","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-06-17","Dt. Mubaraka",29,16,5,0,0,0,0,50],["2026-06-17","Dr. Priyanka",15,18,4,0,0,0,0,37],["2026-06-17","Dr. Yogitha",47,18,4,12,0,0,0,81],["2026-06-18","Dr. Abhishek",0,0,0,0,62,0,0,62],["2026-06-18","Dr. Divya",4,0,0,0,0,0,0,4],["2026-06-18","Dr. Preethi",44,12,4,15,0,0,0,75],["2026-06-18","Dt.Shravya",44,13,0,15,0,0,0,72],["2026-06-18","Dt. Mubaraka",32,13,0,0,0,0,0,45],["2026-06-18","Dr. Priyanka",44,12,3,15,0,0,0,74],["2026-06-18","Dr. Yogitha",45,13,3,15,0,0,0,76],["2026-06-19","Dr. Abhishek",0,0,0,0,0,0,0,0],["2026-06-19","Dr. Divya",21,14,0,0,0,0,0,35],["2026-06-19","Dr. Preethi",35,14,0,12,0,0,0,61],["2026-06-19","Dt.Shravya",40,12,4,18,0,0,0,74],["2026-06-19","Dt. Mubaraka",31,14,5,0,0,0,0,50],["2026-06-19","Dr. Priyanka",40,14,4,18,0,0,0,76],["2026-06-19","Dr. Yogitha",40,14,4,18,0,0,0,76],["2026-06-20","Dr. Abhishek",0,0,0,0,18,3,0,21],["2026-06-20","Dr. Divya",30,8,7,23,0,0,6,74],["2026-06-20","Dr. Preethi",39,10,6,19,0,0,0,74],["2026-06-20","Dt.Shravya",36,10,6,24,0,0,0,76],["2026-06-20","Dt. Mubaraka",34,10,6,0,0,0,0,50],["2026-06-20","Dr. Priyanka",35,10,6,23,0,0,0,74],["2026-06-20","Dr. Yogitha",35,10,6,24,0,0,0,75],["2026-06-21","Dr. Abhishek",0,0,0,0,101,2,0,103],["2026-06-22","Dr. Abhishek",0,0,0,0,54,4,0,58],["2026-06-22","Dr. Divya",25,30,9,12,0,0,6,82],["2026-06-22","Dr. Preethi",25,30,9,12,0,0,0,76],["2026-06-22","Dt.Shravya",25,28,11,12,0,0,0,76],["2026-06-22","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-06-22","Dr. Priyanka",25,30,10,12,0,0,0,77],["2026-06-22","Dr. Yogitha",25,30,6,12,0,0,0,73],["2026-06-23","Dr. Abhishek",0,0,0,0,14,0,0,14],["2026-06-23","Dr. Divya",37,12,6,18,0,0,3,76],["2026-06-23","Dr. Preethi",38,12,6,18,0,0,0,74],["2026-06-23","Dt.Shravya",38,13,6,18,0,0,0,75],["2026-06-23","Dt. Mubaraka",27,13,5,0,0,0,0,45],["2026-06-23","Dr. Priyanka",38,12,0,21,0,0,0,71],["2026-06-23","Dr. Yogitha",38,12,6,18,0,0,0,74],["2026-06-24","Dr. Divya",44,14,4,14,0,1,0,77],["2026-06-24","Dr. Preethi",15,15,4,0,0,1,0,35],["2026-06-24","Dt.Shravya",44,15,4,15,0,0,0,78],["2026-06-24","Dr. Priyanka",33,14,5,10,0,0,0,62],["2026-06-24","Dr. Yogitha",44,14,4,15,0,1,0,78],["2026-06-25","Dr. Abhishek",0,0,0,0,6,1,0,7],["2026-06-25","Dr. Divya",39,12,4,18,0,0,0,73],["2026-06-25","Dr. Preethi",37,12,4,18,0,0,0,71],["2026-06-25","Dt.Shravya",37,12,4,18,0,0,0,71],["2026-06-25","Dt. Mubaraka",37,0,4,0,0,0,0,41],["2026-06-25","Dr. Priyanka",37,12,4,18,0,0,0,71],["2026-06-25","Dr. Yogitha",37,12,4,18,0,0,0,71],["2026-06-26","Dr. Abhishek",0,0,0,0,10,4,0,14],["2026-06-26","Dr. Divya",40,23,2,17,0,0,2,84],["2026-06-26","Dr. Preethi",39,12,4,12,0,0,0,67],["2026-06-26","Dt.Shravya",42,12,2,18,0,0,0,74],["2026-06-26","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-06-26","Dr. Priyanka",39,12,3,18,0,0,0,72],["2026-06-26","Dr. Yogitha",41,12,2,18,0,0,0,73],["2026-06-27","Dr. Abhishek",0,0,0,0,30,1,0,31],["2026-06-27","Dr. Preethi",0,14,0,0,0,0,0,14],["2026-06-27","Dt.Shravya",43,16,4,15,0,0,0,78],["2026-06-27","Dt. Mubaraka",43,14,4,33,0,0,0,94],["2026-06-27","Dr. Priyanka",43,15,5,15,0,0,0,78],["2026-06-27","Dr. Yogitha",36,15,4,15,0,0,0,70],["2026-06-29","Dr. Abhishek",0,0,0,0,47,2,0,49],["2026-06-29","Dr. Preethi",20,31,4,12,0,0,0,67],["2026-06-29","Dt.Shravya",30,33,5,12,0,0,0,80],["2026-06-29","Dt. Mubaraka",20,31,4,12,0,0,0,67],["2026-06-29","Dr. Priyanka",20,31,5,12,0,0,0,68],["2026-06-29","Dr. Yogitha",20,31,5,12,0,0,0,68],["2026-06-30","Dr. Abhishek",0,0,0,0,69,1,0,70],["2026-06-30","Dr. Preethi",57,13,3,18,0,1,0,92],["2026-06-30","Dt.Shravya",44,13,3,18,0,0,0,78],["2026-06-30","Dt. Mubaraka",39,13,4,18,0,0,0,74],["2026-06-30","Dr. Priyanka",44,14,3,18,0,1,0,80],["2026-06-30","Dr. Yogitha",46,13,4,18,0,1,7,89],["2026-07-01","Dr. Abhishek",0,0,0,0,52,2,0,54],["2026-07-01","Dr. Divya",25,14,0,18,0,0,8,65],["2026-07-01","Dr. Preethi",34,15,3,17,0,0,0,69],["2026-07-01","Dt.Shravya",34,15,3,18,0,0,0,70],["2026-07-01","Dt. Mubaraka",34,14,3,18,0,0,0,69],["2026-07-01","Dr. Priyanka",34,14,3,18,0,0,0,69],["2026-07-01","Dr. Yogitha",34,14,3,18,0,0,0,69],["2026-07-02","Dr. Abhishek",0,0,0,0,33,2,0,35],["2026-07-02","Dr. Divya",37,14,4,20,0,0,3,78],["2026-07-02","Dr. Preethi",34,0,0,0,0,0,0,34],["2026-07-02","Dt.Shravya",37,15,3,19,0,0,0,74],["2026-07-02","Dt. Mubaraka",37,14,4,19,0,0,0,74],["2026-07-02","Dr. Priyanka",37,14,4,21,0,0,0,76],["2026-07-02","Dr. Yogitha",37,14,4,20,0,0,0,75],["2026-07-03","Dr. Abhishek",0,0,0,0,54,0,0,54],["2026-07-03","Dr. Divya",3,48,3,15,0,0,1,70],["2026-07-03","Dr. Preethi",40,16,3,11,0,0,0,70],["2026-07-03","Dt.Shravya",36,16,3,15,0,0,0,70],["2026-07-03","Dt. Mubaraka",36,16,7,15,0,0,0,74],["2026-07-03","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-07-03","Dr. Yogitha",0,0,0,0,0,0,0,0],["2026-07-04","Dr. Abhishek",0,0,0,0,42,2,0,44],["2026-07-04","Dr. Divya",39,14,4,0,0,0,2,59],["2026-07-04","Dr. Preethi",30,14,4,11,0,0,0,59],["2026-07-04","Dt.Shravya",39,14,4,12,0,0,0,69],["2026-07-04","Dt. Mubaraka",39,14,5,12,0,0,0,70],["2026-07-04","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-07-04","Dr. Yogitha",39,14,4,12,0,0,0,69],["2026-07-06","Dr. Abhishek",0,0,0,0,78,2,0,80],["2026-07-06","Dr. Divya",25,29,5,6,0,0,6,71],["2026-07-06","Dr. Preethi",25,28,6,13,0,1,0,73],["2026-07-06","Dt.Shravya",25,28,5,12,0,0,0,70],["2026-07-06","Dt. Mubaraka",25,28,6,12,0,0,0,71],["2026-07-06","Dr. Priyanka",25,28,5,12,0,0,0,70],["2026-07-06","Dr. Yogitha",25,28,5,12,0,1,0,71],["2026-07-07","Dr. Abhishek",0,0,0,0,36,6,0,42],["2026-07-07","Dr. Divya",16,17,2,0,0,1,2,38],["2026-07-07","Dr. Preethi",40,17,2,15,0,0,0,74],["2026-07-07","Dt.Shravya",36,17,2,15,0,0,0,70],["2026-07-07","Dt. Mubaraka",36,17,1,15,0,0,0,69],["2026-07-07","Dr. Priyanka",36,17,2,15,0,1,0,71],["2026-07-07","Dr. Yogitha",36,17,2,15,0,0,0,70],["2026-07-08","Dr. Abhishek",0,0,0,0,40,2,0,42],["2026-07-08","Dr. Divya",37,16,3,18,0,0,2,76],["2026-07-08","Dr. Preethi",37,16,3,18,0,0,0,74],["2026-07-08","Dt.Shravya",37,17,3,18,0,0,0,75],["2026-07-08","Dt. Mubaraka",37,16,3,18,0,0,0,74],["2026-07-08","Dr. Priyanka",35,17,3,18,0,0,0,73],["2026-07-08","Dr. Yogitha",14,16,3,0,0,0,0,33],["2026-07-09","Dr. Abhishek",0,0,0,0,30,5,0,35],["2026-07-09","Dr. Divya",46,16,3,15,0,0,1,81],["2026-07-09","Dr. Preethi",16,16,3,0,0,0,0,35],["2026-07-09","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-07-09","Dt. Mubaraka",47,16,3,15,0,0,0,81],["2026-07-09","Dr. Priyanka",44,16,3,15,0,0,0,78],["2026-07-09","Dr. Yogitha",70,15,4,33,0,0,0,122],["2026-07-10","Dr. Abhishek",0,0,0,0,25,0,0,25],["2026-07-10","Dr. Divya",34,12,0,18,0,0,3,67],["2026-07-10","Dr. Preethi",30,12,2,18,0,0,0,62],["2026-07-10","Dt.Shravya",40,13,2,18,0,0,0,73],["2026-07-10","Dt. Mubaraka",40,12,2,19,0,0,0,73],["2026-07-10","Dr. Priyanka",34,13,2,16,0,0,0,65],["2026-07-10","Dr. Yogitha",40,13,2,18,0,0,0,73],["2026-07-11","Dr. Abhishek",0,0,0,0,21,6,0,27],["2026-07-11","Dr. Divya",22,33,10,12,0,0,0,77],["2026-07-11","Dr. Preethi",0,0,0,0,0,0,0,0],["2026-07-11","Dt.Shravya",39,17,10,12,0,0,0,78],["2026-07-11","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-07-11","Dr. Priyanka",39,17,11,11,0,0,0,78],["2026-07-11","Dr. Yogitha",38,17,10,12,0,0,0,77],["2026-07-13","Dr. Abhishek",0,0,0,0,31,8,0,39],["2026-07-13","Dr. Divya",24,30,8,12,0,0,1,75],["2026-07-13","Dr. Preethi",24,30,8,12,0,0,0,74],["2026-07-13","Dt.Shravya",24,30,8,12,0,0,0,74],["2026-07-13","Dt. Mubaraka",24,30,8,12,0,0,0,74],["2026-07-13","Dr. Priyanka",23,30,8,12,0,0,0,73],["2026-07-13","Dr. Yogitha",24,30,8,12,0,0,0,74],["2026-07-14","Dr. Abhishek",0,0,8,0,12,1,0,21],["2026-07-14","Dr. Divya",38,18,3,0,0,0,2,61],["2026-07-14","Dr. Preethi",38,18,3,12,0,0,0,71],["2026-07-14","Dt.Shravya",36,16,3,12,0,0,0,67],["2026-07-14","Dt. Mubaraka",38,18,2,12,0,0,0,70],["2026-07-14","Dr. Priyanka",38,18,3,6,0,0,0,65],["2026-07-14","Dr. Yogitha",38,18,3,12,0,0,0,71],["2026-07-15","Dr. Abhishek",0,0,0,0,10,6,0,16],["2026-07-15","Dr. Divya",34,12,4,15,0,0,1,66],["2026-07-15","Dr. Preethi",40,13,3,15,0,0,0,71],["2026-07-15","Dt.Shravya",34,13,3,15,0,0,0,65],["2026-07-15","Dt. Mubaraka",40,13,3,15,0,0,0,71],["2026-07-15","Dr. Priyanka",40,13,3,15,0,0,0,71],["2026-07-15","Dr. Yogitha",34,13,3,15,0,0,0,65],["2026-07-16","Dr. Abhishek",0,0,0,0,7,3,0,10],["2026-07-16","Dr. Divya",32,16,3,12,0,0,2,65],["2026-07-16","Dr. Preethi",40,18,2,12,0,0,0,72],["2026-07-16","Dt.Shravya",40,18,2,12,0,0,0,72],["2026-07-16","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-07-16","Dr. Priyanka",40,18,2,12,0,0,0,72],["2026-07-16","Dr. Yogitha",40,18,2,12,0,0,0,72],["2026-07-17","Dr. Abhishek",0,0,0,0,18,2,0,20],["2026-07-17","Dr. Divya",37,13,4,18,0,0,6,78],["2026-07-17","Dr. Preethi",37,10,5,11,0,0,0,63],["2026-07-17","Dt.Shravya",37,10,5,21,0,0,0,73],["2026-07-17","Dt. Mubaraka",37,10,5,21,0,0,0,73],["2026-07-17","Dr. Priyanka",20,10,5,0,0,0,0,35],["2026-07-17","Dr. Yogitha",37,10,5,22,0,0,0,74],["2026-07-18","Dr. Abhishek",0,0,0,0,19,0,0,19],["2026-07-18","Dr. Divya",39,10,3,18,0,0,2,72],["2026-07-18","Dr. Preethi",37,10,3,18,0,0,0,68],["2026-07-18","Dt.Shravya",37,10,3,18,0,0,0,68],["2026-07-18","Dt. Mubaraka",38,11,3,18,0,0,0,70],["2026-07-18","Dr. Priyanka",38,11,3,18,0,0,0,70],["2026-07-18","Dr. Yogitha",37,11,3,18,0,0,0,69],["2026-07-20","Dr. Abhishek",0,0,0,0,0,0,0,0],["2026-07-20","Dr. Divya",0,0,0,0,0,0,0,0],["2026-07-20","Dr. Preethi",25,33,4,13,0,0,0,75],["2026-07-20","Dt.Shravya",25,33,5,13,0,0,0,76],["2026-07-20","Dt. Mubaraka",25,33,5,13,0,0,0,76],["2026-07-20","Dr. Priyanka",25,33,5,14,0,0,0,77],["2026-07-20","Dr. Yogitha",25,33,5,14,0,0,0,77],["2026-07-21","Dr. Abhishek",0,0,0,0,35,5,0,40],["2026-07-21","Dr. Divya",0,0,0,0,0,0,0,0],["2026-07-21","Dr. Preethi",40,13,2,18,0,0,0,73],["2026-07-21","Dt.Shravya",40,11,2,18,0,0,0,71],["2026-07-21","Dt. Mubaraka",40,13,3,18,0,0,0,74],["2026-07-21","Dr. Priyanka",40,13,2,18,0,0,0,73],["2026-07-21","Dr. Yogitha",40,13,2,18,0,0,0,73],["2026-07-22","Dr. Abhishek",0,0,0,0,18,2,0,20],["2026-07-22","Dr. Divya",46,16,2,9,0,0,3,76],["2026-07-22","Dr. Preethi",17,15,3,9,0,0,0,44],["2026-07-22","Dt.Shravya",46,16,2,9,0,0,0,73],["2026-07-22","Dt. Mubaraka",46,16,2,9,0,0,0,73],["2026-07-22","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-07-22","Dr. Yogitha",46,0,2,26,0,0,0,74],["2026-07-23","Dr. Abhishek",0,0,0,0,16,0,0,16],["2026-07-23","Dr. Divya",39,9,3,18,0,0,1,70],["2026-07-23","Dr. Preethi",29,9,3,12,0,0,0,53],["2026-07-23","Dt.Shravya",39,9,3,18,0,0,0,69],["2026-07-23","Dt. Mubaraka",38,10,3,18,0,0,0,69],["2026-07-23","Dr. Priyanka",38,9,4,18,0,1,0,70],["2026-07-23","Dr. Yogitha",39,9,3,18,0,0,0,69],["2026-07-24","Dr. Abhishek",0,0,0,0,21,1,0,22],["2026-07-24","Dr. Divya",18,15,2,0,0,0,2,37],["2026-07-24","Dr. Preethi",25,10,2,18,0,0,0,55],["2026-07-24","Dt.Shravya",40,10,2,18,0,0,0,70],["2026-07-24","Dt. Mubaraka",38,0,2,18,0,0,0,58],["2026-07-24","Dr. Priyanka",35,10,3,18,0,0,0,66],["2026-07-24","Dr. Yogitha",40,10,2,18,0,0,0,70],["2026-07-25","Dr. Abhishek",0,0,0,0,18,0,0,18],["2026-07-25","Dr. Divya",48,15,4,9,0,0,1,77],["2026-07-25","Dr. Preethi",48,15,4,9,0,0,0,76],["2026-07-25","Dt.Shravya",0,0,0,0,0,0,0,0],["2026-07-25","Dt. Mubaraka",48,15,4,0,0,0,0,67],["2026-07-25","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-07-25","Dr. Yogitha",49,14,4,9,0,0,0,76],["2026-07-26","Dr. Abhishek",0,61,0,0,9,1,0,70],["2026-07-27","Dr. Divya",37,15,5,12,0,0,7,76],["2026-07-27","Dr. Preethi",36,16,6,12,0,0,0,70],["2026-07-27","Dt.Shravya",36,15,6,12,0,0,0,69],["2026-07-27","Dt. Mubaraka",36,15,6,21,0,0,0,78],["2026-07-27","Dr. Priyanka",0,0,0,0,0,0,0,0],["2026-07-27","Dr. Yogitha",34,15,6,12,0,0,0,67],["2026-07-28","Dr. Divya",22,13,0,0,0,0,3,38],["2026-07-28","Dr. Preethi",35,13,3,18,0,0,0,69],["2026-07-28","Dt.Shravya",35,13,3,18,0,0,0,69],["2026-07-28","Dt. Mubaraka",35,13,3,18,0,0,0,69],["2026-07-28","Dr. Priyanka",35,13,3,18,0,0,0,69],["2026-07-28","Dr. Yogitha",34,12,4,18,0,0,0,68],["2026-07-29","Dr. Divya",40,15,4,12,0,0,3,74],["2026-07-29","Dr. Preethi",42,15,4,12,0,0,0,73],["2026-07-29","Dt.Shravya",40,15,4,12,0,0,0,71],["2026-07-29","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-07-29","Dr. Priyanka",40,15,4,12,0,0,0,71],["2026-07-29","Dr. Yogitha",40,17,3,12,0,0,0,72],["2026-07-30","Dr. Abhishek",0,0,0,0,19,0,0,19],["2026-07-30","Dr. Divya",33,10,2,18,0,0,1,64],["2026-07-30","Dr. Preethi",38,9,2,18,0,0,0,67],["2026-07-30","Dt.Shravya",36,9,2,18,0,0,0,65],["2026-07-30","Dt. Mubaraka",38,9,2,18,0,0,0,67],["2026-07-30","Dr. Priyanka",40,10,3,18,0,0,0,71],["2026-07-30","Dr. Yogitha",38,10,3,18,0,0,0,69],["2026-07-31","Dr. Abhishek",0,0,0,0,16,2,0,18],["2026-07-31","Dr. Divya",39,12,3,17,0,0,1,72],["2026-07-31","Dr. Preethi",35,10,3,12,0,0,0,60],["2026-07-31","Dt.Shravya",40,12,3,18,0,0,0,73],["2026-07-31","Dt. Mubaraka",40,12,3,18,0,0,0,73],["2026-07-31","Dr. Priyanka",25,12,0,0,0,0,0,37],["2026-07-31","Dr. Yogitha",40,12,3,18,0,0,0,73],["2026-08-01","Dr. Abhishek",0,0,0,0,12,1,0,13],["2026-08-01","Dr. Divya",38,13,2,18,0,0,2,73],["2026-08-01","Dr. Preethi",21,12,2,0,0,0,0,35],["2026-08-01","Dt.Shravya",40,12,2,18,0,0,0,72],["2026-08-01","Dt. Mubaraka",0,12,2,0,0,0,0,14],["2026-08-01","Dr. Priyanka",40,12,2,18,0,0,0,72],["2026-08-01","Dr. Yogitha",40,12,2,18,0,0,0,72],["2026-08-03","Dr. Abhishek",0,0,0,0,31,0,0,31],["2026-08-03","Dr. Divya",35,16,7,15,0,0,5,78],["2026-08-03","Dr. Preethi",36,16,7,15,0,0,0,74],["2026-08-03","Dt.Shravya",36,16,7,15,0,0,0,74],["2026-08-03","Dt. Mubaraka",54,16,0,0,0,0,0,70],["2026-08-03","Dr. Priyanka",35,17,7,15,0,0,0,74],["2026-08-03","Dr. Yogitha",35,17,7,15,0,0,0,74],["2026-08-04","Dr. Abhishek",0,55,0,0,0,0,0,55],["2026-08-04","Dr. Divya",0,0,0,0,0,0,0,0],["2026-08-04","Dr. Preethi",40,0,0,24,0,0,0,64],["2026-08-04","Dt.Shravya",41,0,0,24,0,0,0,65],["2026-08-04","Dt. Mubaraka",40,0,0,24,0,0,0,64],["2026-08-04","Dr. Priyanka",40,0,0,24,0,0,0,64],["2026-08-04","Dr. Yogitha",38,0,0,25,0,0,0,63],["2026-08-05","Dr. Abhishek",0,0,0,0,0,0,0,0],["2026-08-05","Dr. Divya",35,0,0,0,0,0,0,35],["2026-08-05","Dr. Preethi",33,0,0,27,0,0,0,60],["2026-08-05","Dt.Shravya",34,0,0,27,0,0,0,61],["2026-08-05","Dt. Mubaraka",33,0,0,27,0,0,0,60],["2026-08-05","Dr. Priyanka",36,0,0,0,0,0,0,36],["2026-08-05","Dr. Yogitha",34,0,0,31,0,0,0,65],["2026-08-06","Dr. Abhishek",0,0,0,0,0,0,0,0],["2026-08-06","Dr. Divya",35,0,0,21,0,0,0,56],["2026-08-06","Dr. Preethi",35,0,0,0,0,0,0,35],["2026-08-06","Dt.Shravya",35,0,0,22,0,0,0,57],["2026-08-06","Dt. Mubaraka",35,0,0,22,0,0,0,57],["2026-08-06","Dr. Priyanka",36,0,0,21,0,0,0,57],["2026-08-06","Dr. Yogitha",36,0,0,21,0,0,0,57],["2026-08-07","Dr. Abhishek",0,0,0,0,9,0,0,9],["2026-08-07","Dr. Divya",36,12,0,6,0,0,5,59],["2026-08-07","Dr. Preethi",34,13,3,13,0,0,0,63],["2026-08-07","Dt.Shravya",37,13,4,18,0,0,0,72],["2026-08-07","Dt. Mubaraka",37,13,4,18,0,0,0,72],["2026-08-07","Dr. Priyanka",18,13,4,0,0,0,0,35],["2026-08-07","Dr. Yogitha",38,13,4,18,0,0,0,73],["2026-08-08","Dr. Abhishek",0,0,0,0,11,1,0,12],["2026-08-08","Dr. Divya",31,18,4,18,0,0,1,72],["2026-08-08","Dr. Preethi",40,10,3,18,0,0,0,71],["2026-08-08","Dt.Shravya",40,9,4,18,0,0,0,71],["2026-08-08","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-08-08","Dr. Priyanka",40,9,4,18,0,0,0,71],["2026-08-08","Dr. Yogitha",52,6,4,13,0,0,0,75],["2026-08-10","Dr. Abhishek",0,0,0,0,25,7,0,32],["2026-08-10","Dr. Divya",39,17,7,12,0,0,2,77],["2026-08-10","Dr. Preethi",39,17,7,12,0,0,0,75],["2026-08-10","Dt.Shravya",39,16,5,14,0,0,0,74],["2026-08-10","Dt. Mubaraka",0,0,0,0,0,0,0,0],["2026-08-10","Dr. Priyanka",39,17,7,12,0,0,0,75],["2026-08-10","Dr. Yogitha",39,17,7,12,0,0,0,75],["2026-08-11","Dr. Abhishek",0,0,0,0,11,0,0,11],["2026-08-11","Dr. Divya",22,12,6,0,0,0,1,41],["2026-08-11","Dr. Preethi",23,12,6,0,0,0,0,41],["2026-08-11","Dt.Shravya",39,12,6,15,0,0,0,72],["2026-08-11","Dt. Mubaraka",39,12,0,15,0,0,0,66],["2026-08-11","Dr. Priyanka",39,12,0,15,0,0,0,66],["2026-08-11","Dr. Yogitha",39,13,0,15,0,0,0,67],["2026-08-12","Dr. Abhishek",0,0,0,0,21,0,0,21],["2026-08-12","Dr. Divya",52,0,2,18,0,0,2,74],["2026-08-12","Dr. Preethi",35,0,2,9,0,0,0,46],["2026-08-12","Dt.Shravya",52,0,0,18,0,0,0,70],["2026-08-12","Dt. Mubaraka",52,0,2,18,0,0,0,72],["2026-08-12","Dr. Priyanka",36,0,2,0,0,0,0,38],["2026-08-12","Dr. Yogitha",52,0,2,18,0,0,0,72],["2026-08-13","Dr. Abhishek",0,0,0,0,17,4,0,21],["2026-08-13","Dr. Divya",35,0,3,0,0,0,4,42],["2026-08-13","Dr. Preethi",35,0,3,0,0,0,0,38],["2026-08-13","Dt.Shravya",38,0,3,28,0,0,0,69],["2026-08-13","Dt. Mubaraka",39,0,2,27,0,0,0,68],["2026-08-13","Dr. Priyanka",38,0,3,0,0,0,0,41],["2026-08-13","Dr. Yogitha",38,0,3,31,0,0,0,72],["2026-08-14","Dr. Abhishek",0,26,0,0,18,2,0,46],["2026-08-14","Dr. Divya",40,10,3,9,0,0,2,64],["2026-08-14","Dr. Preethi",47,11,3,12,0,0,0,73],["2026-08-14","Dt.Shravya",47,11,3,12,0,0,0,73],["2026-08-14","Dt. Mubaraka",48,10,3,12,0,0,0,73],["2026-08-14","Dr. Priyanka",30,10,3,0,0,0,0,43],["2026-08-14","Dr. Yogitha",0,0,0,0,0,0,0,0],["2026-08-15","Dt. Mubaraka",47,22,7,0,0,0,0,76],["2026-08-17","Dr. Abhishek",0,0,0,0,49,6,0,55],["2026-08-17","Dr. Divya",28,26,5,12,0,0,8,79],["2026-08-17","Dr. Preethi",33,26,5,12,0,0,0,76],["2026-08-17","Dt.Shravya",33,26,6,12,0,0,0,77],["2026-08-17","Dt. Mubaraka",33,26,5,12,0,0,0,76],["2026-08-17","Dr. Priyanka",33,26,5,12,0,0,0,76],["2026-08-17","Dr. Yogitha",33,26,5,12,0,0,0,76],["2026-08-18","Dr. Abhishek",0,0,0,0,22,2,0,24],["2026-08-18","Dr. Divya",35,10,7,18,0,0,0,70],["2026-08-18","Dr. Preethi",35,10,6,18,0,0,0,69],["2026-08-18","Dt.Shravya",35,11,7,18,0,0,0,71],["2026-08-18","Dt. Mubaraka",35,10,7,18,0,0,0,70],["2026-08-18","Dr. Priyanka",35,10,7,18,0,0,0,70],["2026-08-18","Dr. Yogitha",35,10,7,18,0,0,0,70],["2026-08-19","Dr. Abhishek",0,0,0,0,15,1,0,16],["2026-08-19","Dr. Preethi",41,7,8,15,0,0,0,71],["2026-08-19","Dt.Shravya",41,9,7,15,0,0,0,72],["2026-08-19","Dt. Mubaraka",41,9,8,15,0,0,0,73],["2026-08-19","Dr. Priyanka",41,9,8,15,0,0,0,73],["2026-08-19","Dr. Yogitha",41,9,8,15,0,0,2,75],["2026-08-20","Dr. Preethi",41,8,3,15,0,1,0,68],["2026-08-20","Dt.Shravya",41,9,2,15,0,0,0,67],["2026-08-20","Dt. Mubaraka",42,8,2,15,0,0,0,67],["2026-08-20","Dr. Priyanka",41,8,2,15,0,1,0,67],["2026-08-20","Dr. Yogitha",42,9,2,6,0,1,5,65],["2026-08-21","Dr. Abhishek",0,0,0,0,40,3,0,43],["2026-08-21","Dt.Shravya",52,11,3,9,0,0,0,75],["2026-08-21","Dt. Mubaraka",39,10,3,0,0,0,0,52],["2026-08-21","Dr. Priyanka",22,10,3,0,0,0,0,35],["2026-08-21","Dr. Yogitha",6,11,0,18,0,0,4,39],["2026-08-22","Dr. Abhishek",0,0,0,0,11,9,0,20],["2026-08-22","Dr. Preethi",0,9,5,0,0,0,0,14],["2026-08-22","Dt.Shravya",32,9,8,18,0,0,0,67],["2026-08-22","Dt. Mubaraka",54,9,8,27,0,0,0,98],["2026-08-22","Dr. Priyanka",42,10,8,18,0,0,0,78],["2026-08-22","Dr. Yogitha",87,9,8,18,0,0,1,123],["2026-08-24","Dr. Abhishek",0,0,0,0,31,13,0,44],["2026-08-24","Dr. Divya",32,15,10,15,0,0,5,77],["2026-08-24","Dr. Preethi",34,14,11,0,0,0,0,59],["2026-08-24","Dt.Shravya",34,15,10,15,0,0,0,74],["2026-08-24","Dt. Mubaraka",34,15,10,15,0,0,0,74],["2026-08-24","Dr. Priyanka",34,15,11,15,0,0,0,75],["2026-08-24","Dr. Yogitha",34,15,11,15,0,0,0,75],["2026-08-25","Dr. Abhishek",0,0,0,0,10,0,0,10],["2026-08-25","Dr. Divya",39,8,5,17,0,0,1,70],["2026-08-25","Dr. Preethi",41,6,7,18,0,0,0,72],["2026-08-25","Dt.Shravya",41,8,5,18,0,0,0,72],["2026-08-25","Dt. Mubaraka",41,8,5,18,0,0,0,72],["2026-08-25","Dr. Priyanka",41,8,5,18,0,0,0,72],["2026-08-25","Dr. Yogitha",41,8,5,18,0,0,0,72],["2026-08-26","Dr. Divya",42,9,6,15,0,0,0,72],["2026-08-26","Dr. Preethi",42,9,7,15,0,0,0,73],["2026-08-26","Dt.Shravya",42,8,6,15,0,0,0,71],["2026-08-26","Dt. Mubaraka",42,8,6,15,0,0,0,71],["2026-08-22","Dr. Priyanka",44,0,0,28,0,0,0,72],["2026-08-26","Dr. Yogitha",42,9,6,15,0,0,0,72]];
+  var STATIC_CANCEL_SUMMARY = {"asOf":"2026-08-25","genuineYes":928,"genuineNo":226,"topReasons":[{"reason":"Patient Cancelled","count":1411},{"reason":"Cannot Prescribe Over Telemedicine Without A Valid Prescription","count":828},{"reason":"Patient needs in person visit","count":361},{"reason":"Medicines Stockup","count":354},{"reason":"Veterinary Prescriptions","count":247},{"reason":"Patient Not Cooperative","count":199},{"reason":"Others","count":124},{"reason":"Proxy Consultation","count":91}],"totalReviewed":1154};
+  var DATA_MAX_DATE = STATIC_PROJECT_ROWS.reduce(function(m,r){ return r[0] > m ? r[0] : m; }, STATIC_PROJECT_ROWS[0][0]);
+
+  var state = JSON.parse(JSON.stringify(STATIC_SNAPSHOT));
+  state.projectRows = STATIC_PROJECT_ROWS;
+  state.auditorRows = STATIC_AUDITOR_ROWS;
+  state.cancelRows = null; /* raw live rows, once fetched */
+  state.cancelSummary = STATIC_CANCEL_SUMMARY;
+  state.dataMaxDate = DATA_MAX_DATE;
+  state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null };
+
+  /* ---------- formatting ---------- */
+  function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
+  function fmtPct(n,d){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(d===undefined?1:d)+"%"; }
+  function fmtHours(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(1)+"h"; }
+  function fmtMinutes(n){
+    if(n===null||n===undefined||isNaN(n)) return "—";
+    var m = Math.round(n);
+    var h = Math.floor(m/60), r = m%60;
+    return h>0 ? (h+"h "+r+"m") : (r+"m");
+  }
+  function clampPct(n){ return Math.max(0, Math.min(100, n)); }
+  function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  /* ---------- date helpers ---------- */
+  function monthStartOf(iso){ return iso.slice(0,8)+"01"; }
+  function fmtDateLabel(iso){
+    if(!iso) return "—";
+    var d = new Date(iso+"T00:00:00Z");
+    return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"});
+  }
+  function fmtMonthLabel(iso){
+    if(!iso) return "—";
+    var d = new Date(iso+"T00:00:00Z");
+    return d.toLocaleDateString("en-IN",{month:"long",year:"numeric",timeZone:"UTC"});
+  }
+  function addDaysIso(iso, n){
+    var d = new Date(iso+"T00:00:00Z");
+    d.setUTCDate(d.getUTCDate()+n);
+    return d.toISOString().slice(0,10);
+  }
+  function daysBetween(a,b){
+    return Math.round((new Date(b+"T00:00:00Z") - new Date(a+"T00:00:00Z"))/86400000)+1;
+  }
+
+  /* ---------- Project_Input / Auditor_Input parsing (read_file_content, natural-language dump) ---------- */
+  function parseDateDMY(s){
+    var p = String(s).trim().split("-");
+    if(p.length!==3) return null;
+    return p[2]+"-"+p[1]+"-"+p[0];
+  }
+  function extractDatedRowTexts(section){
+    var m = section.match(/\d{2}-\d{2}-\d{4},/);
+    if(!m) return [];
+    var body = section.slice(section.indexOf(m[0]));
+    return body.split(/\s+(?=\d{2}-\d{2}-\d{4},)/).map(function(s){return s.trim();}).filter(Boolean);
+  }
+  function parseProjectAuditorText(text){
+    var am = text.search(/Auditor\\?_Input/);
+    if(am===-1) return null;
+    var projSection = text.slice(0, am);
+    var rest = text.slice(am);
+    var rm = rest.search(/Report\s+Audit Coverage Report|Copy of Report/);
+    var audSection = rm===-1 ? rest : rest.slice(0, rm);
+
+    var projectRows = extractDatedRowTexts(projSection).map(function(rt){
+      var f = rt.split(",");
+      var iso = parseDateDMY(f[0]);
+      var vol = f[2]!==undefined && f[2].trim()!=="" ? parseInt(f[2],10) : null;
+      var pop = f[3]!==undefined && f[3].trim()!=="" ? parseInt(f[3],10) : null;
+      var alloc = f[4]!==undefined && f[4].trim()!=="" ? parseInt(f[4],10) : null;
+      var score = f[5]!==undefined && f[5].trim()!=="" ? parseFloat(f[5].replace("%",""))/100 : null;
+      return [iso, (f[1]||"").trim(), vol, pop, alloc, (score===null||isNaN(score))?null:score];
+    }).filter(function(r){ return r[0] && /^\d{4}-\d{2}-\d{2}$/.test(r[0]) && r[1]; });
+
+    var auditorRows = extractDatedRowTexts(audSection).map(function(rt){
+      var f = rt.split(",");
+      var iso = parseDateDMY(f[0]);
+      function n(i){ if(i>=f.length) return 0; var v=f[i].trim(); if(v==="") return 0; var x=parseInt(v,10); return isNaN(x)?0:x; }
+      return [iso, (f[1]||"").trim(), n(2),n(3),n(4),n(5),n(6),n(7),n(8),n(9)];
+    }).filter(function(r){ return r[0] && /^\d{4}-\d{2}-\d{2}$/.test(r[0]) && r[1]; });
+
+    return (projectRows.length || auditorRows.length) ? {projectRows:projectRows, auditorRows:auditorRows} : null;
+  }
+
+  /* ---------- aggregation over [start,end] inclusive, ISO dates ---------- */
+  function aggregateProject(rows, start, end){
+    var byType = {};
+    TYPE_ORDER.forEach(function(t){ byType[t] = {type:t, vol:0, pop:0, alloc:0, weighted:0, scoredAlloc:0}; });
+    rows.forEach(function(r){
+      var date=r[0], type=r[1], vol=r[2], pop=r[3], alloc=r[4], score=r[5];
+      if(date<start || date>end) return;
+      if(!byType[type]) byType[type] = {type:type, vol:0, pop:0, alloc:0, weighted:0, scoredAlloc:0};
+      var b = byType[type];
+      b.vol += vol||0; b.pop += pop||0; b.alloc += alloc||0;
+      if(score!==null && alloc){ b.weighted += score*alloc; b.scoredAlloc += alloc; }
+    });
+    var order = TYPE_ORDER.concat(Object.keys(byType).filter(function(k){return TYPE_ORDER.indexOf(k)===-1;}));
+    var byTypeList = order.filter(function(k){return byType[k];}).map(function(k){
+      var b = byType[k];
+      return {
+        type:b.type, vol:b.vol, pop:b.pop, alloc:b.alloc,
+        pctOfVolume: b.vol ? b.alloc/b.vol*100 : null,
+        pctAllocated: b.pop ? b.alloc/b.pop*100 : null,
+        avgScore: b.scoredAlloc ? b.weighted/b.scoredAlloc*100 : null
+      };
+    });
+    var t = byTypeList.reduce(function(a,x){
+      a.vol+=x.vol; a.pop+=x.pop; a.alloc+=x.alloc;
+      if(x.avgScore!==null){ a.weighted += x.avgScore*x.alloc; a.scoredAlloc += x.alloc; }
+      return a;
+    }, {vol:0,pop:0,alloc:0,weighted:0,scoredAlloc:0});
+    var overall = {
+      vol:t.vol, pop:t.pop, alloc:t.alloc,
+      overallCoverage: t.vol ? t.alloc/t.vol*100 : null,
+      populatedCoverage: t.pop ? t.alloc/t.pop*100 : null,
+      avgScore: t.scoredAlloc ? t.weighted/t.scoredAlloc : null
+    };
+    return {byType:byTypeList, overall:overall};
+  }
+  function aggregateAuditors(rows, start, end){
+    var by = {};
+    rows.forEach(function(r){
+      var date=r[0], name=r[1];
+      if(date<start || date>end) return;
+      if(!by[name]) by[name] = {auditor:name, pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,patientTickets:0,csat:0,total:0,days:{}};
+      var b = by[name];
+      b.pds+=r[2]; b.mounjaro+=r[3]; b.cancellation+=r[4]; b.nonPharma+=r[5]; b.wlp+=r[6]; b.patientTickets+=r[7]; b.csat+=r[8]; b.total+=r[9];
+      if(r[9]>0) b.days[date]=true; /* a working day = at least one audit assigned that date */
+    });
+    return Object.keys(by).map(function(k){
+      var b = by[k];
+      var workingDays = Object.keys(b.days).length;
+      b.workingDays = workingDays;
+      b.avgPerWorkingDay = workingDays ? b.total/workingDays : null;
+      delete b.days;
+      return b;
+    }).sort(function(a,b){return b.total-a.total;});
+  }
+
+  /* ---------- PDS cancellation raw CSV parsing (download_file_content) ---------- */
+  function parseDateMDY(s){
+    /* "08-25-2026" -> "2026-08-25" */
+    var p = String(s||"").trim().split("-");
+    if(p.length!==3) return null;
+    return p[2]+"-"+p[0]+"-"+p[1];
+  }
+  function parseTimeAMPM(s){
+    /* "9:42:48 AM" -> seconds since midnight, or null */
+    var m = String(s||"").trim().match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if(!m) return null;
+    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=parseInt(m[3],10), ap=m[4].toUpperCase();
+    if(ap==="AM"){ if(h===12) h=0; } else { if(h!==12) h+=12; }
+    return h*3600+mi*60+se;
+  }
+  function parseCancellationCsv(csvText){
+    var rows = parseCSV(csvText);
+    if(!rows.length) return [];
+    var header = rows[0].map(function(h){return h.trim();});
+    var idxAuditDate = header.indexOf("Date of Audit");
+    var idxGenuine = header.indexOf("Genuine Cancellation");
+    var idxReason = header.indexOf("Reason for the cancellation");
+    var idxAuditor = header.indexOf("Auditor Name");
+    var idxStart = header.indexOf("Audit start Time");
+    var idxEnd = header.indexOf("Audit End Time");
+    if(idxAuditDate===-1 || idxReason===-1) return [];
+    var out = [];
+    for(var i=1;i<rows.length;i++){
+      var r = rows[i];
+      if(!r || r.length<2) continue;
+      var iso = parseDateMDY(r[idxAuditDate]);
+      var startSec = idxStart!==-1 ? parseTimeAMPM(r[idxStart]) : null;
+      var endSec = idxEnd!==-1 ? parseTimeAMPM(r[idxEnd]) : null;
+      var minutes = null;
+      if(startSec!==null && endSec!==null){
+        var d = endSec-startSec; if(d<0) d+=86400;
+        var mins = d/60;
+        if(mins>0 && mins<=180) minutes = mins; /* drop non-positive/implausible (>3h) outliers */
+      }
+      out.push({
+        date: iso,
+        genuine: idxGenuine!==-1 ? (r[idxGenuine]||"").trim() : "",
+        reason: (r[idxReason]||"").trim(),
+        auditor: idxAuditor!==-1 ? (r[idxAuditor]||"").trim() : "",
+        minutes: minutes
+      });
+    }
+    return out;
+  }
+  function aggregateCancellation(rows, start, end){
+    var yes=0, no=0, reasons={};
+    rows.forEach(function(r){
+      if(r.date && (r.date<start || r.date>end)) return;
+      if(!r.date) return;
+      if(r.genuine==="Yes") yes++;
+      else if(r.genuine==="No") no++;
+      if(r.reason){ reasons[r.reason] = (reasons[r.reason]||0)+1; }
+    });
+    var topReasons = Object.keys(reasons).map(function(k){return {reason:k, count:reasons[k]};})
+      .sort(function(a,b){return b.count-a.count;}).slice(0,8);
+    return {genuineYes:yes, genuineNo:no, totalReviewed:yes+no, topReasons:topReasons};
+  }
+  function aggregateCancellationTime(rows, start, end){
+    var byAuditor = {};
+    rows.forEach(function(r){
+      if(!r.date || r.date<start || r.date>end) return;
+      if(r.minutes===null || !r.auditor) return;
+      if(!byAuditor[r.auditor]) byAuditor[r.auditor] = {auditor:r.auditor, minutes:0, count:0, days:{}};
+      var b = byAuditor[r.auditor];
+      b.minutes += r.minutes; b.count += 1; b.days[r.date]=true;
+    });
+    var list = Object.keys(byAuditor).map(function(k){
+      var b = byAuditor[k];
+      var workingDays = Object.keys(b.days).length;
+      return {auditor:b.auditor, minutes:b.minutes, count:b.count, workingDays:workingDays, avgPerWorkingDay: workingDays ? b.minutes/workingDays : null};
+    }).sort(function(a,b){return b.minutes-a.minutes;});
+    var totalMinutes = list.reduce(function(a,x){return a+x.minutes;},0);
+    return {byAuditor:list, totalMinutes:totalMinutes};
+  }
+
+  /* per (date, auditor) — exact hours/minutes spent on a given day, newest first */
+  function dailyCancellationTime(rows, start, end){
+    var byKey = {};
+    rows.forEach(function(r){
+      if(!r.date || r.date<start || r.date>end) return;
+      if(r.minutes===null || !r.auditor) return;
+      var key = r.date+"|"+r.auditor;
+      if(!byKey[key]) byKey[key] = {date:r.date, auditor:r.auditor, minutes:0, count:0};
+      byKey[key].minutes += r.minutes; byKey[key].count += 1;
+    });
+    return Object.keys(byKey).map(function(k){ return byKey[k]; }).sort(function(a,b){
+      if(a.date!==b.date) return a.date<b.date ? 1 : -1;
+      return b.minutes-a.minutes;
+    });
+  }
+
+  /* ---------- render ---------- */
+  function computeTotals(byType){
+    var t = {zero:0,total:0,s95:0,s90:0};
+    byType.forEach(function(r){ t.zero+=r.zero; t.total+=r.total; t.s95+=r.s95; t.s90+=r.s90; });
+    t.pass = t.total ? (t.total - t.zero) / t.total * 100 : null;
+    return t;
+  }
+
+  function render(){
+    var totals = computeTotals(state.score.byType);
+    var manualTotal = state.auditors.reduce(function(a,x){return a+x.count;},0);
+    var manualAuditorCount = state.auditors.length;
+    var doctorTotal = state.doctors.reduce(function(a,x){return a+x.doctors;},0);
+    var doctorTypeCount = state.doctors.length;
+    var pharma = state.cs.Pharma || {};
+
+    document.getElementById("periodLabel").textContent = fmtDateLabel(state.dataMaxDate);
+    document.getElementById("snapshotNote").textContent = "Note : Please find the Audited Data Dated : "+fmtDateLabel(state.dataMaxDate);
+
+    /* KPI strip */
+    var kpis = [
+      {lbl:"Auto-Scored Audits", val: fmtInt(totals.total), sub:"GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
+      {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of scored calls this month" : "no scored calls yet", cls:"crit"},
+      {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" auto-scored calls", cls:"good"},
+      {lbl:"Manual QA Audits", val: fmtInt(manualTotal), sub:"completed by "+manualAuditorCount+" auditor"+(manualAuditorCount===1?"":"s")},
+      {lbl:"Doctors Covered", val: fmtInt(doctorTotal), sub:"across "+doctorTypeCount+" network type"+(doctorTypeCount===1?"":"s")},
+      {lbl:"Pharma CS Tickets", val: fmtInt(pharma.mtd), sub: fmtInt(pharma.high)+" flagged high-severity", cls:"warn"}
+    ];
+    document.getElementById("kpiRow").innerHTML = kpis.map(function(k){
+      return '<div class="kpi"><div class="lbl">'+esc(k.lbl)+'</div><div class="val tnum'+(k.cls?' '+k.cls:'')+'">'+k.val+'</div><div class="sub">'+esc(k.sub)+'</div></div>';
+    }).join("");
+
+    /* Stage row */
+    document.getElementById("stageRow").innerHTML = state.score.byType.map(function(r){
+      var pass = r.total ? (r.total-r.zero)/r.total*100 : null;
+      var zeroRate = r.total ? r.zero/r.total*100 : 0;
+      var cls = r.total===0 ? "empty" : (zeroRate>1 ? "flag" : "");
+      var meterCls = zeroRate>1 ? "warn" : "";
+      var meterW = pass===null ? 0 : clampPct(pass);
+      var subText = r.total===0 ? "no calls logged MTD" : (fmtInt(r.zero)+" critical · "+fmtPct(pass,1)+" pass");
+      return '<div class="stage '+cls+'"><div class="nm">'+esc(r.name)+'</div><div class="ct tnum">'+fmtInt(r.total)+'</div>'+
+        '<div class="meter"><i class="'+meterCls+'" style="width:'+meterW+'%"></i></div><div class="pct">'+subText+'</div></div>';
+    }).join("");
+
+    /* Project Wise Audit report — score-band distribution, <90% / 90-94% / 95-100% / Zero(0) / Grand Total */
+    var rowsHtml = state.score.byType.map(function(r){
+      return '<tr><td>'+esc(r.name)+'</td><td class="num tnum">'+fmtInt(r.sub90)+'</td><td class="num tnum">'+fmtInt(r.s90)+'</td>'+
+        '<td class="num tnum">'+fmtInt(r.s95)+'</td><td class="num tnum" style="'+(r.zero>0?'color:var(--crit)':'')+'">'+fmtInt(r.zero)+'</td><td class="num tnum">'+fmtInt(r.total)+'</td></tr>';
+    }).join("");
+    rowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.total)+'</td></tr>';
+    document.getElementById("scoreBody").innerHTML = rowsHtml;
+
+    /* Auditor leaderboard */
+    var sortedAuditors = state.auditors.slice().sort(function(a,b){return b.count-a.count;});
+    document.getElementById("leaderboardDesc").textContent = fmtInt(manualTotal)+" manually reviewed audits this period, across GLP / PDS Audit / Non Pharma / WLP.";
+    document.getElementById("leaderboardBody").innerHTML = sortedAuditors.length ? sortedAuditors.map(function(a){
+      var warn = a.avgScore<90 ? " warn" : "";
+      return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td>'+
+        '<td><span class="score-bar'+warn+'"><div class="track"><i style="width:'+clampPct(a.avgScore)+'%"></i></div><b class="tnum">'+fmtPct(a.avgScore,0)+'</b></span></td></tr>';
+    }).join("") : '<tr><td colspan="3" class="empty-note">No manual audits found for this period.</td></tr>';
+
+    /* Doctor coverage */
+    var maxDoctors = Math.max.apply(null, state.doctors.map(function(d){return d.doctors;}).concat([1]));
+    document.getElementById("doctorDesc").textContent = fmtInt(doctorTotal)+" doctors audited this period.";
+    document.getElementById("doctorCoverage").innerHTML = state.doctors.slice().sort(function(a,b){return b.doctors-a.doctors;}).map(function(d){
+      return '<div class="dc-row"><span>'+esc(d.type)+'</span><div class="track"><i style="width:'+clampPct(d.doctors/maxDoctors*100)+'%"></i></div>'+
+        '<span class="figs"><b class="tnum">'+fmtInt(d.doctors)+'</b> · '+fmtInt(d.audits)+' audits</span></div>';
+    }).join("");
+
+    /* Service lines */
+    var svc = "";
+    var ph = state.cs.Pharma;
+    if(ph){
+      var phBars = (ph.issues||[]).slice().sort(function(a,b){return b.count-a.count;}).map(function(i){
+        var w = ph.mtd ? clampPct(i.count/ph.mtd*100) : 0;
+        return '<div class="svc-bar"><span class="nm">'+esc(i.name)+'</span><div class="track"><i style="width:'+w+'%"></i></div><span class="v tnum">'+fmtInt(i.count)+'</span></div>';
+      }).join("");
+      var phNote = "";
+      if(ph.avgRes!==null && ph.avgRes!==undefined && ph.avgRes>500){
+        phNote = '<div class="svc-note">Sheet’s avg resolution time for Pharma MTD reads ~'+Math.round(ph.avgRes/24).toLocaleString("en-IN")+' days — almost certainly a small number of very old unresolved tickets skewing the average, not a typical case time. Shown as sourced; worth a data check upstream.</div>';
+      }
+      svc += '<div class="svc"><div class="svc-head"><span class="nm">Pharmacy</span><span class="vol tnum">'+fmtInt(ph.mtd)+' tickets MTD</span></div>'+
+        '<div class="svc-compare"><div><span class="k">MTD</span><span class="v tnum">'+fmtInt(ph.mtd)+'</span></div>'+
+        '<div><span class="k">LMTD</span><span class="v tnum">'+fmtInt(ph.lmtd)+'</span></div>'+
+        '<div><span class="k">LLMTD</span><span class="v tnum">'+fmtInt(ph.llmtd)+'</span></div>'+
+        '<div><span class="k">High severity</span><span class="v tnum" style="color:var(--crit)">'+fmtInt(ph.high)+'</span></div>'+
+        '<div><span class="k">Avg FRT</span><span class="v tnum">'+fmtHours(ph.avgFrt)+'</span></div></div>'+
+        '<div class="svc-bars">'+phBars+'</div>'+phNote+'</div>';
+    }
+    var diag = state.cs.Diagnostic;
+    if(diag){
+      var diagNote = (diag.lmtd>0 && diag.mtd < diag.lmtd*0.2) ? '<div class="svc-note">MTD volume is far below prior months’ pace at the same cutoff — likely a lag in this month’s log rather than an actual drop; worth confirming the sheet is fully synced.</div>' : "";
+      svc += '<div class="svc"><div class="svc-head"><span class="nm">Diagnostics</span><span class="vol tnum">'+fmtInt(diag.mtd)+' ticket'+(diag.mtd===1?"":"s")+' MTD</span></div>'+
+        '<div class="svc-compare"><div><span class="k">MTD</span><span class="v tnum">'+fmtInt(diag.mtd)+'</span></div>'+
+        '<div><span class="k">LMTD</span><span class="v tnum">'+fmtInt(diag.lmtd)+'</span></div>'+
+        '<div><span class="k">LLMTD</span><span class="v tnum">'+fmtInt(diag.llmtd)+'</span></div>'+
+        (diag.topIssue ? '<div><span class="k">Top issue (LMTD)</span><span class="v" style="font-size:11px">'+esc(diag.topIssue)+'</span></div>' : '')+
+        '</div>'+diagNote+'</div>';
+    }
+    var cons = state.cs.Consultation;
+    if(cons){
+      var consNote = (cons.lmtd>0 && cons.mtd < cons.lmtd*0.2) ? '<div class="svc-note">Same lag pattern as Diagnostics — MTD reads low against a steadier prior-month baseline.</div>' : "";
+      svc += '<div class="svc"><div class="svc-head"><span class="nm">Consults</span><span class="vol tnum">'+fmtInt(cons.mtd)+' ticket'+(cons.mtd===1?"":"s")+' MTD</span></div>'+
+        '<div class="svc-compare"><div><span class="k">MTD</span><span class="v tnum">'+fmtInt(cons.mtd)+'</span></div>'+
+        '<div><span class="k">LMTD</span><span class="v tnum">'+fmtInt(cons.lmtd)+'</span></div>'+
+        '<div><span class="k">LLMTD</span><span class="v tnum">'+fmtInt(cons.llmtd)+'</span></div>'+
+        '<div><span class="k">High (LMTD)</span><span class="v tnum">'+fmtInt(cons.high)+'</span></div>'+
+        '<div><span class="k">Medium (LMTD)</span><span class="v tnum">'+fmtInt(cons.medium)+'</span></div></div>'+consNote+'</div>';
+    }
+    document.getElementById("svcContainer").innerHTML = svc;
+
+    /* status chip + footer */
+    var chip = document.getElementById("statusChip");
+    var chipText = document.getElementById("statusText");
+    var asOf = document.getElementById("asOfLabel");
+    var fetchNote = document.getElementById("fetchNote");
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0);
+    if(liveCount===2){
+      chip.className = "status-chip";
+      chipText.textContent = "Live from Google Sheets";
+    } else if(liveCount>0){
+      chip.className = "status-chip stale";
+      chipText.textContent = "Partially live";
+    } else if(lastError.project || lastError.cancel){
+      chip.className = "status-chip stale";
+      chipText.textContent = "Showing last snapshot";
+    } else {
+      chip.className = "status-chip off";
+      chipText.textContent = "Connecting…";
+    }
+    asOf.textContent = state.fetchedAt ? new Date(state.fetchedAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}) : fmtDateLabel(state.dataMaxDate)+" (published)";
+    var notes = [];
+    if(lastError.project) notes.push("Audit coverage workbook: "+lastError.project);
+    if(lastError.cancel) notes.push("Cancellation sheet: "+lastError.cancel);
+    notes.push("Score leaderboard, doctor coverage & CS panels: periodic snapshot, not yet wired to auto-refresh.");
+    fetchNote.textContent = notes.join(" · ");
+
+    renderFilteredSections();
+  }
+
+  /* ---------- filter bar + date-filtered sections (Overall / Project-wise / Auditor-wise / Cancellation) ---------- */
+  var CHIPS = [
+    {key:"today", label:"Today"},
+    {key:"yesterday", label:"Yesterday"},
+    {key:"7d", label:"Last 7 Days"},
+    {key:"mtd", label:"MTD"},
+    {key:"30d", label:"Last 30 Days"},
+    {key:"all", label:"All Time"}
+  ];
+  var activeChip = "mtd";
+
+  function chipRange(key){
+    var end = state.dataMaxDate;
+    if(key==="today") return {start:end, end:end};
+    if(key==="yesterday"){ var y=addDaysIso(end,-1); return {start:y, end:y}; }
+    if(key==="7d") return {start:addDaysIso(end,-6), end:end};
+    if(key==="mtd") return {start:monthStartOf(end), end:end};
+    if(key==="30d") return {start:addDaysIso(end,-29), end:end};
+    if(key==="all"){
+      var minDate = state.projectRows.reduce(function(m,r){return r[0]<m?r[0]:m;}, end);
+      return {start:minDate, end:end};
+    }
+    return {start:monthStartOf(end), end:end};
+  }
+
+  function renderChipRow(){
+    document.getElementById("chipRow").innerHTML = CHIPS.map(function(c){
+      return '<button type="button" class="chip'+(activeChip===c.key?' active':'')+'" data-chip="'+c.key+'">'+esc(c.label)+'</button>';
+    }).join("");
+    Array.prototype.forEach.call(document.querySelectorAll("#chipRow .chip"), function(btn){
+      btn.addEventListener("click", function(){
+        activeChip = btn.getAttribute("data-chip");
+        var r = chipRange(activeChip);
+        state.filter.start = r.start; state.filter.end = r.end;
+        renderFilteredSections();
+      });
+    });
+  }
+  renderChipRow();
+
+  document.getElementById("filterStart").addEventListener("change", function(e){
+    activeChip = null;
+    state.filter.start = e.target.value || state.filter.start;
+    renderFilteredSections();
+  });
+  document.getElementById("filterEnd").addEventListener("change", function(e){
+    activeChip = null;
+    state.filter.end = e.target.value || state.filter.end;
+    renderFilteredSections();
+  });
+
+  function renderFilteredSections(){
+    if(state.filter.start > state.filter.end){ var t=state.filter.start; state.filter.start=state.filter.end; state.filter.end=t; }
+    document.getElementById("filterStart").value = state.filter.start;
+    document.getElementById("filterEnd").value = state.filter.end;
+    Array.prototype.forEach.call(document.querySelectorAll("#chipRow .chip"), function(btn){
+      btn.classList.toggle("active", btn.getAttribute("data-chip")===activeChip);
+    });
+    var nDays = daysBetween(state.filter.start, state.filter.end);
+    document.getElementById("filterRangeLabel").innerHTML = fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' <b>('+nDays+' day'+(nDays===1?"":"s")+')</b>';
+
+    /* MTD banner — always current month, independent of the filter above */
+    var mtdAgg = aggregateProject(state.projectRows, monthStartOf(state.dataMaxDate), state.dataMaxDate);
+    document.getElementById("mtdRangeLabel").textContent = fmtMonthLabel(state.dataMaxDate)+" · through "+fmtDateLabel(state.dataMaxDate);
+    var mtdStats = [
+      {k:"Total Consult Volume", v:fmtInt(mtdAgg.overall.vol)},
+      {k:"Total Audits Populated", v:fmtInt(mtdAgg.overall.pop)},
+      {k:"Total Audits Allocated", v:fmtInt(mtdAgg.overall.alloc)},
+      {k:"Overall Audit Coverage", v:fmtPct(mtdAgg.overall.overallCoverage,2)},
+      {k:"Populated Audit Coverage", v:fmtPct(mtdAgg.overall.populatedCoverage,1)},
+      {k:"Average Audit Score", v:fmtPct(mtdAgg.overall.avgScore,1)}
+    ];
+    document.getElementById("mtdStats").innerHTML = mtdStats.map(function(s){
+      return '<div class="mtd-stat"><div class="k">'+esc(s.k)+'</div><div class="v tnum">'+s.v+'</div></div>';
+    }).join("");
+
+    /* 1. Overall Audit Summary (date-filtered) */
+    var agg = aggregateProject(state.projectRows, state.filter.start, state.filter.end);
+    var ov = agg.overall;
+    var overallKpis = [
+      {lbl:"Total Consult Volume", val:fmtInt(ov.vol)},
+      {lbl:"Total Audits Populated", val:fmtInt(ov.pop)},
+      {lbl:"Total Audits Allocated", val:fmtInt(ov.alloc)},
+      {lbl:"Overall Audit Coverage", val:fmtPct(ov.overallCoverage,2)},
+      {lbl:"Populated Audit Coverage", val:fmtPct(ov.populatedCoverage,1), cls:"good"},
+      {lbl:"Average Audit Score", val:fmtPct(ov.avgScore,1), cls: (ov.avgScore!==null && ov.avgScore<90) ? "warn" : "good"}
+    ];
+    document.getElementById("overallKpiRow").innerHTML = overallKpis.map(function(k){
+      return '<div class="kpi"><div class="lbl">'+esc(k.lbl)+'</div><div class="val tnum'+(k.cls?' '+k.cls:'')+'">'+k.val+'</div></div>';
+    }).join("");
+
+    /* 2. Project-wise Audit Summary */
+    var projRowsHtml = agg.byType.map(function(t){
+      return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+fmtInt(t.vol)+'</td><td class="num tnum">'+fmtInt(t.pop)+'</td><td class="num tnum">'+fmtInt(t.alloc)+'</td>'+
+        '<td class="num tnum">'+fmtPct(t.pctOfVolume,1)+'</td><td class="num tnum">'+fmtPct(t.pctAllocated,1)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td></tr>';
+    }).join("");
+    projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(ov.vol)+'</td><td class="num tnum">'+fmtInt(ov.pop)+'</td><td class="num tnum">'+fmtInt(ov.alloc)+'</td>'+
+      '<td class="num tnum">'+fmtPct(ov.overallCoverage,2)+'</td><td class="num tnum">'+fmtPct(ov.populatedCoverage,1)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td></tr>';
+    document.getElementById("projectTableBody").innerHTML = projRowsHtml;
+
+    /* 3. Auditor-wise Allocation Summary */
+    var auditorAgg = aggregateAuditors(state.auditorRows, state.filter.start, state.filter.end);
+    var audRowsHtml = auditorAgg.length ? auditorAgg.map(function(a){
+      return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.pds)+'</td><td class="num tnum">'+fmtInt(a.mounjaro)+'</td><td class="num tnum">'+fmtInt(a.cancellation)+'</td>'+
+        '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.patientTickets)+'</td><td class="num tnum">'+fmtInt(a.csat)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td>'+
+        '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':a.avgPerWorkingDay.toFixed(1))+'</td></tr>';
+    }).join("") : '<tr><td colspan="11" class="empty-note">No allocation data for this range.</td></tr>';
+    if(auditorAgg.length){
+      var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.patientTickets+=x.patientTickets;a.csat+=x.csat;a.total+=x.total;a.workingDays+=x.workingDays; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,patientTickets:0,csat:0,total:0,workingDays:0});
+      var avgAll = audTotal.workingDays ? (audTotal.total/audTotal.workingDays) : null;
+      audRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(audTotal.pds)+'</td><td class="num tnum">'+fmtInt(audTotal.mounjaro)+'</td><td class="num tnum">'+fmtInt(audTotal.cancellation)+'</td>'+
+        '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.patientTickets)+'</td><td class="num tnum">'+fmtInt(audTotal.csat)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td>'+
+        '<td class="num tnum">&mdash;</td><td class="num tnum">'+(avgAll===null?'—':avgAll.toFixed(1))+'</td></tr>';
+    }
+    document.getElementById("auditorTableBody").innerHTML = audRowsHtml;
+
+    /* PDS Cancellation — reason mix */
+    var cancelRowsSrc = state.cancelRows;
+    var cancelAgg;
+    if(cancelRowsSrc){
+      cancelAgg = aggregateCancellation(cancelRowsSrc, state.filter.start, state.filter.end);
+      document.getElementById("cancelDesc").textContent = "Genuine-cancellation review, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+".";
+    } else {
+      cancelAgg = {genuineYes: state.cancelSummary.genuineYes, genuineNo: state.cancelSummary.genuineNo, totalReviewed: state.cancelSummary.totalReviewed, topReasons: state.cancelSummary.topReasons};
+      document.getElementById("cancelDesc").textContent = "Genuine-cancellation review, cumulative snapshot as of "+fmtDateLabel(state.cancelSummary.asOf)+" (connecting for live, range-filtered data…).";
+    }
+    document.getElementById("gcSplit").innerHTML =
+      '<div class="gc-pill yes"><div class="v tnum">'+fmtInt(cancelAgg.genuineYes)+'</div><div class="k">Genuine</div></div>'+
+      '<div class="gc-pill no"><div class="v tnum">'+fmtInt(cancelAgg.genuineNo)+'</div><div class="k">Not genuine</div></div>';
+    var maxReason = Math.max.apply(null, cancelAgg.topReasons.map(function(r){return r.count;}).concat([1]));
+    document.getElementById("reasonList").innerHTML = cancelAgg.topReasons.length ? cancelAgg.topReasons.map(function(r){
+      return '<div class="reason-row"><span class="nm">'+esc(r.reason)+'</span><div class="track"><i style="width:'+clampPct(r.count/maxReason*100)+'%"></i></div><span class="v tnum">'+fmtInt(r.count)+'</span></div>';
+    }).join("") : '<div class="empty-note">No cancellation reasons logged for this range.</div>';
+
+    /* Auditor working time (from Audit start/end time — live on PDS Cancellation reviews) */
+    if(cancelRowsSrc){
+      var timeAgg = aggregateCancellationTime(cancelRowsSrc, state.filter.start, state.filter.end);
+      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (PDS Cancellation reviews).";
+      document.getElementById("cancelTimeBody").innerHTML = timeAgg.byAuditor.length ? timeAgg.byAuditor.map(function(a){
+        return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td><td class="num tnum">'+fmtMinutes(a.minutes)+'</td>'+
+          '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':fmtMinutes(a.avgPerWorkingDay))+'</td></tr>';
+      }).join("") : '<tr><td colspan="5" class="empty-note">No timed cancellation reviews for this range.</td></tr>';
+    } else {
+      document.getElementById("cancelTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
+      document.getElementById("cancelTimeBody").innerHTML = '<tr><td colspan="5" class="empty-note">Connecting to live cancellation sheet for working-time data…</td></tr>';
+    }
+
+    /* Daily Working Time — exact hrs/min per auditor per day */
+    if(cancelRowsSrc){
+      var dailyTime = dailyCancellationTime(cancelRowsSrc, state.filter.start, state.filter.end);
+      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent on cancellation reviews, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (from Audit Start/End Time). Sorted newest date first.";
+      document.getElementById("dailyTimeBody").innerHTML = dailyTime.length ? dailyTime.map(function(d){
+        return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtMinutes(d.minutes)+'</td></tr>';
+      }).join("") : '<tr><td colspan="4" class="empty-note">No timed cancellation reviews for this range.</td></tr>';
+    } else {
+      document.getElementById("dailyTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
+      document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="4" class="empty-note">Connecting to live cancellation sheet for working-time data…</td></tr>';
+    }
+  }
+
+  render();
+
+  /* ---------- markdown-table parsing (audit workbook) ---------- */
+  function parsePipeRow(line){
+    var s = line.trim();
+    if(s.charAt(0)==="|") s = s.slice(1);
+    if(s.charAt(s.length-1)==="|") s = s.slice(0,-1);
+    return s.split("|").map(function(c){
+      return c.trim()
+        .replace(/\\_/g,"_").replace(/\\-/g,"-").replace(/\\\(/g,"(").replace(/\\\)/g,")")
+        .replace(/&nbsp;/g," ").replace(/&mdash;/g,"—").replace(/&ndash;/g,"–").replace(/&amp;/g,"&");
+    });
+  }
+  function splitMarkdownTables(content){
+    var re = /\n\|(?: :-: \|)+\n/g;
+    var seps = []; var m;
+    while((m = re.exec(content))){ seps.push({index:m.index, len:m[0].length}); }
+    var tables = [];
+    for(var i=0;i<seps.length;i++){
+      var start = seps[i].index + seps[i].len;
+      var end = (i+1<seps.length) ? seps[i+1].index : content.length;
+      var block = content.slice(start, end);
+      var rows = block.split("\n").filter(function(r){return r.trim().charAt(0)==="|";}).map(parsePipeRow);
+      tables.push(rows);
+    }
+    return tables;
+  }
+  function findTable(tables, mustIncludeAll){
+    for(var t=0;t<tables.length;t++){
+      var rows = tables[t];
+      for(var r=0;r<rows.length;r++){
+        var joined = rows[r].join(" | ");
+        var ok = true;
+        for(var s=0;s<mustIncludeAll.length;s++){ if(joined.indexOf(mustIncludeAll[s])===-1){ ok=false; break; } }
+        if(ok) return rows;
+      }
+    }
+    return null;
+  }
+  function toNum(s){
+    if(s===undefined||s===null) return NaN;
+    var n = parseFloat(String(s).replace(/,/g,"").replace("%",""));
+    return n;
+  }
+
+  function parseScoreDistribution(tables){
+    var rows = findTable(tables, ["Types","GLP","PDS Audit","PDS WLP"]);
+    if(!rows) return null;
+    var header = null;
+    for(var i=0;i<rows.length;i++){ if(rows[i].indexOf("Types")!==-1){ header = rows[i]; break; } }
+    if(!header) return null;
+    var typeIdx = header.indexOf("Types");
+    var cols = [];
+    for(var c=typeIdx+1;c<header.length;c++){
+      var name = header[c];
+      if(!name) continue;
+      cols.push({name:name, idx:c});
+      if(name==="Total") break;
+    }
+    if(!cols.length) return null;
+    var bands = {};
+    rows.forEach(function(r){
+      var label = r[typeIdx];
+      if(["Zero(0)","95-100%","90-94%","<90%","Total"].indexOf(label)!==-1){
+        bands[label] = {};
+        cols.forEach(function(cd){ bands[label][cd.name] = toNum(r[cd.idx]) || 0; });
+      }
+    });
+    if(!bands["Total"]) return null;
+    var typeNames = cols.filter(function(c){return c.name!=="Total";}).map(function(c){return c.name;});
+    var byType = typeNames.map(function(name){
+      return {
+        name: name,
+        zero: (bands["Zero(0)"]||{})[name] || 0,
+        s95: (bands["95-100%"]||{})[name] || 0,
+        s90: (bands["90-94%"]||{})[name] || 0,
+        sub90: (bands["<90%"]||{})[name] || 0,
+        total: (bands["Total"]||{})[name] || 0
+      };
+    });
+    return byType;
+  }
+
+  function parseAuditorLeaderboard(tables){
+    var rows = findTable(tables, ["Auditor Name","COUNTA of Auditor Name"]);
+    if(!rows) return null;
+    var header = null;
+    for(var i=0;i<rows.length;i++){ if(rows[i].indexOf("Audit type")!==-1 && rows[i].indexOf("Auditor Name")!==-1){ header = rows[i]; break; } }
+    if(!header) return null;
+    var idxType = header.indexOf("Audit type"), idxAuditor = header.indexOf("Auditor Name"),
+        idxCount = header.indexOf("COUNTA of Auditor Name"), idxPct = header.indexOf("AVERAGE of Attained %");
+    var currentType = "";
+    var byAuditor = {};
+    rows.forEach(function(r){
+      if(r===header) return;
+      var typeCell = (r[idxType]||"").trim();
+      var auditor = (r[idxAuditor]||"").trim();
+      if(typeCell && typeCell.toLowerCase().indexOf("total")===-1) currentType = typeCell;
+      if(!auditor || auditor.toLowerCase().indexOf("total")!==-1) return;
+      var count = parseInt(r[idxCount],10);
+      var pct = toNum(r[idxPct]);
+      if(isNaN(count) || isNaN(pct)) return;
+      if(!byAuditor[auditor]) byAuditor[auditor] = {auditor:auditor, count:0, weighted:0, types:{}};
+      byAuditor[auditor].count += count;
+      byAuditor[auditor].weighted += count*pct;
+      byAuditor[auditor].types[currentType||"(unspecified)"] = true;
+    });
+    var out = Object.keys(byAuditor).map(function(k){
+      var a = byAuditor[k];
+      return {auditor:a.auditor, count:a.count, avgScore: a.count ? a.weighted/a.count : 0};
+    });
+    return out.length ? out : null;
+  }
+
+  function parseDoctorCoverage(tables){
+    var rows = findTable(tables, ["Doctor Type","Dr ID","COUNTA of Doctor Name"]);
+    if(!rows) return null;
+    var header = null;
+    for(var i=0;i<rows.length;i++){ if(rows[i].indexOf("Doctor Type")!==-1 && rows[i].indexOf("Dr ID")!==-1){ header = rows[i]; break; } }
+    if(!header) return null;
+    var idxType = header.indexOf("Doctor Type"), idxName = header.indexOf("Doctor Name"),
+        idxId = header.indexOf("Dr ID"), idxCount = header.indexOf("COUNTA of Doctor Name");
+    var currentType = null;
+    var groups = {};
+    rows.forEach(function(r){
+      if(r===header) return;
+      var typeCell = (r[idxType]||"").trim();
+      var name = (r[idxName]||"").trim();
+      var id = (r[idxId]||"").trim();
+      if(typeCell){
+        var norm = typeCell.toUpperCase().replace(/\s+/g,"_");
+        currentType = (norm.indexOf("DOCTOR")!==-1 && norm.indexOf("CONNECT")!==-1) ? "DOCTOR_CONNECT" : norm;
+      }
+      if(!name || !id || !currentType) return;
+      var count = parseInt(r[idxCount],10);
+      if(isNaN(count)) return;
+      if(!groups[currentType]) groups[currentType] = {type:currentType, doctors:0, audits:0};
+      groups[currentType].doctors += 1;
+      groups[currentType].audits += count;
+    });
+    var out = Object.keys(groups).map(function(k){return groups[k];});
+    return out.length ? out : null;
+  }
+
+  /* ---------- CSV parsing (CS ticket sheet) ---------- */
+  function parseCSV(text){
+    var rows = [], row = [], field = "", inQuotes = false;
+    for(var i=0;i<text.length;i++){
+      var ch = text[i];
+      if(inQuotes){
+        if(ch === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else inQuotes = false; }
+        else field += ch;
+      } else {
+        if(ch === '"') inQuotes = true;
+        else if(ch === ","){ row.push(field); field=""; }
+        else if(ch === "\r"){ /* skip */ }
+        else if(ch === "\n"){ row.push(field); rows.push(row); row=[]; field=""; }
+        else field += ch;
+      }
+    }
+    if(field.length || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+  function parseCsSheet(csvText){
+    var rows = parseCSV(csvText);
+    var result = {};
+    var currentCat = null;
+    for(var i=2;i<rows.length;i++){
+      var r = rows[i];
+      if(!r || r.length<4) continue;
+      var cat = (r[0]||"").trim();
+      var sev = (r[1]||"").trim();
+      var label = (r[2]||"").trim();
+      if(cat) currentCat = cat;
+      if(!currentCat) continue;
+      if(!result[currentCat]) result[currentCat] = {issues:[]};
+      var mtdCount = toNum(r[3]);
+      if(label === "Overall"){
+        result[currentCat].mtd = mtdCount || 0;
+        result[currentCat].lmtd = toNum(r[6]) || 0;
+        result[currentCat].llmtd = toNum(r[9]) || 0;
+        result[currentCat].avgRes = r[4]!==undefined && r[4]!=="" ? toNum(r[4]) : null;
+        result[currentCat].avgFrt = r[5]!==undefined && r[5]!=="" ? toNum(r[5]) : null;
+      } else if(sev === "High" && label === "High Total"){
+        result[currentCat].high = mtdCount || 0;
+      } else if(sev === "Medium" && label === "Medium Total"){
+        result[currentCat].medium = mtdCount || 0;
+      } else if(label && !cat && !sev && mtdCount>0){
+        result[currentCat].issues.push({name:label, count:mtdCount});
+      }
+    }
+    return result;
+  }
+
+  /* ---------- base64 -> utf8 ---------- */
+  function b64ToUtf8(b64){
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for(var i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  function extractPayload(result){
+    var p = result && result.payload;
+    if(p == null) return null;
+    if(typeof p === "string") return p;
+    if(typeof p.fileContent === "string") return p.fileContent;
+    return p;
+  }
+
+  /* ---------- standalone live data: plain fetch() against public Google endpoints, no Claude involved ---------- */
+  var PROJECT_XLSX_URL = "https://drive.google.com/uc?export=download&id=" + FILE_PROJECT;
+  var CANCEL_CSV_URL   = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&gid=0";
+  var REFRESH_MS = 10 * 60 * 1000; /* auto-refresh every 10 minutes */
+
+  lastError.audit = "not connected yet — this panel shows a periodic snapshot, not a live feed";
+  lastError.cs = "not connected yet — this panel shows a periodic snapshot, not a live feed";
+
+  function pad2(n){ return n<10 ? "0"+n : ""+n; }
+  function toIsoDateFromCell(v){
+    if(v instanceof Date && !isNaN(v)) return v.getUTCFullYear()+"-"+pad2(v.getUTCMonth()+1)+"-"+pad2(v.getUTCDate());
+    if(typeof v === "string"){
+      var m = v.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if(m) return m[3]+"-"+pad2(+m[1])+"-"+pad2(+m[2]);
+    }
+    return null;
+  }
+
+  function loadProjectAuditorLive(){
+    return fetch(PROJECT_XLSX_URL, {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.arrayBuffer();
+    }).then(function(buf){
+      if(typeof XLSX === "undefined") throw new Error("xlsx parser didn't load");
+      var wb = XLSX.read(buf, {type:"array", cellDates:true});
+      var wsP = wb.Sheets["Project_Input"], wsA = wb.Sheets["Auditor_Input"];
+      if(!wsP || !wsA) throw new Error("sheet layout changed");
+      var pRows = XLSX.utils.sheet_to_json(wsP, {header:1, raw:true, blankrows:false});
+      var aRows = XLSX.utils.sheet_to_json(wsA, {header:1, raw:true, blankrows:false});
+      var projectRows = [];
+      for(var i=1;i<pRows.length;i++){
+        var r = pRows[i]; if(!r || r[1]==null || r[1]==="") continue;
+        var iso = toIsoDateFromCell(r[0]); if(!iso) continue;
+        var score = (r[5]===""||r[5]==null) ? null : Number(r[5]);
+        projectRows.push([iso, String(r[1]).trim(), Number(r[2])||0, Number(r[3])||0, Number(r[4])||0, (score===null||isNaN(score))?null:score]);
+      }
+      var auditorRows = [];
+      for(var j=1;j<aRows.length;j++){
+        var r2 = aRows[j]; if(!r2 || r2[1]==null || r2[1]==="") continue;
+        var iso2 = toIsoDateFromCell(r2[0]); if(!iso2) continue;
+        auditorRows.push([iso2, String(r2[1]).trim(), Number(r2[2])||0, Number(r2[3])||0, Number(r2[4])||0, Number(r2[5])||0, Number(r2[6])||0, Number(r2[7])||0, Number(r2[8])||0, Number(r2[9])||0]);
+      }
+      if(!projectRows.length) throw new Error("no rows parsed");
+      return {projectRows: projectRows, auditorRows: auditorRows};
+    });
+  }
+
+  function loadCancellationLive(){
+    return fetch(CANCEL_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCancellationCsv(csvText);
+      if(!rows.length) throw new Error("no rows parsed");
+      return rows;
+    });
+  }
+
+  function refreshAll(){
+    loadProjectAuditorLive().then(function(parsed){
+      state.projectRows = parsed.projectRows;
+      state.auditorRows = parsed.auditorRows.length ? parsed.auditorRows : state.auditorRows;
+      state.dataMaxDate = parsed.projectRows.reduce(function(m,r){return r[0]>m?r[0]:m;}, parsed.projectRows[0][0]);
+      if(activeChip){ var r2 = chipRange(activeChip); state.filter.start = r2.start; state.filter.end = r2.end; }
+      liveOK.project = true; lastError.project = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.project = false;
+      lastError.project = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadCancellationLive().then(function(rows){
+      state.cancelRows = rows;
+      liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.cancel = false;
+      lastError.cancel = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+  }
+
+  document.getElementById("refreshBtn").style.display = "inline-block";
+  document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+  refreshAll();
+  setInterval(refreshAll, REFRESH_MS);
+
+})();
+</script>
+</body>
+</html>
