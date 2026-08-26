@@ -673,14 +673,29 @@
   function parseAuditTimeCsv(csvText){
     var rows = parseCSV(csvText);
     if(!rows.length) return [];
-    var header = rows[0].map(function(h){return h.trim();});
+    /* Some checklist tabs (PDS Audit Sheet, Non Pharma Audit Sheet) have 1-2 grouped/point-value
+       rows above the real header, and "Date of Audit"/"Audit start Time"/"Audit End Time" come back
+       as BLANK cells from gviz on that header row (a merged-cell export quirk) even though the data
+       is right there underneath. "Auditor Name" is the one label that's always present verbatim, so:
+       find whichever of the first few rows has it, then look up date/start/end by name — falling
+       back to the fixed layout observed on those two tabs (one column before Auditor Name is the
+       date, one and two after are start/end) only when the name lookup comes up empty. */
+    var headerRowIdx = -1, idxAuditor = -1;
+    for(var hr=0; hr<Math.min(5,rows.length); hr++){
+      var htrim = rows[hr].map(function(h){return h.trim();});
+      var ai = htrim.indexOf("Auditor Name");
+      if(ai!==-1){ headerRowIdx = hr; idxAuditor = ai; break; }
+    }
+    if(headerRowIdx===-1) return [];
+    var header = rows[headerRowIdx].map(function(h){return h.trim();});
     var idxAuditDate = header.indexOf("Date of Audit");
-    var idxAuditor = header.indexOf("Auditor Name");
     var idxStart = header.indexOf("Audit start Time");
     var idxEnd = header.indexOf("Audit End Time");
-    if(idxAuditDate===-1 || idxAuditor===-1) return [];
+    if(idxAuditDate===-1) idxAuditDate = idxAuditor-1;
+    if(idxStart===-1) idxStart = idxAuditor+1;
+    if(idxEnd===-1) idxEnd = idxAuditor+2;
     var out = [];
-    for(var i=1;i<rows.length;i++){
+    for(var i=headerRowIdx+1;i<rows.length;i++){
       var r = rows[i];
       if(!r || r.length<2) continue;
       var iso = parseDateMDY(r[idxAuditDate]);
