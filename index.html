@@ -297,7 +297,7 @@
     <div class="gc-split" id="gcSplit"></div>
     <div id="reasonList"></div>
     <h2 style="margin-top:18px;font-size:14px">Auditor working time</h2>
-    <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. PDS Cancellation reviews only for now.</p>
+    <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS Cancellation + PDS WLP (Mounjaro) + GLP audits &mdash; the checklists that log start/end time.</p>
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg Time/Day</th></tr></thead>
@@ -309,7 +309,7 @@
 
 <div class="panel" style="margin-bottom:30px" id="dailyTimePanel">
   <h2>Daily Working Time &mdash; by auditor &amp; date</h2>
-  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent on cancellation reviews, day by day, in the selected range (from Audit Start/End Time). Sorted newest date first.</p>
+  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS Cancellation + PDS WLP (Mounjaro) + GLP audits combined. Sorted newest date first.</p>
   <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
     <table>
       <thead><tr><th>Date</th><th>Auditor</th><th class="num">Reviews</th><th class="num">Time Spent</th></tr></thead>
@@ -481,7 +481,8 @@
   var state = JSON.parse(JSON.stringify(STATIC_SNAPSHOT));
   state.projectRows = STATIC_PROJECT_ROWS;
   state.auditorRows = STATIC_AUDITOR_ROWS;
-  state.cancelRows = null; /* raw live rows, once fetched */
+  state.cancelRows = null; /* raw live rows, once fetched — PDS Cancellation only (used for reason-mix) */
+  state.workTimeRows = null; /* combined timed rows: PDS Cancellation + PDS WLP (Mounjaro) + GLP — used for working-time panels */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
@@ -663,6 +664,35 @@
         auditor: idxAuditor!==-1 ? (r[idxAuditor]||"").trim() : "",
         minutes: minutes
       });
+    }
+    return out;
+  }
+  /* Same "Date of Audit / Auditor Name / Audit start Time / Audit End Time" columns as the cancellation
+     sheet, but these checklists (PDS WLP/Mounjaro, GLP) don't have a "Reason for the cancellation"
+     column — parseCancellationCsv would bail out on that, so this variant only requires date+time. */
+  function parseAuditTimeCsv(csvText){
+    var rows = parseCSV(csvText);
+    if(!rows.length) return [];
+    var header = rows[0].map(function(h){return h.trim();});
+    var idxAuditDate = header.indexOf("Date of Audit");
+    var idxAuditor = header.indexOf("Auditor Name");
+    var idxStart = header.indexOf("Audit start Time");
+    var idxEnd = header.indexOf("Audit End Time");
+    if(idxAuditDate===-1 || idxAuditor===-1) return [];
+    var out = [];
+    for(var i=1;i<rows.length;i++){
+      var r = rows[i];
+      if(!r || r.length<2) continue;
+      var iso = parseDateMDY(r[idxAuditDate]);
+      var startSec = idxStart!==-1 ? parseTimeAMPM(r[idxStart]) : null;
+      var endSec = idxEnd!==-1 ? parseTimeAMPM(r[idxEnd]) : null;
+      var minutes = null;
+      if(startSec!==null && endSec!==null){
+        var d = endSec-startSec; if(d<0) d+=86400;
+        var mins = d/60;
+        if(mins>0 && mins<=180) minutes = mins;
+      }
+      out.push({ date: iso, genuine: "", reason: "", auditor: (r[idxAuditor]||"").trim(), minutes: minutes });
     }
     return out;
   }
@@ -987,29 +1017,33 @@
       return '<div class="reason-row"><span class="nm">'+esc(r.reason)+'</span><div class="track"><i style="width:'+clampPct(r.count/maxReason*100)+'%"></i></div><span class="v tnum">'+fmtInt(r.count)+'</span></div>';
     }).join("") : '<div class="empty-note">No cancellation reasons logged for this range.</div>';
 
-    /* Auditor working time (from Audit start/end time — live on PDS Cancellation reviews) */
-    if(cancelRowsSrc){
-      var timeAgg = aggregateCancellationTime(cancelRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (PDS Cancellation reviews).";
+    /* Auditor working time — combined from every checklist that actually logs Audit start/end Time:
+       PDS Cancellation + PDS WLP (Mounjaro) + GLP. Plain PDS, Non Pharma, Patient Tickets and CSAT
+       checklists don't record start/end timestamps in the source sheets, so their time can't be
+       measured — their review counts are in the Allocation Summary table above instead. */
+    var workRowsSrc = state.workTimeRows;
+    if(workRowsSrc){
+      var timeAgg = aggregateCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
+      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS Cancellation + PDS WLP (Mounjaro) + GLP audits combined. PDS, Non Pharma, Patient Tickets & CSAT checklists don't log start/end time, so aren't in this time total (see Allocation Summary above for their full counts).";
       document.getElementById("cancelTimeBody").innerHTML = timeAgg.byAuditor.length ? timeAgg.byAuditor.map(function(a){
         return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td><td class="num tnum">'+fmtMinutes(a.minutes)+'</td>'+
           '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':fmtMinutes(a.avgPerWorkingDay))+'</td></tr>';
-      }).join("") : '<tr><td colspan="5" class="empty-note">No timed cancellation reviews for this range.</td></tr>';
+      }).join("") : '<tr><td colspan="5" class="empty-note">No timed audits for this range.</td></tr>';
     } else {
       document.getElementById("cancelTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
-      document.getElementById("cancelTimeBody").innerHTML = '<tr><td colspan="5" class="empty-note">Connecting to live cancellation sheet for working-time data…</td></tr>';
+      document.getElementById("cancelTimeBody").innerHTML = '<tr><td colspan="5" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
     }
 
-    /* Daily Working Time — exact hrs/min per auditor per day */
-    if(cancelRowsSrc){
-      var dailyTime = dailyCancellationTime(cancelRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent on cancellation reviews, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (from Audit Start/End Time). Sorted newest date first.";
+    /* Daily Working Time — exact hrs/min per auditor per day, same combined sources as above */
+    if(workRowsSrc){
+      var dailyTime = dailyCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
+      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS Cancellation + PDS WLP (Mounjaro) + GLP audits combined (from Audit Start/End Time). PDS, Non Pharma, Patient Tickets & CSAT checklists don't log start/end time so aren't counted here. Sorted newest date first.";
       document.getElementById("dailyTimeBody").innerHTML = dailyTime.length ? dailyTime.map(function(d){
         return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtMinutes(d.minutes)+'</td></tr>';
-      }).join("") : '<tr><td colspan="4" class="empty-note">No timed cancellation reviews for this range.</td></tr>';
+      }).join("") : '<tr><td colspan="4" class="empty-note">No timed audits for this range.</td></tr>';
     } else {
       document.getElementById("dailyTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
-      document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="4" class="empty-note">Connecting to live cancellation sheet for working-time data…</td></tr>';
+      document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="4" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
     }
   }
 
@@ -1226,6 +1260,11 @@
   /* ---------- standalone live data: plain fetch() against public Google endpoints, no Claude involved ---------- */
   var PROJECT_XLSX_URL = "https://drive.google.com/uc?export=download&id=" + FILE_PROJECT;
   var CANCEL_CSV_URL   = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&gid=0";
+  /* Extra checklist tabs inside the FILE_AUDIT workbook that also log Audit start/end Time —
+     PDS (Non Pharma) and plain PDS Audit checklists do NOT log start/end time in the source sheet,
+     so they can't be included here; these two are the only other tabs that do. */
+  var WLP_MOUNJARO_CSV_URL = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent("WLP_Audit_PDS-Mounjaro_Import");
+  var GLP_WLP_CSV_URL      = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent("WLP_Audit_BS WLP Audits_Import");
   var REFRESH_MS = 10 * 60 * 1000; /* auto-refresh every 10 minutes */
 
   lastError.audit = "not connected yet — this panel shows a periodic snapshot, not a live feed";
@@ -1281,6 +1320,21 @@
     });
   }
 
+  /* PDS WLP (Mounjaro) + GLP checklists — also log Audit start/end Time, so their rows can join the
+     working-time total. Each source degrades to [] on its own if unreachable, so a hiccup on one tab
+     doesn't kill the others or the Cancellation-based time. */
+  function loadWorkTimeExtraLive(){
+    var urls = [WLP_MOUNJARO_CSV_URL, GLP_WLP_CSV_URL];
+    return Promise.all(urls.map(function(u){
+      return fetch(u + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      }).then(function(csvText){
+        return parseAuditTimeCsv(csvText);
+      }).catch(function(){ return []; });
+    })).then(function(results){ return results[0].concat(results[1]); });
+  }
+
   function refreshAll(){
     loadProjectAuditorLive().then(function(parsed){
       state.projectRows = parsed.projectRows;
@@ -1295,8 +1349,10 @@
       render();
     });
 
-    loadCancellationLive().then(function(rows){
-      state.cancelRows = rows;
+    Promise.all([loadCancellationLive(), loadWorkTimeExtraLive()]).then(function(results){
+      var cancelRows = results[0], extraRows = results[1];
+      state.cancelRows = cancelRows;
+      state.workTimeRows = cancelRows.concat(extraRows);
       liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now();
       render();
     }).catch(function(e){
