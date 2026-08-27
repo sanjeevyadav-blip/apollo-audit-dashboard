@@ -847,9 +847,9 @@
 
     /* KPI strip */
     var kpis = [
-      {lbl:"Auto-Scored Audits", val: fmtInt(totals.total), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP, MTD (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
-      {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of scored calls this month" : "no scored calls yet", cls:"crit"},
-      {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" auto-scored calls", cls:"good"},
+      {lbl:"Total Audits", val: fmtInt(totals.grandTotal), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP + PDS Cancellation, MTD (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
+      {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)" : "no scored calls yet", cls:"crit"},
+      {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)", cls:"good"},
       {lbl:"Manual QA Audits", val: fmtInt(manualTotal), sub:"completed by "+manualAuditorCount+" auditor"+(manualAuditorCount===1?"":"s")},
       {lbl:"Doctors Covered", val: fmtInt(doctorTotal), sub:"across "+doctorTypeCount+" network type"+(doctorTypeCount===1?"":"s")}
     ];
@@ -1345,7 +1345,12 @@
   }
 
   /* ---------- standalone live data: plain fetch() against public Google endpoints, no Claude involved ---------- */
-  var CANCEL_CSV_URL   = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&gid=0";
+  /* gid=0 on this file is a raw "Date of appointment" cancellation-request log with no audit tracking
+     columns at all (no Date of Audit / Auditor Name / Genuine Cancellation) — it stopped being the
+     right tab to read. "PDS Cancellation Sheet" (gid=909502922) is the tab actually maintained for
+     audit tracking now; it has the full Date of Audit / Audit start+End Time / Auditor Name / Genuine
+     Cancellation columns parseCancellationCsv needs, confirmed live through today. */
+  var CANCEL_CSV_URL   = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&gid=909502922";
   /* Extra checklist tabs inside the FILE_AUDIT workbook that also log Audit start/end Time —
      PDS (Non Pharma) and plain PDS Audit checklists do NOT log start/end time in the source sheet,
      so they can't be included here; these two are the only other tabs that do. */
