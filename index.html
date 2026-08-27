@@ -485,7 +485,7 @@
   var DATA_MAX_DATE = "2026-08-26"; /* placeholder only — overwritten by the live Merge Overall Sheet fetch on load */
 
   var state = JSON.parse(JSON.stringify(STATIC_SNAPSHOT));
-  state.auditRows = null; /* raw live rows [dateISO, type, auditorName, scoreFraction|null], once fetched — PDS/PDS-Mounjaro/Non Pharma/WLP from Merge Overall Sheet */
+  state.auditRows = null; /* raw live rows [dateISO, type, auditorName, scoreFraction|null, doctorName, doctorType], once fetched — PDS/PDS-Mounjaro/Non Pharma/WLP from Merge Overall Sheet; also feeds the leaderboard + doctor-coverage panels */
   state.cancelRows = null; /* raw live rows, once fetched — PDS Cancellation only (used for reason-mix, and the PDS Cancellation column above) */
   state.workTimeRows = null; /* combined timed rows: PDS Cancellation + PDS WLP (Mounjaro) + GLP — used for working-time panels */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
@@ -641,6 +641,42 @@
       delete b.days;
       return b;
     }).sort(function(a,b){return b.total-a.total;});
+  }
+
+  /* ---------- live auditor leaderboard + doctor coverage ----------
+     Both derive from the same auditRows already fetched for the score panels — Merge Overall Sheet
+     rows now carry Doctor Name (col H) and Doctor Type (col L) alongside type/date/auditor/score, so
+     no separate sheet fetch is needed. PDS Cancellation rows are already excluded from auditRows by
+     the query in loadAuditSummaryLive, so every row here is a genuine manually-scored audit. */
+  function aggregateLeaderboard(auditRows, start, end){
+    var by = {};
+    auditRows.forEach(function(r){
+      var date=r[0], auditor=r[2], score=r[3];
+      if(date<start || date>end || !auditor) return;
+      if(!by[auditor]) by[auditor] = {auditor:auditor, count:0, weighted:0, scoredCount:0};
+      var b = by[auditor];
+      b.count += 1;
+      if(score!==null){ b.weighted += score; b.scoredCount += 1; }
+    });
+    return Object.keys(by).map(function(k){
+      var b = by[k];
+      return { auditor:b.auditor, count:b.count, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : 0 };
+    }).sort(function(a,b){return b.count-a.count;});
+  }
+  function aggregateDoctorCoverage(auditRows, start, end){
+    var by = {};
+    auditRows.forEach(function(r){
+      var date=r[0], doctorName=r[4], doctorType=r[5];
+      if(date<start || date>end || !doctorType) return;
+      if(!by[doctorType]) by[doctorType] = {type:doctorType, names:{}, audits:0};
+      var b = by[doctorType];
+      b.audits += 1;
+      if(doctorName) b.names[doctorName] = true;
+    });
+    return Object.keys(by).map(function(k){
+      var b = by[k];
+      return { type:b.type, doctors:Object.keys(b.names).length, audits:b.audits };
+    }).sort(function(a,b){return b.doctors-a.doctors;});
   }
 
   /* ---------- live score-band breakdown (Auto-Scored Volume by Audit Type / Project Wise Audit report) ----------
@@ -830,14 +866,21 @@
 
   function render(){
     var scoreLive = state.auditRows && state.cancelRows;
+    var auditLive = !!state.auditRows;
     var scoreByType = scoreLive
       ? aggregateScoreBands(state.auditRows, state.cancelRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
       : state.score.byType;
     var totals = computeTotals(scoreByType);
-    var manualTotal = state.auditors.reduce(function(a,x){return a+x.count;},0);
-    var manualAuditorCount = state.auditors.length;
-    var doctorTotal = state.doctors.reduce(function(a,x){return a+x.doctors;},0);
-    var doctorTypeCount = state.doctors.length;
+    var leaderboardRows = auditLive
+      ? aggregateLeaderboard(state.auditRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
+      : state.auditors;
+    var doctorRows = auditLive
+      ? aggregateDoctorCoverage(state.auditRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
+      : state.doctors;
+    var manualTotal = leaderboardRows.reduce(function(a,x){return a+x.count;},0);
+    var manualAuditorCount = leaderboardRows.length;
+    var doctorTotal = doctorRows.reduce(function(a,x){return a+x.doctors;},0);
+    var doctorTypeCount = doctorRows.length;
     var pharma = state.cs.Pharma || {};
 
     document.getElementById("periodLabel").textContent = fmtDateLabel(state.dataMaxDate);
@@ -879,7 +922,7 @@
     document.getElementById("scoreBody").innerHTML = rowsHtml;
 
     /* Auditor leaderboard */
-    var sortedAuditors = state.auditors.slice().sort(function(a,b){return b.count-a.count;});
+    var sortedAuditors = leaderboardRows.slice().sort(function(a,b){return b.count-a.count;});
     document.getElementById("leaderboardDesc").textContent = fmtInt(manualTotal)+" manually reviewed audits this period, across GLP / PDS Audit / Non Pharma / WLP.";
     document.getElementById("leaderboardBody").innerHTML = sortedAuditors.length ? sortedAuditors.map(function(a){
       var warn = a.avgScore<90 ? " warn" : "";
@@ -888,9 +931,9 @@
     }).join("") : '<tr><td colspan="3" class="empty-note">No manual audits found for this period.</td></tr>';
 
     /* Doctor coverage */
-    var maxDoctors = Math.max.apply(null, state.doctors.map(function(d){return d.doctors;}).concat([1]));
+    var maxDoctors = Math.max.apply(null, doctorRows.map(function(d){return d.doctors;}).concat([1]));
     document.getElementById("doctorDesc").textContent = fmtInt(doctorTotal)+" doctors audited this period.";
-    document.getElementById("doctorCoverage").innerHTML = state.doctors.slice().sort(function(a,b){return b.doctors-a.doctors;}).map(function(d){
+    document.getElementById("doctorCoverage").innerHTML = doctorRows.slice().sort(function(a,b){return b.doctors-a.doctors;}).map(function(d){
       return '<div class="dc-row"><span>'+esc(d.type)+'</span><div class="track"><i style="width:'+clampPct(d.doctors/maxDoctors*100)+'%"></i></div>'+
         '<span class="figs"><b class="tnum">'+fmtInt(d.doctors)+'</b> · '+fmtInt(d.audits)+' audits</span></div>';
     }).join("");
@@ -942,14 +985,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0);
-    if(liveCount===2){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0);
+    if(liveCount===3){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel){
+    } else if(lastError.project || lastError.cancel || lastError.cs){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -958,10 +1001,10 @@
     }
     asOf.textContent = state.fetchedAt ? new Date(state.fetchedAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}) : fmtDateLabel(state.dataMaxDate)+" (published)";
     var notes = [];
-    if(lastError.project) notes.push("Audit summary sheet: "+lastError.project);
+    if(lastError.project) notes.push("Audit summary sheet (also feeds leaderboard & doctor coverage): "+lastError.project);
     if(lastError.cancel) notes.push("Cancellation sheet: "+lastError.cancel);
-    notes.push("Score leaderboard, doctor coverage & CS panels: periodic snapshot, not yet wired to auto-refresh.");
-    fetchNote.textContent = notes.join(" · ");
+    if(lastError.cs) notes.push("CS ticket sheet: "+lastError.cs);
+    fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
   }
@@ -1301,7 +1344,7 @@
     var rows = parseCSV(csvText);
     var result = {};
     var currentCat = null;
-    for(var i=2;i<rows.length;i++){
+    for(var i=1;i<rows.length;i++){
       var r = rows[i];
       if(!r || r.length<4) continue;
       var cat = (r[0]||"").trim();
@@ -1360,7 +1403,6 @@
   var NON_PHARMA_CSV_URL   = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent("Non Pharma Audit Sheet");
   var REFRESH_MS = 10 * 60 * 1000; /* auto-refresh every 10 minutes */
 
-  lastError.audit = "not connected yet — this panel shows a periodic snapshot, not a live feed";
   lastError.cs = "not connected yet — this panel shows a periodic snapshot, not a live feed";
 
   function pad2(n){ return n<10 ? "0"+n : ""+n; }
@@ -1373,12 +1415,14 @@
      (it also has some PDS Cancellation rows, but the dedicated FILE_CANCEL sheet is the fuller,
      already-validated source for that type, so cancellations are excluded here via the WHERE clause
      and pulled from FILE_CANCEL instead). Columns: N=Audit type, O=Date of Audit, Q=Auditor Name,
-     S=Attained % (matches the old score field 1:1 — confirmed against raw sheet values). The tq=
-     query runs server-side on Google's end, so only these 4 columns and ~13 months of rows come
-     down the wire instead of the sheet's full multi-megabyte export. */
+     S=Attained % (matches the old score field 1:1 — confirmed against raw sheet values), plus
+     H=Doctor Name, L=Doctor Type (feeds the leaderboard + doctor-coverage panels, confirmed live
+     against real rows — e.g. "Dr. Ravulapati Triveni" / "ATHS_PHARMA"). The tq= query runs
+     server-side on Google's end, so only these 6 columns and ~13 months of rows come down the wire
+     instead of the sheet's full multi-megabyte export. */
   function loadAuditSummaryLive(){
     var floor = isoDateNDaysAgo(400);
-    var tq = "select N,O,Q,S where O >= date '"+floor+"' and N <> 'PDS Cancellation'";
+    var tq = "select N,O,Q,S,H,L where O >= date '"+floor+"' and N <> 'PDS Cancellation'";
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(MERGE_SHEET_NAME) + "&tq=" + encodeURIComponent(tq);
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
@@ -1400,7 +1444,9 @@
           var num = parseFloat(scoreRaw.replace("%",""));
           if(!isNaN(num)) score = num/100;
         }
-        out.push([iso, type, auditor, score]);
+        var doctorName = (r[4]||"").trim();
+        var doctorType = (r[5]||"").trim();
+        out.push([iso, type, auditor, score, doctorName, doctorType]);
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -1415,6 +1461,23 @@
       var rows = parseCancellationCsv(csvText);
       if(!rows.length) throw new Error("no rows parsed");
       return rows;
+    });
+  }
+
+  /* Service lines — CS ticket volume. FILE_CS's "Sheet1" tab has one Overall/High Total/Medium Total
+     block per service line (Consultation, Diagnostic, "Pharma " — trimmed to "Pharma"), each with
+     MTD/LMTD/LLMTD counts, confirmed live against the real sheet. It doesn't carry an issue-level
+     breakdown (that lives on a separate Pharma_Raw tab), so the per-issue bars under Pharmacy stay
+     empty rather than showing stale numbers — everything else on this panel is live. */
+  var CS_CSV_URL = "https://docs.google.com/spreadsheets/d/" + FILE_CS + "/gviz/tq?tqx=out:csv&sheet=Sheet1";
+  function loadCsLive(){
+    return fetch(CS_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var result = parseCsSheet(csvText);
+      if(!result || !Object.keys(result).length) throw new Error("no rows parsed");
+      return result;
     });
   }
 
@@ -1457,6 +1520,16 @@
     }).catch(function(e){
       liveOK.cancel = false;
       lastError.cancel = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadCsLive().then(function(cs){
+      state.cs = cs;
+      liveOK.cs = true; lastError.cs = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.cs = false;
+      lastError.cs = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
