@@ -435,6 +435,10 @@
   /* ---------- last-published static snapshot (fallback / initial paint) ---------- */
   var STATIC_SNAPSHOT = {
     fetchedAt: null,
+    asOfDate: "2026-08-26", /* the actual date this periodic snapshot (score bands, leaderboard, doctor
+      coverage, CS tickets) was captured for — these panels aren't live yet (see footer), so this must
+      stay independent of state.dataMaxDate, which now reflects the live Merge Overall Sheet feed and
+      can legitimately be a day ahead (D-1 vs. today) of this still-static snapshot. */
     period: "1–26 Aug 2026 (MTD)",
     score: {
       byType: [
@@ -639,6 +643,36 @@
     }).sort(function(a,b){return b.total-a.total;});
   }
 
+  /* ---------- live score-band breakdown (Auto-Scored Volume by Audit Type / Project Wise Audit report) ----------
+     Same auditRows/cancelRows as above, banded by score (<90% / 90-94% / 95-100% / Zero) instead of just
+     counted. Uses the raw Merge Overall Sheet type names (GLP/PDS Audit/PDS WLP/Non Pharma Audit) since
+     that's what these two panels have always displayed, not the TYPE_ORDER labels used elsewhere.
+     PDS Cancellation isn't points-scored (genuine/not-genuine only), so it gets a real live total with
+     zero'd score bands rather than a fabricated score. */
+  function aggregateScoreBands(auditRows, cancelRows, start, end){
+    var RAW_NAME = { "PDS":"PDS Audit", "PDS- Mounjaro":"PDS WLP", "Non Pharma":"Non Pharma Audit", "WLP - Non Pharma":"GLP" };
+    var DISPLAY_ORDER = ["GLP","PDS Audit","PDS WLP","Non Pharma Audit"];
+    var byType = {};
+    DISPLAY_ORDER.forEach(function(n){ byType[n] = {name:n, zero:0, s95:0, s90:0, sub90:0, total:0}; });
+    auditRows.forEach(function(r){
+      var date=r[0], type=r[1], score=r[3];
+      if(date<start || date>end) return;
+      var displayName = RAW_NAME[type]; if(!displayName) return;
+      var b = byType[displayName];
+      b.total += 1;
+      if(score===null) return;
+      if(score<=0) b.zero += 1;
+      else if(score>=0.95) b.s95 += 1;
+      else if(score>=0.90) b.s90 += 1;
+      else b.sub90 += 1;
+    });
+    var cancelTotal = 0;
+    cancelRows.forEach(function(r){ if(r.date && r.date>=start && r.date<=end) cancelTotal += 1; });
+    var list = DISPLAY_ORDER.map(function(n){ return byType[n]; });
+    list.push({name:"PDS Cancellation", zero:0, s95:0, s90:0, sub90:0, total:cancelTotal});
+    return list;
+  }
+
   /* ---------- PDS cancellation raw CSV parsing (download_file_content) ---------- */
   function parseDateMDY(s){
     /* "08-25-2026" -> "2026-08-25" */
@@ -781,14 +815,25 @@
 
   /* ---------- render ---------- */
   function computeTotals(byType){
-    var t = {zero:0,total:0,s95:0,s90:0};
-    byType.forEach(function(r){ t.zero+=r.zero; t.total+=r.total; t.s95+=r.s95; t.s90+=r.s90; });
+    /* PDS Cancellation is excluded — it isn't points-scored, so it shouldn't dilute the "auto-scored"
+       total, zero-score rate, or pass rate. grandTotal (used only for the score-band table's Grand
+       Total row) sums every row including Cancellation, since that row is shown in the table above it. */
+    var t = {zero:0,total:0,s95:0,s90:0,grandTotal:0};
+    byType.forEach(function(r){
+      t.grandTotal += r.total;
+      if(r.name==="PDS Cancellation") return;
+      t.zero+=r.zero; t.total+=r.total; t.s95+=r.s95; t.s90+=r.s90;
+    });
     t.pass = t.total ? (t.total - t.zero) / t.total * 100 : null;
     return t;
   }
 
   function render(){
-    var totals = computeTotals(state.score.byType);
+    var scoreLive = state.auditRows && state.cancelRows;
+    var scoreByType = scoreLive
+      ? aggregateScoreBands(state.auditRows, state.cancelRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
+      : state.score.byType;
+    var totals = computeTotals(scoreByType);
     var manualTotal = state.auditors.reduce(function(a,x){return a+x.count;},0);
     var manualAuditorCount = state.auditors.length;
     var doctorTotal = state.doctors.reduce(function(a,x){return a+x.doctors;},0);
@@ -796,39 +841,41 @@
     var pharma = state.cs.Pharma || {};
 
     document.getElementById("periodLabel").textContent = fmtDateLabel(state.dataMaxDate);
-    document.getElementById("snapshotNote").textContent = "Note : Please find the Audited Data Dated : "+fmtDateLabel(state.dataMaxDate);
+    document.getElementById("snapshotNote").textContent = scoreLive
+      ? "Note : Please find the Audited Data through : "+fmtDateLabel(state.dataMaxDate)+" (MTD, live — PDS Cancellation now included)"
+      : "Note : Please find the Audited Data Dated : "+fmtDateLabel(state.asOfDate)+" (D-1 — connecting for live data…)";
 
     /* KPI strip */
     var kpis = [
-      {lbl:"Auto-Scored Audits", val: fmtInt(totals.total), sub:"GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
+      {lbl:"Auto-Scored Audits", val: fmtInt(totals.total), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP, MTD (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
       {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of scored calls this month" : "no scored calls yet", cls:"crit"},
       {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" auto-scored calls", cls:"good"},
       {lbl:"Manual QA Audits", val: fmtInt(manualTotal), sub:"completed by "+manualAuditorCount+" auditor"+(manualAuditorCount===1?"":"s")},
-      {lbl:"Doctors Covered", val: fmtInt(doctorTotal), sub:"across "+doctorTypeCount+" network type"+(doctorTypeCount===1?"":"s")},
-      {lbl:"Pharma CS Tickets", val: fmtInt(pharma.mtd), sub: fmtInt(pharma.high)+" flagged high-severity", cls:"warn"}
+      {lbl:"Doctors Covered", val: fmtInt(doctorTotal), sub:"across "+doctorTypeCount+" network type"+(doctorTypeCount===1?"":"s")}
     ];
     document.getElementById("kpiRow").innerHTML = kpis.map(function(k){
       return '<div class="kpi"><div class="lbl">'+esc(k.lbl)+'</div><div class="val tnum'+(k.cls?' '+k.cls:'')+'">'+k.val+'</div><div class="sub">'+esc(k.sub)+'</div></div>';
     }).join("");
 
     /* Stage row */
-    document.getElementById("stageRow").innerHTML = state.score.byType.map(function(r){
+    document.getElementById("stageRow").innerHTML = scoreByType.map(function(r){
+      var notScored = r.name === "PDS Cancellation"; /* genuine/not-genuine review, not points-scored */
       var pass = r.total ? (r.total-r.zero)/r.total*100 : null;
       var zeroRate = r.total ? r.zero/r.total*100 : 0;
-      var cls = r.total===0 ? "empty" : (zeroRate>1 ? "flag" : "");
-      var meterCls = zeroRate>1 ? "warn" : "";
-      var meterW = pass===null ? 0 : clampPct(pass);
-      var subText = r.total===0 ? "no calls logged MTD" : (fmtInt(r.zero)+" critical · "+fmtPct(pass,1)+" pass");
+      var cls = r.total===0 ? "empty" : (notScored ? "" : (zeroRate>1 ? "flag" : ""));
+      var meterCls = (!notScored && zeroRate>1) ? "warn" : "";
+      var meterW = notScored ? 0 : (pass===null ? 0 : clampPct(pass));
+      var subText = r.total===0 ? "no calls logged MTD" : (notScored ? "not points-scored (genuine/not-genuine review)" : (fmtInt(r.zero)+" critical · "+fmtPct(pass,1)+" pass"));
       return '<div class="stage '+cls+'"><div class="nm">'+esc(r.name)+'</div><div class="ct tnum">'+fmtInt(r.total)+'</div>'+
         '<div class="meter"><i class="'+meterCls+'" style="width:'+meterW+'%"></i></div><div class="pct">'+subText+'</div></div>';
     }).join("");
 
     /* Project Wise Audit report — score-band distribution, <90% / 90-94% / 95-100% / Zero(0) / Grand Total */
-    var rowsHtml = state.score.byType.map(function(r){
+    var rowsHtml = scoreByType.map(function(r){
       return '<tr><td>'+esc(r.name)+'</td><td class="num tnum">'+fmtInt(r.sub90)+'</td><td class="num tnum">'+fmtInt(r.s90)+'</td>'+
         '<td class="num tnum">'+fmtInt(r.s95)+'</td><td class="num tnum" style="'+(r.zero>0?'color:var(--crit)':'')+'">'+fmtInt(r.zero)+'</td><td class="num tnum">'+fmtInt(r.total)+'</td></tr>';
     }).join("");
-    rowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.total)+'</td></tr>';
+    rowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.grandTotal)+'</td></tr>';
     document.getElementById("scoreBody").innerHTML = rowsHtml;
 
     /* Auditor leaderboard */
