@@ -502,6 +502,13 @@
   }
   function clampPct(n){ return Math.max(0, Math.min(100, n)); }
   function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  /* Source sheets sometimes drop the period after "Dr"/"Dt" (e.g. "Dt Mubaraka" vs "Dt. Mubaraka"),
+     which would otherwise split one auditor into two rows across every panel. Normalize at parse
+     time so it's fixed everywhere at once, not just in one table. */
+  function canonicalAuditorName(raw){
+    var s = String(raw||"").trim().replace(/\s+/g," ");
+    return s.replace(/^(Dr|Dt)\.?\s+/i, function(m,p1){ return p1.charAt(0).toUpperCase()+p1.slice(1).toLowerCase()+". "; });
+  }
 
   /* ---------- date helpers ---------- */
   function monthStartOf(iso){ return iso.slice(0,8)+"01"; }
@@ -675,7 +682,7 @@
         date: iso,
         genuine: idxGenuine!==-1 ? (r[idxGenuine]||"").trim() : "",
         reason: (r[idxReason]||"").trim(),
-        auditor: idxAuditor!==-1 ? (r[idxAuditor]||"").trim() : "",
+        auditor: idxAuditor!==-1 ? canonicalAuditorName(r[idxAuditor]) : "",
         minutes: minutes
       });
     }
@@ -721,7 +728,7 @@
         var mins = d/60;
         if(mins>0 && mins<=180) minutes = mins;
       }
-      out.push({ date: iso, genuine: "", reason: "", auditor: (r[idxAuditor]||"").trim(), minutes: minutes });
+      out.push({ date: iso, genuine: "", reason: "", auditor: canonicalAuditorName(r[idxAuditor]), minutes: minutes });
     }
     return out;
   }
@@ -1334,7 +1341,7 @@
         if(!type) continue;
         var iso = parseDateMDY(r[1]);
         if(!iso) continue;
-        var auditor = (r[2]||"").trim();
+        var auditor = canonicalAuditorName(r[2]);
         var scoreRaw = (r[3]||"").trim();
         var score = null;
         if(scoreRaw){
