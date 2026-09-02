@@ -1733,17 +1733,24 @@
      only audits genuinely unique to "BS WLP Audits" (Dr. Abhishek's WLP/GLP work today) count under
      WLP - Non Pharma, while a real future "BS WLP Audits" row for another auditor still counts. */
   function dedupeWlpAgainstMounjaro(wlpRows, mounjaroRows){
+    /* Matches primarily on (auditor, Appt ID). A small, recurring subset of "BS WLP Audits" rows
+       come through with a blank Appt ID cell (a data-entry gap, not a real distinct case) — every
+       one checked so far turned out to have an exact same-auditor/same-date/same-doctor-name row
+       over in "PDS-Mounjaro" too, just under a populated Appt ID. So when the Appt ID is missing,
+       fall back to matching on (auditor, date, doctor name) instead of defaulting to "keep" —
+       otherwise these gaps quietly inflate "WLP - Non Pharma" with what are still duplicate rows. */
     if(!wlpRows || !wlpRows.length || !mounjaroRows || !mounjaroRows.length) return wlpRows;
-    var seen = {};
+    var seenByAppt = {}, seenByDateDoctor = {};
     mounjaroRows.forEach(function(r){
       var apptId = r[6];
-      if(!apptId) return;
-      seen[r[2] + "||" + apptId] = true;
+      if(apptId) seenByAppt[r[2] + "||" + apptId] = true;
+      if(r[4]) seenByDateDoctor[r[2] + "||" + r[0] + "||" + r[4]] = true;
     });
     return wlpRows.filter(function(r){
       var apptId = r[6];
-      if(!apptId) return true; /* no Appt ID to compare (older rows/unresolved column) — keep as-is */
-      return !seen[r[2] + "||" + apptId];
+      if(apptId) return !seenByAppt[r[2] + "||" + apptId];
+      if(!r[4]) return true; /* no doctor name either — nothing to match on, keep as-is */
+      return !seenByDateDoctor[r[2] + "||" + r[0] + "||" + r[4]];
     });
   }
 
