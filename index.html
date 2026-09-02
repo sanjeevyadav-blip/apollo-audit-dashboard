@@ -866,77 +866,11 @@
 
   function render(){
     var scoreLive = state.auditRows && state.cancelRows;
-    var auditLive = !!state.auditRows;
-    var scoreByType = scoreLive
-      ? aggregateScoreBands(state.auditRows, state.cancelRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
-      : state.score.byType;
-    var totals = computeTotals(scoreByType);
-    var leaderboardRows = auditLive
-      ? aggregateLeaderboard(state.auditRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
-      : state.auditors;
-    var doctorRows = auditLive
-      ? aggregateDoctorCoverage(state.auditRows, monthStartOf(state.dataMaxDate), state.dataMaxDate)
-      : state.doctors;
-    var manualTotal = leaderboardRows.reduce(function(a,x){return a+x.count;},0);
-    var manualAuditorCount = leaderboardRows.length;
-    var doctorTotal = doctorRows.reduce(function(a,x){return a+x.doctors;},0);
-    var doctorTypeCount = doctorRows.length;
-    var pharma = state.cs.Pharma || {};
 
     document.getElementById("periodLabel").textContent = fmtDateLabel(state.dataMaxDate);
     document.getElementById("snapshotNote").textContent = scoreLive
-      ? "Note : Please find the Audited Data through : "+fmtDateLabel(state.dataMaxDate)+" (MTD, live — PDS Cancellation now included)"
+      ? "Note : Please find the Audited Data through : "+fmtDateLabel(state.dataMaxDate)+" (live — PDS Cancellation included; KPIs/leaderboard/doctor coverage below follow the date range selected above)"
       : "Note : Please find the Audited Data Dated : "+fmtDateLabel(state.asOfDate)+" (D-1 — connecting for live data…)";
-
-    /* KPI strip */
-    var kpis = [
-      {lbl:"Total Audits", val: fmtInt(totals.grandTotal), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP + PDS Cancellation, MTD (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
-      {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)" : "no scored calls yet", cls:"crit"},
-      {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)", cls:"good"},
-      {lbl:"Manual QA Audits", val: fmtInt(manualTotal), sub:"completed by "+manualAuditorCount+" auditor"+(manualAuditorCount===1?"":"s")},
-      {lbl:"Doctors Covered", val: fmtInt(doctorTotal), sub:"across "+doctorTypeCount+" network type"+(doctorTypeCount===1?"":"s")}
-    ];
-    document.getElementById("kpiRow").innerHTML = kpis.map(function(k){
-      return '<div class="kpi"><div class="lbl">'+esc(k.lbl)+'</div><div class="val tnum'+(k.cls?' '+k.cls:'')+'">'+k.val+'</div><div class="sub">'+esc(k.sub)+'</div></div>';
-    }).join("");
-
-    /* Stage row */
-    document.getElementById("stageRow").innerHTML = scoreByType.map(function(r){
-      var notScored = r.name === "PDS Cancellation"; /* genuine/not-genuine review, not points-scored */
-      var pass = r.total ? (r.total-r.zero)/r.total*100 : null;
-      var zeroRate = r.total ? r.zero/r.total*100 : 0;
-      var cls = r.total===0 ? "empty" : (notScored ? "" : (zeroRate>1 ? "flag" : ""));
-      var meterCls = (!notScored && zeroRate>1) ? "warn" : "";
-      var meterW = notScored ? 0 : (pass===null ? 0 : clampPct(pass));
-      var subText = r.total===0 ? "no calls logged MTD" : (notScored ? "not points-scored (genuine/not-genuine review)" : (fmtInt(r.zero)+" critical · "+fmtPct(pass,1)+" pass"));
-      return '<div class="stage '+cls+'"><div class="nm">'+esc(r.name)+'</div><div class="ct tnum">'+fmtInt(r.total)+'</div>'+
-        '<div class="meter"><i class="'+meterCls+'" style="width:'+meterW+'%"></i></div><div class="pct">'+subText+'</div></div>';
-    }).join("");
-
-    /* Project Wise Audit report — score-band distribution, <90% / 90-94% / 95-100% / Zero(0) / Grand Total */
-    var rowsHtml = scoreByType.map(function(r){
-      return '<tr><td>'+esc(r.name)+'</td><td class="num tnum">'+fmtInt(r.sub90)+'</td><td class="num tnum">'+fmtInt(r.s90)+'</td>'+
-        '<td class="num tnum">'+fmtInt(r.s95)+'</td><td class="num tnum" style="'+(r.zero>0?'color:var(--crit)':'')+'">'+fmtInt(r.zero)+'</td><td class="num tnum">'+fmtInt(r.total)+'</td></tr>';
-    }).join("");
-    rowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.grandTotal)+'</td></tr>';
-    document.getElementById("scoreBody").innerHTML = rowsHtml;
-
-    /* Auditor leaderboard */
-    var sortedAuditors = leaderboardRows.slice().sort(function(a,b){return b.count-a.count;});
-    document.getElementById("leaderboardDesc").textContent = fmtInt(manualTotal)+" manually reviewed audits this period, across GLP / PDS Audit / Non Pharma / WLP.";
-    document.getElementById("leaderboardBody").innerHTML = sortedAuditors.length ? sortedAuditors.map(function(a){
-      var warn = a.avgScore<90 ? " warn" : "";
-      return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td>'+
-        '<td><span class="score-bar'+warn+'"><div class="track"><i style="width:'+clampPct(a.avgScore)+'%"></i></div><b class="tnum">'+fmtPct(a.avgScore,0)+'</b></span></td></tr>';
-    }).join("") : '<tr><td colspan="3" class="empty-note">No manual audits found for this period.</td></tr>';
-
-    /* Doctor coverage */
-    var maxDoctors = Math.max.apply(null, doctorRows.map(function(d){return d.doctors;}).concat([1]));
-    document.getElementById("doctorDesc").textContent = fmtInt(doctorTotal)+" doctors audited this period.";
-    document.getElementById("doctorCoverage").innerHTML = doctorRows.slice().sort(function(a,b){return b.doctors-a.doctors;}).map(function(d){
-      return '<div class="dc-row"><span>'+esc(d.type)+'</span><div class="track"><i style="width:'+clampPct(d.doctors/maxDoctors*100)+'%"></i></div>'+
-        '<span class="figs"><b class="tnum">'+fmtInt(d.doctors)+'</b> · '+fmtInt(d.audits)+' audits</span></div>';
-    }).join("");
 
     /* Service lines */
     var svc = "";
@@ -1072,6 +1006,78 @@
 
     var auditRowsSrc = state.auditRows;
     var cancelRowsForAgg = state.cancelRows || [];
+
+    /* KPI strip, Auto-Scored stage row, Project Wise Audit report (score bands), Auditor
+       leaderboard and Doctor coverage — all follow the date range selected via the chip row /
+       date pickers above, not a fixed MTD window. (Service lines — CS ticket volume, further
+       down, stays MTD/LMTD/LLMTD only — that's all its source sheet provides.) */
+    var scoreLive = state.auditRows && state.cancelRows;
+    var auditLive = !!state.auditRows;
+    var scoreByType = scoreLive
+      ? aggregateScoreBands(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end)
+      : state.score.byType;
+    var totals = computeTotals(scoreByType);
+    var leaderboardRows = auditLive
+      ? aggregateLeaderboard(auditRowsSrc, state.filter.start, state.filter.end)
+      : state.auditors;
+    var doctorRows = auditLive
+      ? aggregateDoctorCoverage(auditRowsSrc, state.filter.start, state.filter.end)
+      : state.doctors;
+    var manualTotal = leaderboardRows.reduce(function(a,x){return a+x.count;},0);
+    var manualAuditorCount = leaderboardRows.length;
+    var doctorTotal = doctorRows.reduce(function(a,x){return a+x.doctors;},0);
+    var doctorTypeCount = doctorRows.length;
+
+    /* KPI strip */
+    var kpis = [
+      {lbl:"Total Audits", val: fmtInt(totals.grandTotal), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP + PDS Cancellation, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
+      {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)" : "no scored calls yet", cls:"crit"},
+      {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)", cls:"good"},
+      {lbl:"Manual QA Audits", val: fmtInt(manualTotal), sub:"completed by "+manualAuditorCount+" auditor"+(manualAuditorCount===1?"":"s")},
+      {lbl:"Doctors Covered", val: fmtInt(doctorTotal), sub:"across "+doctorTypeCount+" network type"+(doctorTypeCount===1?"":"s")}
+    ];
+    document.getElementById("kpiRow").innerHTML = kpis.map(function(k){
+      return '<div class="kpi"><div class="lbl">'+esc(k.lbl)+'</div><div class="val tnum'+(k.cls?' '+k.cls:'')+'">'+k.val+'</div><div class="sub">'+esc(k.sub)+'</div></div>';
+    }).join("");
+
+    /* Stage row */
+    document.getElementById("stageRow").innerHTML = scoreByType.map(function(r){
+      var notScored = r.name === "PDS Cancellation"; /* genuine/not-genuine review, not points-scored */
+      var pass = r.total ? (r.total-r.zero)/r.total*100 : null;
+      var zeroRate = r.total ? r.zero/r.total*100 : 0;
+      var cls = r.total===0 ? "empty" : (notScored ? "" : (zeroRate>1 ? "flag" : ""));
+      var meterCls = (!notScored && zeroRate>1) ? "warn" : "";
+      var meterW = notScored ? 0 : (pass===null ? 0 : clampPct(pass));
+      var subText = r.total===0 ? "no calls logged for this range" : (notScored ? "not points-scored (genuine/not-genuine review)" : (fmtInt(r.zero)+" critical · "+fmtPct(pass,1)+" pass"));
+      return '<div class="stage '+cls+'"><div class="nm">'+esc(r.name)+'</div><div class="ct tnum">'+fmtInt(r.total)+'</div>'+
+        '<div class="meter"><i class="'+meterCls+'" style="width:'+meterW+'%"></i></div><div class="pct">'+subText+'</div></div>';
+    }).join("");
+
+    /* Project Wise Audit report — score-band distribution, <90% / 90-94% / 95-100% / Zero(0) / Grand Total */
+    var scoreRowsHtml = scoreByType.map(function(r){
+      return '<tr><td>'+esc(r.name)+'</td><td class="num tnum">'+fmtInt(r.sub90)+'</td><td class="num tnum">'+fmtInt(r.s90)+'</td>'+
+        '<td class="num tnum">'+fmtInt(r.s95)+'</td><td class="num tnum" style="'+(r.zero>0?'color:var(--crit)':'')+'">'+fmtInt(r.zero)+'</td><td class="num tnum">'+fmtInt(r.total)+'</td></tr>';
+    }).join("");
+    scoreRowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.grandTotal)+'</td></tr>';
+    document.getElementById("scoreBody").innerHTML = scoreRowsHtml;
+
+    /* Auditor leaderboard */
+    var sortedAuditors = leaderboardRows.slice().sort(function(a,b){return b.count-a.count;});
+    document.getElementById("leaderboardDesc").textContent = fmtInt(manualTotal)+" manually reviewed audits "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+", across GLP / PDS Audit / Non Pharma / WLP.";
+    document.getElementById("leaderboardBody").innerHTML = sortedAuditors.length ? sortedAuditors.map(function(a){
+      var warn = a.avgScore<90 ? " warn" : "";
+      return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td>'+
+        '<td><span class="score-bar'+warn+'"><div class="track"><i style="width:'+clampPct(a.avgScore)+'%"></i></div><b class="tnum">'+fmtPct(a.avgScore,0)+'</b></span></td></tr>';
+    }).join("") : '<tr><td colspan="3" class="empty-note">No manual audits found for this range.</td></tr>';
+
+    /* Doctor coverage */
+    var maxDoctors = Math.max.apply(null, doctorRows.map(function(d){return d.doctors;}).concat([1]));
+    document.getElementById("doctorDesc").textContent = fmtInt(doctorTotal)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+".";
+    document.getElementById("doctorCoverage").innerHTML = doctorRows.slice().sort(function(a,b){return b.doctors-a.doctors;}).map(function(d){
+      return '<div class="dc-row"><span>'+esc(d.type)+'</span><div class="track"><i style="width:'+clampPct(d.doctors/maxDoctors*100)+'%"></i></div>'+
+        '<span class="figs"><b class="tnum">'+fmtInt(d.doctors)+'</b> · '+fmtInt(d.audits)+' audits</span></div>';
+    }).join("");
+
     if(auditRowsSrc){
       /* MTD banner — always current month, independent of the filter above */
       var mtdAgg = aggregateProject(auditRowsSrc, cancelRowsForAgg, monthStartOf(state.dataMaxDate), state.dataMaxDate);
