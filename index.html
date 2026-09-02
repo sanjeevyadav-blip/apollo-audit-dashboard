@@ -422,6 +422,8 @@
   var FILE_AUDIT   = "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA";
   var FILE_CS      = "19utnwA01R-poW79N2RlkzbzrTHdozns6Jo8TQjGMjqw";
   var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"; /* PDS Cancellations – Audit Sheet_updated */
+  var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"; /* "WLP Audits" workbook */
+  var WLP_SOURCE_GID   = "1328268744"; /* "BS WLP Audits" tab — feeds the "WLP - Non Pharma" type per explicit request */
   var SERVER = "Google Drive";
   var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   /* "Merge Overall Sheet" tab inside FILE_AUDIT is the live per-audit master log (Audit type, Date of
@@ -488,11 +490,12 @@
   state.auditRows = null; /* raw live rows [dateISO, type, auditorName, scoreFraction|null, doctorName, doctorType], once fetched — PDS/PDS-Mounjaro/Non Pharma/WLP from Merge Overall Sheet; also feeds the leaderboard + doctor-coverage panels */
   state.cancelRows = null; /* raw live rows, once fetched — PDS Cancellation only (used for reason-mix, and the PDS Cancellation column above) */
   state.workTimeRows = null; /* combined timed rows: PDS Cancellation + PDS WLP (Mounjaro) + GLP — used for working-time panels */
+  state.wlpSourceRows = null; /* raw live rows, same 6-field shape as state.auditRows, fetched from the dedicated "BS WLP Audits" tab and typed "WLP - Non Pharma" — concatenated onto state.auditRows at render time to feed that type everywhere (KPI/stage row/score bands/leaderboard/doctor coverage/project + auditor tables) */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null };
 
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
@@ -919,14 +922,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0);
-    if(liveCount===3){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0);
+    if(liveCount===4){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -938,6 +941,7 @@
     if(lastError.project) notes.push("Audit summary sheet (also feeds leaderboard & doctor coverage): "+lastError.project);
     if(lastError.cancel) notes.push("Cancellation sheet: "+lastError.cancel);
     if(lastError.cs) notes.push("CS ticket sheet: "+lastError.cs);
+    if(lastError.wlpSource) notes.push("WLP - Non Pharma (BS WLP Audits) sheet: "+lastError.wlpSource);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1006,22 +1010,28 @@
 
     var auditRowsSrc = state.auditRows;
     var cancelRowsForAgg = state.cancelRows || [];
+    /* "WLP - Non Pharma" rows come from a separate sheet (loadWlpSourceLive), fetched independently
+       of the Merge Overall Sheet rows above — concatenated here so every aggregator below sees them
+       under the existing "WLP - Non Pharma" type without needing its own code path. */
+    var combinedAuditRows = (auditRowsSrc || state.wlpSourceRows)
+      ? (auditRowsSrc || []).concat(state.wlpSourceRows || [])
+      : null;
 
     /* KPI strip, Auto-Scored stage row, Project Wise Audit report (score bands), Auditor
        leaderboard and Doctor coverage — all follow the date range selected via the chip row /
        date pickers above, not a fixed MTD window. (Service lines — CS ticket volume, further
        down, stays MTD/LMTD/LLMTD only — that's all its source sheet provides.) */
-    var scoreLive = state.auditRows && state.cancelRows;
-    var auditLive = !!state.auditRows;
+    var scoreLive = combinedAuditRows && state.cancelRows;
+    var auditLive = !!combinedAuditRows;
     var scoreByType = scoreLive
-      ? aggregateScoreBands(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end)
+      ? aggregateScoreBands(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end)
       : state.score.byType;
     var totals = computeTotals(scoreByType);
     var leaderboardRows = auditLive
-      ? aggregateLeaderboard(auditRowsSrc, state.filter.start, state.filter.end)
+      ? aggregateLeaderboard(combinedAuditRows, state.filter.start, state.filter.end)
       : state.auditors;
     var doctorRows = auditLive
-      ? aggregateDoctorCoverage(auditRowsSrc, state.filter.start, state.filter.end)
+      ? aggregateDoctorCoverage(combinedAuditRows, state.filter.start, state.filter.end)
       : state.doctors;
     var manualTotal = leaderboardRows.reduce(function(a,x){return a+x.count;},0);
     var manualAuditorCount = leaderboardRows.length;
@@ -1078,9 +1088,9 @@
         '<span class="figs"><b class="tnum">'+fmtInt(d.doctors)+'</b> · '+fmtInt(d.audits)+' audits</span></div>';
     }).join("");
 
-    if(auditRowsSrc){
+    if(combinedAuditRows){
       /* MTD banner — always current month, independent of the filter above */
-      var mtdAgg = aggregateProject(auditRowsSrc, cancelRowsForAgg, monthStartOf(state.dataMaxDate), state.dataMaxDate);
+      var mtdAgg = aggregateProject(combinedAuditRows, cancelRowsForAgg, monthStartOf(state.dataMaxDate), state.dataMaxDate);
       document.getElementById("mtdRangeLabel").textContent = fmtMonthLabel(state.dataMaxDate)+" · through "+fmtDateLabel(state.dataMaxDate);
       var mtdStats = [
         {k:"Total Audits Completed", v:fmtInt(mtdAgg.overall.count)},
@@ -1091,9 +1101,9 @@
       }).join("");
 
       /* 1. Overall Audit Summary (date-filtered) */
-      var agg = aggregateProject(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end);
+      var agg = aggregateProject(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
       var ov = agg.overall;
-      var auditorAggForKpi = aggregateAuditors(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end);
+      var auditorAggForKpi = aggregateAuditors(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
       var overallKpis = [
         {lbl:"Total Audits Completed", val:fmtInt(ov.count)},
         {lbl:"Average Audit Score", val:fmtPct(ov.avgScore,1), cls: (ov.avgScore!==null && ov.avgScore<90) ? "warn" : "good"},
@@ -1459,6 +1469,46 @@
     });
   }
 
+  /* "BS WLP Audits" tab, dedicated "WLP Audits" workbook — feeds the "WLP - Non Pharma" type
+     directly (per explicit request), producing rows in the same 6-field shape as
+     loadAuditSummaryLive so they concatenate cleanly at render time. Confirmed column layout:
+     K=Date of Audit, L=Auditor Name, AO=Attained %, C=Doctor Name, H=Doctor Type.
+     Note: this tab's rows have been verified (row-by-row, across two separate date windows) to be
+     identical to the "PDS WLP" (Mounjaro) rows already tracked from Merge Overall Sheet — so
+     "WLP - Non Pharma" will show the same figures as "PDS– Mounjaro" everywhere on this dashboard,
+     and combined totals (Total Audits, Manual QA Audits, Doctors Covered, Auditor-wise Allocation
+     grand totals) double-count these audits under both labels. Wired in as explicitly requested. */
+  function loadWlpSourceLive(){
+    var floor = isoDateNDaysAgo(400);
+    var tq = "select K,L,AO,C,H where K >= date '"+floor+"'";
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&gid=" + WLP_SOURCE_GID + "&tq=" + encodeURIComponent(tq);
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r || r.length<4) continue;
+        var iso = parseDateMDY(r[0]);
+        if(!iso) continue;
+        var auditor = canonicalAuditorName(r[1]);
+        var scoreRaw = (r[2]||"").trim();
+        var score = null;
+        if(scoreRaw){
+          var num = parseFloat(scoreRaw.replace("%",""));
+          if(!isNaN(num)) score = num/100;
+        }
+        var doctorName = (r[3]||"").trim();
+        var doctorType = (r[4]||"").trim();
+        out.push([iso, "WLP - Non Pharma", auditor, score, doctorName, doctorType]);
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+
   function loadCancellationLive(){
     return fetch(CANCEL_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
@@ -1536,6 +1586,16 @@
     }).catch(function(e){
       liveOK.cs = false;
       lastError.cs = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadWlpSourceLive().then(function(rows){
+      state.wlpSourceRows = rows;
+      liveOK.wlpSource = true; lastError.wlpSource = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.wlpSource = false;
+      lastError.wlpSource = "couldn’t reach the live sheet" + (state.wlpSourceRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
