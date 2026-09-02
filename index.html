@@ -1090,9 +1090,13 @@
     /* "PDS- Mounjaro" and "WLP - Non Pharma" rows both come from the dedicated WLP Audits workbook
        (loadMounjaroSourceLive / loadWlpSourceLive), fetched independently of the Merge Overall Sheet
        rows above (which now only carries PDS / Non Pharma) — concatenated here so every aggregator
-       below sees all types under their existing labels without needing their own code paths. */
-    var combinedAuditRows = (auditRowsSrc || state.mounjaroSourceRows || state.wlpSourceRows)
-      ? (auditRowsSrc || []).concat(state.mounjaroSourceRows || []).concat(state.wlpSourceRows || [])
+       below sees all types under their existing labels without needing their own code paths.
+       wlpSourceRows is deduped against mounjaroSourceRows first (see dedupeWlpAgainstMounjaro) since
+       "BS WLP Audits" has been directly verified to hold copied-over Mounjaro rows for every auditor
+       except Dr. Abhishek — without this, those audits would count twice, once under each type. */
+    var wlpRowsDeduped = dedupeWlpAgainstMounjaro(state.wlpSourceRows, state.mounjaroSourceRows);
+    var combinedAuditRows = (auditRowsSrc || state.mounjaroSourceRows || wlpRowsDeduped)
+      ? (auditRowsSrc || []).concat(state.mounjaroSourceRows || []).concat(wlpRowsDeduped || [])
       : null;
 
     /* KPI strip, Auto-Scored stage row, Project Wise Audit report (score bands), Auditor
@@ -1589,7 +1593,8 @@
         auditorName: find(/auditor name/i),
         attained: find(/attained/i),
         doctorName: find(/^doctor name$/i),
-        doctorType: find(/^doctor type$/i)
+        doctorType: find(/^doctor type$/i),
+        apptId: find(/appt id/i)
       };
       if(!map.dateOfAudit || !map.auditorName || !map.doctorName || !map.doctorType){
         throw new Error("could not resolve WLP columns for " + sheetName);
@@ -1611,15 +1616,16 @@
     var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
     return resolveWlpColumns(sheetName, gid).then(function(cols){
       var attainedCol = cols.attained || cols.dateOfAudit; /* fall back rather than break the whole fetch if score header text ever changes */
-      var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType].join(",");
+      var apptCol = cols.apptId; /* optional 7th field, used only for cross-tab dedup below */
+      var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType].concat(apptCol ? [apptCol] : []).join(",");
       var tq = "select " + selectCols;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
       return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
-      });
-    }).then(function(csvText){
-      var rows = parseCSV(csvText);
+      }).then(function(csvText){ return {csvText: csvText, hasAppt: !!apptCol}; });
+    }).then(function(res){
+      var rows = parseCSV(res.csvText);
       if(rows.length < 2) throw new Error("no rows parsed");
       var out = [];
       for(var i=1;i<rows.length;i++){
@@ -1635,7 +1641,8 @@
         }
         var doctorName = (r[3]||"").trim();
         var doctorType = (r[4]||"").trim();
-        out.push([iso, typeLabel, auditor, score, doctorName, doctorType]);
+        var apptId = res.hasAppt ? (r[5]||"").trim() : "";
+        out.push([iso, typeLabel, auditor, score, doctorName, doctorType, apptId]);
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -1643,6 +1650,29 @@
   }
   function loadWlpSourceLive(){ return loadWlpWorkbookTabLive("BS WLP Audits", WLP_SOURCE_GID, "WLP - Non Pharma"); }
   function loadMounjaroSourceLive(){ return loadWlpWorkbookTabLive(MOUNJARO_SOURCE_TAB, null, "PDS- Mounjaro"); }
+  /* "BS WLP Audits" and "PDS-Mounjaro" are two independently-maintained tabs in the same workbook,
+     but for every auditor except Dr. Abhishek, "BS WLP Audits" has been directly verified (same
+     Appt ID, same Doctor Name, same Date of Audit, in the same order) to hold an exact copy of
+     that auditor's "PDS-Mounjaro" rows — a source-level data duplication, not a dashboard mapping
+     issue. Left alone, every audit an auditor does under PDS-Mounjaro would be double-counted a
+     second time under "WLP - Non Pharma". This strips out, from the WLP-typed rows, any row whose
+     (auditor, Appt ID) pair also appears in that auditor's Mounjaro rows for the same range — so
+     only audits genuinely unique to "BS WLP Audits" (Dr. Abhishek's WLP/GLP work today) count under
+     WLP - Non Pharma, while a real future "BS WLP Audits" row for another auditor still counts. */
+  function dedupeWlpAgainstMounjaro(wlpRows, mounjaroRows){
+    if(!wlpRows || !wlpRows.length || !mounjaroRows || !mounjaroRows.length) return wlpRows;
+    var seen = {};
+    mounjaroRows.forEach(function(r){
+      var apptId = r[6];
+      if(!apptId) return;
+      seen[r[2] + "||" + apptId] = true;
+    });
+    return wlpRows.filter(function(r){
+      var apptId = r[6];
+      if(!apptId) return true; /* no Appt ID to compare (older rows/unresolved column) — keep as-is */
+      return !seen[r[2] + "||" + apptId];
+    });
+  }
 
   function loadCancellationLive(){
     return fetch(CANCEL_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
