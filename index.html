@@ -422,8 +422,9 @@
   var FILE_AUDIT   = "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA";
   var FILE_CS      = "19utnwA01R-poW79N2RlkzbzrTHdozns6Jo8TQjGMjqw";
   var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"; /* PDS Cancellations – Audit Sheet_updated */
-  var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"; /* "WLP Audits" workbook */
-  var WLP_SOURCE_GID   = "1328268744"; /* "BS WLP Audits" tab — feeds the "WLP - Non Pharma" type per explicit request */
+  var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"; /* "WLP Audits" workbook — dedicated source for BOTH WLP sub-programs, per explicit request */
+  var WLP_SOURCE_GID   = "1328268744"; /* "BS WLP Audits" tab — feeds the "WLP - Non Pharma" type */
+  var MOUNJARO_SOURCE_TAB = "PDS-Mounjaro"; /* tab inside the same workbook — feeds the "PDS- Mounjaro" type (same column layout: K/L/AO/C/H) */
   var SERVER = "Google Drive";
   var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   /* "Merge Overall Sheet" tab inside FILE_AUDIT is the live per-audit master log (Audit type, Date of
@@ -432,7 +433,12 @@
      source of the "Partially live"/stale-27-Aug issue). PDS Cancellation counts still come from the
      dedicated FILE_CANCEL sheet — it's the more complete, already-validated source for that type. */
   var MERGE_SHEET_NAME = "Merge Overall Sheet";
-  var AUDIT_TYPE_MAP = { "PDS Audit":"PDS", "PDS WLP":"PDS- Mounjaro", "Non Pharma Audit":"Non Pharma", "GLP":"WLP - Non Pharma" };
+  /* "PDS WLP" is deliberately NOT mapped here any more — "PDS- Mounjaro" is now sourced directly from
+     the dedicated "PDS-Mounjaro" tab in the WLP Audits workbook (loadMounjaroSourceLive), not from this
+     Merge Overall Sheet mirror, per explicit request. "GLP" is left unmapped too since no raw row in
+     this sheet has ever used that value (confirmed via exhaustive scan) — "WLP - Non Pharma" is sourced
+     the same way, from the "BS WLP Audits" tab (loadWlpSourceLive). */
+  var AUDIT_TYPE_MAP = { "PDS Audit":"PDS", "Non Pharma Audit":"Non Pharma" };
 
   /* ---------- last-published static snapshot (fallback / initial paint) ---------- */
   var STATIC_SNAPSHOT = {
@@ -491,11 +497,12 @@
   state.cancelRows = null; /* raw live rows, once fetched — PDS Cancellation only (used for reason-mix, and the PDS Cancellation column above) */
   state.workTimeRows = null; /* combined timed rows: PDS Cancellation + PDS WLP (Mounjaro) + GLP — used for working-time panels */
   state.wlpSourceRows = null; /* raw live rows, same 6-field shape as state.auditRows, fetched from the dedicated "BS WLP Audits" tab and typed "WLP - Non Pharma" — concatenated onto state.auditRows at render time to feed that type everywhere (KPI/stage row/score bands/leaderboard/doctor coverage/project + auditor tables) */
+  state.mounjaroSourceRows = null; /* same shape, fetched from the "PDS-Mounjaro" tab (same WLP Audits workbook) and typed "PDS- Mounjaro" — concatenated the same way, replacing the old Merge Overall Sheet "PDS WLP" source */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null };
 
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
@@ -922,14 +929,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0);
-    if(liveCount===4){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0);
+    if(liveCount===5){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -942,6 +949,7 @@
     if(lastError.cancel) notes.push("Cancellation sheet: "+lastError.cancel);
     if(lastError.cs) notes.push("CS ticket sheet: "+lastError.cs);
     if(lastError.wlpSource) notes.push("WLP - Non Pharma (BS WLP Audits) sheet: "+lastError.wlpSource);
+    if(lastError.mounjaroSource) notes.push("PDS- Mounjaro (PDS-Mounjaro tab) sheet: "+lastError.mounjaroSource);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1010,11 +1018,12 @@
 
     var auditRowsSrc = state.auditRows;
     var cancelRowsForAgg = state.cancelRows || [];
-    /* "WLP - Non Pharma" rows come from a separate sheet (loadWlpSourceLive), fetched independently
-       of the Merge Overall Sheet rows above — concatenated here so every aggregator below sees them
-       under the existing "WLP - Non Pharma" type without needing its own code path. */
-    var combinedAuditRows = (auditRowsSrc || state.wlpSourceRows)
-      ? (auditRowsSrc || []).concat(state.wlpSourceRows || [])
+    /* "PDS- Mounjaro" and "WLP - Non Pharma" rows both come from the dedicated WLP Audits workbook
+       (loadMounjaroSourceLive / loadWlpSourceLive), fetched independently of the Merge Overall Sheet
+       rows above (which now only carries PDS / Non Pharma) — concatenated here so every aggregator
+       below sees all types under their existing labels without needing their own code paths. */
+    var combinedAuditRows = (auditRowsSrc || state.mounjaroSourceRows || state.wlpSourceRows)
+      ? (auditRowsSrc || []).concat(state.mounjaroSourceRows || []).concat(state.wlpSourceRows || [])
       : null;
 
     /* KPI strip, Auto-Scored stage row, Project Wise Audit report (score bands), Auditor
@@ -1469,19 +1478,24 @@
     });
   }
 
-  /* "BS WLP Audits" tab, dedicated "WLP Audits" workbook — feeds the "WLP - Non Pharma" type
-     directly (per explicit request), producing rows in the same 6-field shape as
-     loadAuditSummaryLive so they concatenate cleanly at render time. Confirmed column layout:
-     K=Date of Audit, L=Auditor Name, AO=Attained %, C=Doctor Name, H=Doctor Type.
-     Note: this tab's rows have been verified (row-by-row, across two separate date windows) to be
-     identical to the "PDS WLP" (Mounjaro) rows already tracked from Merge Overall Sheet — so
-     "WLP - Non Pharma" will show the same figures as "PDS– Mounjaro" everywhere on this dashboard,
-     and combined totals (Total Audits, Manual QA Audits, Doctors Covered, Auditor-wise Allocation
-     grand totals) double-count these audits under both labels. Wired in as explicitly requested. */
-  function loadWlpSourceLive(){
+  /* Both WLP sub-programs — "PDS- Mounjaro" and "WLP - Non Pharma" — are sourced directly from
+     dedicated tabs inside this same "WLP Audits" workbook (per explicit request), each producing
+     rows in the same 6-field shape as loadAuditSummaryLive so they concatenate cleanly at render
+     time. Both tabs share the identical column layout: K=Date of Audit, L=Auditor Name,
+     AO=Attained %, C=Doctor Name, H=Doctor Type.
+     Note: "PDS-Mounjaro" and "BS WLP Audits" have been verified (row-by-row, across multiple date
+     windows, checked directly against each other in this same workbook — not just via the old
+     Merge Overall Sheet mirror) to hold byte-for-byte identical data. This is a source-level
+     duplication in the underlying sheets themselves, not a dashboard mapping issue — wiring both
+     tabs in as instructed means "PDS– Mounjaro" and "WLP - Non Pharma" will keep showing identical
+     figures everywhere on this dashboard, and combined totals (Total Audits, Manual QA Audits,
+     Doctors Covered, Auditor-wise Allocation grand totals) double-count these audits under both
+     labels until the source sheets themselves are deduplicated upstream. */
+  function loadWlpWorkbookTabLive(sheetName, gid, typeLabel){
     var floor = isoDateNDaysAgo(400);
     var tq = "select K,L,AO,C,H where K >= date '"+floor+"'";
-    var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&gid=" + WLP_SOURCE_GID + "&tq=" + encodeURIComponent(tq);
+    var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
@@ -1502,12 +1516,14 @@
         }
         var doctorName = (r[3]||"").trim();
         var doctorType = (r[4]||"").trim();
-        out.push([iso, "WLP - Non Pharma", auditor, score, doctorName, doctorType]);
+        out.push([iso, typeLabel, auditor, score, doctorName, doctorType]);
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
     });
   }
+  function loadWlpSourceLive(){ return loadWlpWorkbookTabLive("BS WLP Audits", WLP_SOURCE_GID, "WLP - Non Pharma"); }
+  function loadMounjaroSourceLive(){ return loadWlpWorkbookTabLive(MOUNJARO_SOURCE_TAB, null, "PDS- Mounjaro"); }
 
   function loadCancellationLive(){
     return fetch(CANCEL_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
@@ -1596,6 +1612,16 @@
     }).catch(function(e){
       liveOK.wlpSource = false;
       lastError.wlpSource = "couldn’t reach the live sheet" + (state.wlpSourceRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadMounjaroSourceLive().then(function(rows){
+      state.mounjaroSourceRows = rows;
+      liveOK.mounjaroSource = true; lastError.mounjaroSource = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.mounjaroSource = false;
+      lastError.mounjaroSource = "couldn’t reach the live sheet" + (state.mounjaroSourceRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
