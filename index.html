@@ -284,10 +284,10 @@
 <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;margin-bottom:30px" id="auditorCancelGrid">
   <div class="panel">
     <p class="section-label" style="margin-bottom:4px"><span class="n">03</span> Auditor&#8209;wise Allocation Summary</p>
-    <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. audit <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets &amp; CSAT Audits aren&rsquo;t tracked in the audit checklist system, so they're not part of this live table.</p>
+    <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit, ticket, or CSAT review. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets (escalation ticket audits) and CSAT Audits (negative-review appointment audits) are now included as their own columns, folded into Total Assigned.</p>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th></tr></thead>
+        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th></tr></thead>
         <tbody id="auditorTableBody"></tbody>
       </table>
     </div>
@@ -298,10 +298,10 @@
     <div class="gc-split" id="gcSplit"></div>
     <div id="reasonList"></div>
     <h2 style="margin-top:18px;font-size:14px">Auditor working time</h2>
-    <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP audits &mdash; every checklist that logs start/end time. Patient Tickets &amp; CSAT Audits aren&rsquo;t part of this checklist workflow, so aren&rsquo;t included.</p>
+    <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits &mdash; every source that logs start/end time &mdash; plus logged Training session duration. "Training Days" counts training days even when no duration was logged.</p>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg Time/Day</th></tr></thead>
+        <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Training Days</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg Time/Day</th></tr></thead>
         <tbody id="cancelTimeBody"></tbody>
       </table>
     </div>
@@ -310,7 +310,7 @@
 
 <div class="panel" style="margin-bottom:30px" id="dailyTimePanel">
   <h2>Daily Working Time &mdash; by auditor &amp; date</h2>
-  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP audits combined. Sorted newest date first.</p>
+  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined. Sorted newest date first.</p>
   <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
     <table>
       <thead><tr><th>Date</th><th>Auditor</th><th class="num">Reviews</th><th class="num">Time Spent</th></tr></thead>
@@ -425,6 +425,12 @@
   var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"; /* "WLP Audits" workbook — dedicated source for BOTH WLP sub-programs, per explicit request */
   var WLP_SOURCE_GID   = "1328268744"; /* "BS WLP Audits" tab — feeds the "WLP - Non Pharma" type */
   var MOUNJARO_SOURCE_TAB = "PDS-Mounjaro"; /* tab inside the same workbook — feeds the "PDS- Mounjaro" type (same column layout: K/L/AO/C/H) */
+  var FILE_TRAINING = "1NQ7mxCPLjjHOM_R_s1QPGo4nUMTs03xfIa3S_eN6Ey8"; /* "Trainer Acknowledgement (Responses)" form log */
+  var TRAINING_GID  = "456645703";
+  var FILE_TICKETS  = "1NKOgta897n5SJH38fx-Q3rGiCmfd-x0zEUuAliVhhG4"; /* "Patient escalation Tickets - Audit", "Tickets 2026" tab */
+  var TICKETS_GID   = "2075545445";
+  var FILE_CSAT     = "1ZpL8LwvgG_QNeSbqKtQ5SAmL8wrLg2cbfsXt-AfeDmM"; /* "CSAT Rating & Patient Review", "Negative Review Appointments" tab */
+  var CSAT_GID      = "1513006442";
   var SERVER = "Google Drive";
   var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   /* "Merge Overall Sheet" tab inside FILE_AUDIT is the live per-audit master log (Audit type, Date of
@@ -495,14 +501,17 @@
   var state = JSON.parse(JSON.stringify(STATIC_SNAPSHOT));
   state.auditRows = null; /* raw live rows [dateISO, type, auditorName, scoreFraction|null, doctorName, doctorType], once fetched — PDS/PDS-Mounjaro/Non Pharma/WLP from Merge Overall Sheet; also feeds the leaderboard + doctor-coverage panels */
   state.cancelRows = null; /* raw live rows, once fetched — PDS Cancellation only (used for reason-mix, and the PDS Cancellation column above) */
-  state.workTimeRows = null; /* combined timed rows: PDS Cancellation + PDS WLP (Mounjaro) + GLP — used for working-time panels */
+  state.extraTimeRows = null; /* timed rows from the extra WLP/GLP/PDS/Non-Pharma checklist tabs (loadWorkTimeExtraLive) */
   state.wlpSourceRows = null; /* raw live rows, same 6-field shape as state.auditRows, fetched from the dedicated "BS WLP Audits" tab and typed "WLP - Non Pharma" — concatenated onto state.auditRows at render time to feed that type everywhere (KPI/stage row/score bands/leaderboard/doctor coverage/project + auditor tables) */
   state.mounjaroSourceRows = null; /* same shape, fetched from the "PDS-Mounjaro" tab (same WLP Audits workbook) and typed "PDS- Mounjaro" — concatenated the same way, replacing the old Merge Overall Sheet "PDS WLP" source */
+  state.trainingRows = null; /* {date,auditor,minutes} from the Trainer Acknowledgement sheet — feeds the Training Days column + Total Time on the working-time table */
+  state.ticketRows = null; /* {date,auditor,minutes} from the Patient escalation Tickets sheet ("Tickets 2026") — feeds Allocation Summary's Patient Tickets column + working-time panels */
+  state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, training:null, tickets:null, csat:null };
 
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
@@ -522,6 +531,36 @@
   function canonicalAuditorName(raw){
     var s = String(raw||"").trim().replace(/\s+/g," ");
     return s.replace(/^(Dr|Dt)\.?\s+/i, function(m,p1){ return p1.charAt(0).toUpperCase()+p1.slice(1).toLowerCase()+". "; });
+  }
+  /* The Trainer Acknowledgement sheet's "Trainer Name" field is free-text and wildly inconsistent
+     ("Dr.Preethi", "DR PREETHI", "dr preethi k", "Dr Divya Bhanu", "DrDivyaBhanu", co-trainer pairs
+     like "Dr karthik dr priyanka", etc.) — canonicalAuditorName's prefix-casing fix isn't enough here.
+     Match by stripping everything but letters and checking for each known auditor's first name as a
+     substring; a row can match more than one auditor when two co-trained a session, and each gets full
+     credit for that day (the sheet doesn't split time between co-trainers). */
+  var KNOWN_AUDITOR_KEYS = [
+    {key:"shravya", name:"Dt. Shravya"},
+    {key:"mubaraka", name:"Dt. Mubaraka"},
+    {key:"preethi", name:"Dr. Preethi"},
+    {key:"divya", name:"Dr. Divya"},
+    {key:"priyanka", name:"Dr. Priyanka"},
+    {key:"yogitha", name:"Dr. Yogitha"}
+  ];
+  function matchKnownAuditors(raw){
+    var norm = String(raw||"").toLowerCase().replace(/[^a-z]/g,"");
+    var out = [];
+    KNOWN_AUDITOR_KEYS.forEach(function(k){ if(norm.indexOf(k.key)!==-1) out.push(k.name); });
+    return out;
+  }
+  /* Tickets/CSAT/Training date columns mix "M/D/YYYY" and "MM-DD-YYYY" (sometimes within the very
+     same column) — unlike parseDateMDY, this accepts either separator and 1- or 2-digit month/day,
+     and sanity-checks the year to reject stray/serial-date parses. */
+  function parseFlexMDY(s){
+    var m = String(s||"").trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if(!m) return null;
+    var mm=m[1], dd=m[2], yyyy=m[3];
+    if(yyyy<"2015" || yyyy>"2099") return null;
+    return yyyy+"-"+(mm.length<2?"0"+mm:mm)+"-"+(dd.length<2?"0"+dd:dd);
   }
 
   /* ---------- date helpers ---------- */
@@ -618,7 +657,7 @@
     var overall = { count:t.count, avgScore: t.scoredCount ? t.weighted/t.scoredCount : null };
     return {byType:byTypeList, overall:overall};
   }
-  function aggregateAuditors(auditRows, cancelRows, start, end){
+  function aggregateAuditors(auditRows, cancelRows, ticketRows, csatRows, start, end){
     var by = {};
     function bucketFor(type){
       if(type==="PDS") return "pds";
@@ -628,7 +667,7 @@
       return null;
     }
     function ensure(name){
-      if(!by[name]) by[name] = {auditor:name, pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,total:0,days:{}};
+      if(!by[name]) by[name] = {auditor:name, pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,tickets:0,csat:0,total:0,days:{}};
       return by[name];
     }
     auditRows.forEach(function(r){
@@ -643,6 +682,16 @@
       var b = ensure(r.auditor);
       b.cancellation += 1; b.total += 1; b.days[r.date] = true;
     });
+    (ticketRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      var b = ensure(r.auditor);
+      b.tickets += 1; b.total += 1; b.days[r.date] = true;
+    });
+    (csatRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      var b = ensure(r.auditor);
+      b.csat += 1; b.total += 1; b.days[r.date] = true;
+    });
     return Object.keys(by).map(function(k){
       var b = by[k];
       var workingDays = Object.keys(b.days).length;
@@ -651,6 +700,23 @@
       delete b.days;
       return b;
     }).sort(function(a,b){return b.total-a.total;});
+  }
+  /* Training days — distinct (auditor, date) pairs from the Trainer Acknowledgement sheet, counted
+     regardless of whether that row happened to log a duration (many don't). Kept separate from
+     aggregateAuditors: training isn't audit-assignment work, so it doesn't fold into Total Assigned —
+     it only feeds the standalone "Training Days" column on the working-time table, and (when a
+     duration IS logged) the minutes flow into that same table's Total Time via the shared
+     aggregateCancellationTime/dailyCancellationTime pipeline below. */
+  function aggregateTrainingDays(trainingRows, start, end){
+    var by = {};
+    (trainingRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      if(!by[r.auditor]) by[r.auditor] = {};
+      by[r.auditor][r.date] = true;
+    });
+    var out = {};
+    Object.keys(by).forEach(function(k){ out[k] = Object.keys(by[k]).length; });
+    return out;
   }
 
   /* ---------- live auditor leaderboard + doctor coverage ----------
@@ -929,14 +995,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0);
-    if(liveCount===5){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0);
+    if(liveCount===8){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.training || lastError.tickets || lastError.csat){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -950,6 +1016,9 @@
     if(lastError.cs) notes.push("CS ticket sheet: "+lastError.cs);
     if(lastError.wlpSource) notes.push("WLP - Non Pharma (BS WLP Audits) sheet: "+lastError.wlpSource);
     if(lastError.mounjaroSource) notes.push("PDS- Mounjaro (PDS-Mounjaro tab) sheet: "+lastError.mounjaroSource);
+    if(lastError.training) notes.push("Training sheet: "+lastError.training);
+    if(lastError.tickets) notes.push("Patient Tickets sheet: "+lastError.tickets);
+    if(lastError.csat) notes.push("CSAT sheet: "+lastError.csat);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1112,7 +1181,7 @@
       /* 1. Overall Audit Summary (date-filtered) */
       var agg = aggregateProject(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
       var ov = agg.overall;
-      var auditorAggForKpi = aggregateAuditors(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
+      var auditorAggForKpi = aggregateAuditors(combinedAuditRows, cancelRowsForAgg, state.ticketRows||[], state.csatRows||[], state.filter.start, state.filter.end);
       var overallKpis = [
         {lbl:"Total Audits Completed", val:fmtInt(ov.count)},
         {lbl:"Average Audit Score", val:fmtPct(ov.avgScore,1), cls: (ov.avgScore!==null && ov.avgScore<90) ? "warn" : "good"},
@@ -1135,14 +1204,14 @@
       var auditorAgg = auditorAggForKpi;
       var audRowsHtml = auditorAgg.length ? auditorAgg.map(function(a){
         return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.pds)+'</td><td class="num tnum">'+fmtInt(a.mounjaro)+'</td><td class="num tnum">'+fmtInt(a.cancellation)+'</td>'+
-          '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td>'+
+          '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.tickets)+'</td><td class="num tnum">'+fmtInt(a.csat)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td>'+
           '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':a.avgPerWorkingDay.toFixed(1))+'</td></tr>';
-      }).join("") : '<tr><td colspan="9" class="empty-note">No allocation data for this range.</td></tr>';
+      }).join("") : '<tr><td colspan="11" class="empty-note">No allocation data for this range.</td></tr>';
       if(auditorAgg.length){
-        var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.total+=x.total;a.workingDays+=x.workingDays; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,total:0,workingDays:0});
+        var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.tickets+=x.tickets;a.csat+=x.csat;a.total+=x.total;a.workingDays+=x.workingDays; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,tickets:0,csat:0,total:0,workingDays:0});
         var avgAll = audTotal.workingDays ? (audTotal.total/audTotal.workingDays) : null;
         audRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(audTotal.pds)+'</td><td class="num tnum">'+fmtInt(audTotal.mounjaro)+'</td><td class="num tnum">'+fmtInt(audTotal.cancellation)+'</td>'+
-          '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td>'+
+          '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.tickets)+'</td><td class="num tnum">'+fmtInt(audTotal.csat)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td>'+
           '<td class="num tnum">&mdash;</td><td class="num tnum">'+(avgAll===null?'—':avgAll.toFixed(1))+'</td></tr>';
       }
       document.getElementById("auditorTableBody").innerHTML = audRowsHtml;
@@ -1151,7 +1220,7 @@
       document.getElementById("mtdStats").innerHTML = "";
       document.getElementById("overallKpiRow").innerHTML = '<div class="kpi"><div class="lbl">Status</div><div class="val" style="font-size:14px">Connecting…</div></div>';
       document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="3" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
-      document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="9" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
+      document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="11" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
     }
 
     /* PDS Cancellation — reason mix */
@@ -1172,27 +1241,32 @@
       return '<div class="reason-row"><span class="nm">'+esc(r.reason)+'</span><div class="track"><i style="width:'+clampPct(r.count/maxReason*100)+'%"></i></div><span class="v tnum">'+fmtInt(r.count)+'</span></div>';
     }).join("") : '<div class="empty-note">No cancellation reasons logged for this range.</div>';
 
-    /* Auditor working time — combined from every checklist that actually logs Audit start/end Time:
-       PDS Cancellation + PDS WLP (Mounjaro) + GLP. Plain PDS, Non Pharma, Patient Tickets and CSAT
-       checklists don't record start/end timestamps in the source sheets, so their time can't be
-       measured — their review counts are in the Allocation Summary table above instead. */
-    var workRowsSrc = state.workTimeRows;
+    /* Auditor working time — combined from every source that logs Audit start/end Time: PDS
+       Cancellation + PDS WLP (Mounjaro) + GLP + Patient Tickets + CSAT audits, plus Training
+       sessions (using their logged duration where available — many training rows don't log one,
+       so "Training Days" below is tracked separately and always counts the day regardless). Plain
+       PDS and Non Pharma checklists still don't record start/end timestamps in the source sheets,
+       so their time can't be measured — their review counts are in the Allocation Summary above. */
+    var workRowsSrc = (state.cancelRows || state.extraTimeRows || state.trainingRows || state.ticketRows || state.csatRows)
+      ? (state.cancelRows||[]).concat(state.extraTimeRows||[]).concat(state.trainingRows||[]).concat(state.ticketRows||[]).concat(state.csatRows||[])
+      : null;
+    var trainingDaysByAuditor = aggregateTrainingDays(state.trainingRows, state.filter.start, state.filter.end);
     if(workRowsSrc){
       var timeAgg = aggregateCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP audits combined. Patient Tickets & CSAT Audits are a different workflow with no start/end tracking, so aren't in this time total (see Allocation Summary above for their full counts).";
+      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits combined, plus logged Training session duration. \"Training Days\" counts training days even when no duration was logged.";
       document.getElementById("cancelTimeBody").innerHTML = timeAgg.byAuditor.length ? timeAgg.byAuditor.map(function(a){
-        return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td><td class="num tnum">'+fmtMinutes(a.minutes)+'</td>'+
+        return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td><td class="num tnum">'+fmtInt(trainingDaysByAuditor[a.auditor]||0)+'</td><td class="num tnum">'+fmtMinutes(a.minutes)+'</td>'+
           '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':fmtMinutes(a.avgPerWorkingDay))+'</td></tr>';
-      }).join("") : '<tr><td colspan="5" class="empty-note">No timed audits for this range.</td></tr>';
+      }).join("") : '<tr><td colspan="6" class="empty-note">No timed audits for this range.</td></tr>';
     } else {
       document.getElementById("cancelTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
-      document.getElementById("cancelTimeBody").innerHTML = '<tr><td colspan="5" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
+      document.getElementById("cancelTimeBody").innerHTML = '<tr><td colspan="6" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
     }
 
     /* Daily Working Time — exact hrs/min per auditor per day, same combined sources as above */
     if(workRowsSrc){
       var dailyTime = dailyCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP audits combined (from Audit Start/End Time). Patient Tickets & CSAT Audits are a different workflow with no start/end tracking, so aren't counted here. Sorted newest date first.";
+      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Sorted newest date first.";
       document.getElementById("dailyTimeBody").innerHTML = dailyTime.length ? dailyTime.map(function(d){
         return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtMinutes(d.minutes)+'</td></tr>';
       }).join("") : '<tr><td colspan="4" class="empty-note">No timed audits for this range.</td></tr>';
@@ -1570,6 +1644,95 @@
     })).then(function(results){ return results.reduce(function(a,r){ return a.concat(r); }, []); });
   }
 
+  /* Training — "Trainer Acknowledgement (Responses)" form. C=Session Date, D=Trainer Name (free-text,
+     matched via matchKnownAuditors since spelling/casing varies a lot), I=Time taken to complete
+     training in minutes (often blank — a session still counts as a training day even without a
+     logged duration). A row naming two co-trainers credits both in full. */
+  function loadTrainingLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_TRAINING + "/gviz/tq?tqx=out:csv&gid=" + TRAINING_GID + "&tq=" + encodeURIComponent("select C,D,I");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var iso = parseFlexMDY(r[0]); if(!iso) continue;
+        var names = matchKnownAuditors(r[1]); if(!names.length) continue;
+        var minsRaw = (r[2]||"").trim();
+        var mins = null;
+        if(minsRaw){ var num = parseFloat(minsRaw); if(!isNaN(num) && num>0 && num<=480) mins = num; }
+        names.forEach(function(nm){ out.push({date: iso, auditor: nm, minutes: mins}); });
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+
+  /* Patient escalation Tickets — "Tickets 2026" tab. I=Date of ticket (Worked), Q=Ticket handled by
+     (the auditor), R/S=Audit start/end Time — this sheet DOES track start/end time (unlike the old
+     assumption baked into this dashboard's copy), so it feeds both Allocation Summary counts and the
+     working-time panels. Rows with no auditor assigned yet (blank Q — not yet worked) are skipped. */
+  function loadTicketsLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_TICKETS + "/gviz/tq?tqx=out:csv&gid=" + TICKETS_GID + "&tq=" + encodeURIComponent("select I,Q,R,S");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var iso = parseFlexMDY(r[0]); if(!iso) continue;
+        var auditor = (r[1]||"").trim(); if(!auditor) continue;
+        auditor = canonicalAuditorName(auditor);
+        var startSec = parseTimeAMPM(r[2]), endSec = parseTimeAMPM(r[3]);
+        var minutes = null;
+        if(startSec!==null && endSec!==null){
+          var d = endSec-startSec; if(d<0) d+=86400;
+          var mins = d/60; if(mins>0 && mins<=180) minutes = mins;
+        }
+        out.push({date: iso, auditor: auditor, minutes: minutes});
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+
+  /* CSAT — "Negative Review Appointments" tab. N=Date of Audit, O/P=audit start/end time,
+     R=Audited by. Dates come mixed as M/D/YYYY and MM-DD-YYYY (even within the same column) and some
+     start/end times omit AM/PM — parseFlexMDY / parseTimeAMPM tolerate both, degrading to a null
+     time rather than dropping the row (still counted in Allocation Summary, just not in time). */
+  function loadCsatLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_CSAT + "/gviz/tq?tqx=out:csv&gid=" + CSAT_GID + "&tq=" + encodeURIComponent("select N,O,P,R");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var iso = parseFlexMDY(r[0]); if(!iso) continue;
+        var auditor = (r[3]||"").trim(); if(!auditor) continue;
+        auditor = canonicalAuditorName(auditor);
+        var startSec = parseTimeAMPM(r[1]), endSec = parseTimeAMPM(r[2]);
+        var minutes = null;
+        if(startSec!==null && endSec!==null){
+          var d = endSec-startSec; if(d<0) d+=86400;
+          var mins = d/60; if(mins>0 && mins<=180) minutes = mins;
+        }
+        out.push({date: iso, auditor: auditor, minutes: minutes});
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+
   function refreshAll(){
     loadAuditSummaryLive().then(function(rows){
       state.auditRows = rows;
@@ -1586,7 +1749,7 @@
     Promise.all([loadCancellationLive(), loadWorkTimeExtraLive()]).then(function(results){
       var cancelRows = results[0], extraRows = results[1];
       state.cancelRows = cancelRows;
-      state.workTimeRows = cancelRows.concat(extraRows);
+      state.extraTimeRows = extraRows;
       liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now();
       render();
     }).catch(function(e){
@@ -1622,6 +1785,36 @@
     }).catch(function(e){
       liveOK.mounjaroSource = false;
       lastError.mounjaroSource = "couldn’t reach the live sheet" + (state.mounjaroSourceRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadTrainingLive().then(function(rows){
+      state.trainingRows = rows;
+      liveOK.training = true; lastError.training = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.training = false;
+      lastError.training = "couldn’t reach the live sheet" + (state.trainingRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadTicketsLive().then(function(rows){
+      state.ticketRows = rows;
+      liveOK.tickets = true; lastError.tickets = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.tickets = false;
+      lastError.tickets = "couldn’t reach the live sheet" + (state.ticketRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadCsatLive().then(function(rows){
+      state.csatRows = rows;
+      liveOK.csat = true; lastError.csat = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.csat = false;
+      lastError.csat = "couldn’t reach the live sheet" + (state.csatRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
