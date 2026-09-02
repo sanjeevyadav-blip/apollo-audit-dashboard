@@ -1598,12 +1598,21 @@
     });
   }
   function loadWlpWorkbookTabLive(sheetName, gid, typeLabel){
+    /* No server-side "where <dateCol> >= date '...'" filter here on purpose. This sheet's "Date of
+       Audit" column is displayed as plain mm-dd-yyyy text, but rows get added by more than one
+       process and not every row's cell ends up holding a true Sheets date value — some land as
+       stray numbers/text. A gviz date-typed comparison against a column like that can silently
+       drop or error on exactly the rows that don't match its majority-inferred type (this is what
+       was excluding Dr. Abhishek's most recent rows even after the column-letter fix). So instead:
+       fetch every row for the resolved columns, unfiltered, and parse/filter the mm-dd-yyyy text
+       client-side with parseDateMDY — a row whose date cell isn't clean mm-dd-yyyy text just gets
+       skipped (parseDateMDY returns null), instead of corrupting or erroring the whole fetch. */
     var floor = isoDateNDaysAgo(400);
     var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
     return resolveWlpColumns(sheetName, gid).then(function(cols){
       var attainedCol = cols.attained || cols.dateOfAudit; /* fall back rather than break the whole fetch if score header text ever changes */
       var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType].join(",");
-      var tq = "select " + selectCols + " where " + cols.dateOfAudit + " >= date '"+floor+"'";
+      var tq = "select " + selectCols;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
       return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
@@ -1615,8 +1624,8 @@
       var out = [];
       for(var i=1;i<rows.length;i++){
         var r = rows[i]; if(!r || r.length<4) continue;
-        var iso = parseDateMDY(r[0]);
-        if(!iso) continue;
+        var iso = parseDateMDY(r[0]) || parseFlexMDY(r[0]);
+        if(!iso || iso < floor) continue;
         var auditor = canonicalAuditorName(r[1]);
         var scoreRaw = (r[2]||"").trim();
         var score = null;
