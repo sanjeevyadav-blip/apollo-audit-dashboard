@@ -53,7 +53,7 @@
   *{box-sizing:border-box}
   html{background:var(--paper)}
   body{
-    margin:0; background:var(--paper); color:var(--ink);
+    margin:0; background:var(--paper); color:var(--ink); overflow-x:hidden;
     font-family:var(--font-body); font-size:14px; line-height:1.5;
     padding:28px clamp(14px,3vw,36px) 60px; -webkit-font-smoothing:antialiased;
   }
@@ -106,9 +106,13 @@
   .kpi .sub{font-size:11px;color:var(--ink-soft);margin-top:5px}
 
   /* ===== Layout grid ===== */
-  main{ display:grid; grid-template-columns:1.55fr 1fr; gap:16px; align-items:start; }
-  .col{display:flex;flex-direction:column;gap:16px}
-  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; box-shadow:var(--shadow); }
+  main{ display:grid; grid-template-columns:1.55fr 1fr; gap:16px; align-items:start; min-width:0; }
+  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+  /* min-width:0 overrides the flex/grid-item default of min-width:auto, which otherwise lets a wide
+     table (via its own .tbl-wrap{overflow-x:auto}) force this panel — and the grid/flex track it
+     sits in — wider than its share, pushing the whole page into horizontal scroll. With this set,
+     an overflowing table scrolls inside its own .tbl-wrap instead of moving anything else sideways. */
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; box-shadow:var(--shadow); min-width:0; }
   .panel h2{ font-family:var(--font-display); font-size:16px; font-weight:600; margin:0 0 3px; }
   .panel .desc{font-size:12px;color:var(--ink-soft);margin:0 0 16px}
 
@@ -145,6 +149,12 @@
 
   /* ===== Tables ===== */
   .tbl-wrap{overflow-x:auto}
+  /* Used by the narrow "Auditor working time" table (right column of the auditor/cancellation grid)
+     so its 6 columns wrap onto 2 header lines and shrink to fit that column's width instead of
+     forcing a horizontal scrollbar on the card. */
+  .tbl-compact table{font-size:11px}
+  .tbl-compact th{white-space:normal;line-height:1.25;padding:0 4px 8px}
+  .tbl-compact td{padding:7px 4px}
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   th{ text-align:left; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft);
     font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line-strong); white-space:nowrap; }
@@ -209,11 +219,12 @@
 
   /* ===== Reason mix / genuine split ===== */
   .gc-split{display:flex;gap:12px;margin-bottom:14px}
-  .gc-pill{flex:1;text-align:center;border-radius:8px;padding:9px 6px;border:1px solid var(--line)}
+  .gc-pill{flex:1;text-align:center;border-radius:8px;padding:9px 6px;border:1px solid var(--line);cursor:pointer;transition:box-shadow .12s,opacity .12s;opacity:.62}
   .gc-pill .v{font-family:var(--font-mono);font-weight:600;font-size:19px}
   .gc-pill .k{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
   .gc-pill.yes{background:var(--good-soft);border-color:var(--accent-soft-line)}
   .gc-pill.no{background:var(--crit-soft);border-color:#f0c6bd}
+  .gc-pill.active{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
   .reason-row{display:grid;grid-template-columns:1fr 90px 34px;align-items:center;gap:8px;font-size:11.5px;padding:5px 0}
   .reason-row .nm{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .reason-row .track{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
@@ -242,7 +253,7 @@
     <span class="mark">APOLLO 24|7</span>
     <div class="top-title">
       <h1>Audit Coverage &amp; Quality Governance</h1>
-      <p>Overall Audit Summary &middot; Project &amp; Auditor allocation &middot; CS ticket volumes &middot; critical-error register</p>
+      <p>Overall Audit Summary &middot; Project &amp; Auditor allocation &middot; Doctor&#8209;wise summary &middot; critical-error register</p>
     </div>
   </div>
   <div class="top-meta">
@@ -277,6 +288,10 @@
     <table>
       <thead><tr><th>Audit Type</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th></tr></thead>
       <tbody id="projectTableBody"></tbody>
+      <!-- Patient Tickets, CSAT Audits and Training are appended as extra rows at render time (not
+           scored audit types, so they carry no Avg Audit Score) — see the "2. Project-wise Audit
+           Summary" block in render(). Training is shown here but, like the Allocation Summary table,
+           deliberately excluded from the Total row's count since it isn't audit-assignment work. -->
     </table>
   </div>
 </div>
@@ -284,10 +299,10 @@
 <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;margin-bottom:30px" id="auditorCancelGrid">
   <div class="panel">
     <p class="section-label" style="margin-bottom:4px"><span class="n">03</span> Auditor&#8209;wise Allocation Summary</p>
-    <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit, ticket, or CSAT review. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets (escalation ticket audits) and CSAT Audits (negative-review appointment audits) are now included as their own columns, folded into Total Assigned.</p>
+    <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit, ticket, or CSAT review. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets (escalation ticket audits) and CSAT Audits (negative-review appointment audits) are now included as their own columns, folded into Total Assigned. Training Time (from logged session duration) is shown for reference only and is not folded into Total Assigned, since training isn&rsquo;t audit-assignment work.</p>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th></tr></thead>
+        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th><th class="num">Training Time</th></tr></thead>
         <tbody id="auditorTableBody"></tbody>
       </table>
     </div>
@@ -295,13 +310,15 @@
   <div class="panel">
     <h2>PDS Cancellation &mdash; reason mix</h2>
     <p class="desc" id="cancelDesc">Genuine-cancellation review, selected range.</p>
+    <p class="desc" style="margin-bottom:6px">Click Genuine or Not genuine to see that group&rsquo;s reason breakdown below.</p>
     <div class="gc-split" id="gcSplit"></div>
+    <p class="desc" id="reasonToggleLabel" style="margin:0 0 6px;font-weight:600"></p>
     <div id="reasonList"></div>
     <h2 style="margin-top:18px;font-size:14px">Auditor working time</h2>
     <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits &mdash; every source that logs start/end time &mdash; plus logged Training session duration. "Training Days" counts training days even when no duration was logged.</p>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap tbl-compact">
       <table>
-        <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Training Days</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg Time/Day</th></tr></thead>
+        <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num" title="Training Days">Train. Days</th><th class="num" title="Total Time">Total Time</th><th class="num" title="Working Days">Work Days</th><th class="num" title="Avg Time/Day">Avg/Day</th></tr></thead>
         <tbody id="cancelTimeBody"></tbody>
       </table>
     </div>
@@ -331,9 +348,14 @@
     </div>
 
     <div class="panel">
-      <h2>Service lines &mdash; CS ticket volume</h2>
-      <p class="desc">Month-to-date vs. the same date last month and the month before, from the CS ticketing sheet.</p>
-      <div id="svcContainer"></div>
+      <h2>Doctor&#8209;wise Audit Summary</h2>
+      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Sorted by audits completed.</p>
+      <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+        <table>
+          <thead><tr><th>Doctor Name</th><th>Doctor Type</th><th class="num">Audits Completed</th><th class="num">Avg Score</th></tr></thead>
+          <tbody id="doctorWiseBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="panel">
@@ -508,6 +530,7 @@
   state.ticketRows = null; /* {date,auditor,minutes} from the Patient escalation Tickets sheet ("Tickets 2026") — feeds Allocation Summary's Patient Tickets column + working-time panels */
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
+  state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false };
@@ -718,6 +741,19 @@
     Object.keys(by).forEach(function(k){ out[k] = Object.keys(by[k]).length; });
     return out;
   }
+  /* Training time — total logged session minutes per auditor (rows with no logged duration simply
+     don't add anything). Feeds the Allocation Summary table's "Training Time" column; kept separate
+     from Total Assigned there for the same reason Training Days is kept out of it — training isn't
+     audit-assignment work. */
+  function aggregateTrainingMinutes(trainingRows, start, end){
+    var by = {};
+    (trainingRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      if(r.minutes===null || r.minutes===undefined || isNaN(r.minutes)) return;
+      by[r.auditor] = (by[r.auditor]||0) + r.minutes;
+    });
+    return by;
+  }
 
   /* ---------- live auditor leaderboard + doctor coverage ----------
      Both derive from the same auditRows already fetched for the score panels — Merge Overall Sheet
@@ -753,6 +789,25 @@
       var b = by[k];
       return { type:b.type, doctors:Object.keys(b.names).length, audits:b.audits };
     }).sort(function(a,b){return b.doctors-a.doctors;});
+  }
+  /* Doctor-wise Audit Summary — one row per individual doctor (not grouped by doctor type, unlike
+     aggregateDoctorCoverage above), across every audit type combined. Feeds the "Doctor-wise Audit
+     Summary" panel. */
+  function aggregateDoctorWise(auditRows, start, end){
+    var by = {};
+    auditRows.forEach(function(r){
+      var date=r[0], score=r[3], doctorName=r[4], doctorType=r[5];
+      if(date<start || date>end || !doctorName) return;
+      if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
+      var b = by[doctorName];
+      b.count += 1;
+      if(doctorType && (!b.doctorType || b.doctorType==="—")) b.doctorType = doctorType;
+      if(score!==null){ b.weighted += score; b.scoredCount += 1; }
+    });
+    return Object.keys(by).map(function(k){
+      var b = by[k];
+      return { doctor:b.doctor, doctorType:b.doctorType, count:b.count, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
+    }).sort(function(a,b){return b.count-a.count;});
   }
 
   /* ---------- live score-band breakdown (Auto-Scored Volume by Audit Type / Project Wise Audit report) ----------
@@ -879,17 +934,26 @@
     return out;
   }
   function aggregateCancellation(rows, start, end){
-    var yes=0, no=0, reasons={};
+    /* topReasons stays the combined (Genuine + Not genuine) mix for anything still reading it;
+       topReasonsYes/topReasonsNo split the same tally by the "Genuine Cancellation" flag so the
+       gc-pill toggle can show one group's reasons at a time. */
+    var yes=0, no=0, reasons={}, reasonsYes={}, reasonsNo={};
     rows.forEach(function(r){
       if(r.date && (r.date<start || r.date>end)) return;
       if(!r.date) return;
       if(r.genuine==="Yes") yes++;
       else if(r.genuine==="No") no++;
-      if(r.reason){ reasons[r.reason] = (reasons[r.reason]||0)+1; }
+      if(r.reason){
+        reasons[r.reason] = (reasons[r.reason]||0)+1;
+        if(r.genuine==="Yes") reasonsYes[r.reason] = (reasonsYes[r.reason]||0)+1;
+        else if(r.genuine==="No") reasonsNo[r.reason] = (reasonsNo[r.reason]||0)+1;
+      }
     });
-    var topReasons = Object.keys(reasons).map(function(k){return {reason:k, count:reasons[k]};})
-      .sort(function(a,b){return b.count-a.count;}).slice(0,8);
-    return {genuineYes:yes, genuineNo:no, totalReviewed:yes+no, topReasons:topReasons};
+    function topOf(obj){
+      return Object.keys(obj).map(function(k){return {reason:k, count:obj[k]};})
+        .sort(function(a,b){return b.count-a.count;}).slice(0,8);
+    }
+    return {genuineYes:yes, genuineNo:no, totalReviewed:yes+no, topReasons:topOf(reasons), topReasonsYes:topOf(reasonsYes), topReasonsNo:topOf(reasonsNo)};
   }
   function aggregateCancellationTime(rows, start, end){
     var byAuditor = {};
@@ -947,48 +1011,6 @@
     document.getElementById("snapshotNote").textContent = scoreLive
       ? "Note : Please find the Audited Data through : "+fmtDateLabel(state.dataMaxDate)+" (live — PDS Cancellation included; KPIs/leaderboard/doctor coverage below follow the date range selected above)"
       : "Note : Please find the Audited Data Dated : "+fmtDateLabel(state.asOfDate)+" (D-1 — connecting for live data…)";
-
-    /* Service lines */
-    var svc = "";
-    var ph = state.cs.Pharma;
-    if(ph){
-      var phBars = (ph.issues||[]).slice().sort(function(a,b){return b.count-a.count;}).map(function(i){
-        var w = ph.mtd ? clampPct(i.count/ph.mtd*100) : 0;
-        return '<div class="svc-bar"><span class="nm">'+esc(i.name)+'</span><div class="track"><i style="width:'+w+'%"></i></div><span class="v tnum">'+fmtInt(i.count)+'</span></div>';
-      }).join("");
-      var phNote = "";
-      if(ph.avgRes!==null && ph.avgRes!==undefined && ph.avgRes>500){
-        phNote = '<div class="svc-note">Sheet’s avg resolution time for Pharma MTD reads ~'+Math.round(ph.avgRes/24).toLocaleString("en-IN")+' days — almost certainly a small number of very old unresolved tickets skewing the average, not a typical case time. Shown as sourced; worth a data check upstream.</div>';
-      }
-      svc += '<div class="svc"><div class="svc-head"><span class="nm">Pharmacy</span><span class="vol tnum">'+fmtInt(ph.mtd)+' tickets MTD</span></div>'+
-        '<div class="svc-compare"><div><span class="k">MTD</span><span class="v tnum">'+fmtInt(ph.mtd)+'</span></div>'+
-        '<div><span class="k">LMTD</span><span class="v tnum">'+fmtInt(ph.lmtd)+'</span></div>'+
-        '<div><span class="k">LLMTD</span><span class="v tnum">'+fmtInt(ph.llmtd)+'</span></div>'+
-        '<div><span class="k">High severity</span><span class="v tnum" style="color:var(--crit)">'+fmtInt(ph.high)+'</span></div>'+
-        '<div><span class="k">Avg FRT</span><span class="v tnum">'+fmtHours(ph.avgFrt)+'</span></div></div>'+
-        '<div class="svc-bars">'+phBars+'</div>'+phNote+'</div>';
-    }
-    var diag = state.cs.Diagnostic;
-    if(diag){
-      var diagNote = (diag.lmtd>0 && diag.mtd < diag.lmtd*0.2) ? '<div class="svc-note">MTD volume is far below prior months’ pace at the same cutoff — likely a lag in this month’s log rather than an actual drop; worth confirming the sheet is fully synced.</div>' : "";
-      svc += '<div class="svc"><div class="svc-head"><span class="nm">Diagnostics</span><span class="vol tnum">'+fmtInt(diag.mtd)+' ticket'+(diag.mtd===1?"":"s")+' MTD</span></div>'+
-        '<div class="svc-compare"><div><span class="k">MTD</span><span class="v tnum">'+fmtInt(diag.mtd)+'</span></div>'+
-        '<div><span class="k">LMTD</span><span class="v tnum">'+fmtInt(diag.lmtd)+'</span></div>'+
-        '<div><span class="k">LLMTD</span><span class="v tnum">'+fmtInt(diag.llmtd)+'</span></div>'+
-        (diag.topIssue ? '<div><span class="k">Top issue (LMTD)</span><span class="v" style="font-size:11px">'+esc(diag.topIssue)+'</span></div>' : '')+
-        '</div>'+diagNote+'</div>';
-    }
-    var cons = state.cs.Consultation;
-    if(cons){
-      var consNote = (cons.lmtd>0 && cons.mtd < cons.lmtd*0.2) ? '<div class="svc-note">Same lag pattern as Diagnostics — MTD reads low against a steadier prior-month baseline.</div>' : "";
-      svc += '<div class="svc"><div class="svc-head"><span class="nm">Consults</span><span class="vol tnum">'+fmtInt(cons.mtd)+' ticket'+(cons.mtd===1?"":"s")+' MTD</span></div>'+
-        '<div class="svc-compare"><div><span class="k">MTD</span><span class="v tnum">'+fmtInt(cons.mtd)+'</span></div>'+
-        '<div><span class="k">LMTD</span><span class="v tnum">'+fmtInt(cons.lmtd)+'</span></div>'+
-        '<div><span class="k">LLMTD</span><span class="v tnum">'+fmtInt(cons.llmtd)+'</span></div>'+
-        '<div><span class="k">High (LMTD)</span><span class="v tnum">'+fmtInt(cons.high)+'</span></div>'+
-        '<div><span class="k">Medium (LMTD)</span><span class="v tnum">'+fmtInt(cons.medium)+'</span></div></div>'+consNote+'</div>';
-    }
-    document.getElementById("svcContainer").innerHTML = svc;
 
     /* status chip + footer */
     var chip = document.getElementById("statusChip");
@@ -1170,6 +1192,17 @@
         '<span class="figs"><b class="tnum">'+fmtInt(d.doctors)+'</b> · '+fmtInt(d.audits)+' audits</span></div>';
     }).join("");
 
+    /* Doctor-wise Audit Summary — individual doctor breakdown (same source rows as Doctor coverage
+       above, just grouped per-doctor instead of per-doctor-type). No static-snapshot fallback since
+       this panel is new, so it just waits for live data rather than showing stale placeholder rows. */
+    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end) : [];
+    document.getElementById("doctorWiseDesc").textContent = auditLive
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted by audits completed.")
+      : "Connecting for live audit data…";
+    document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
+      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td></tr>';
+    }).join("") : '<tr><td colspan="4" class="empty-note">'+(auditLive ? "No audited doctors found for this range." : "Connecting to the live audit summary sheet…")+'</td></tr>';
+
     if(combinedAuditRows){
       /* MTD banner — always current month, independent of the filter above */
       var mtdAgg = aggregateProject(combinedAuditRows, cancelRowsForAgg, monthStartOf(state.dataMaxDate), state.dataMaxDate);
@@ -1197,11 +1230,33 @@
         return '<div class="kpi"><div class="lbl">'+esc(k.lbl)+'</div><div class="val tnum'+(k.cls?' '+k.cls:'')+'">'+k.val+'</div></div>';
       }).join("");
 
+      /* Patient Tickets / CSAT / Training counts + training minutes for the selected range — needed
+         by both the Project-wise Audit Summary (as extra rows) and the Auditor-wise Allocation
+         Summary (Training Time column) below. */
+      var ticketsInRange = (state.ticketRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
+      var csatInRange = (state.csatRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
+      var trainingInRange = (state.trainingRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
+      var trainingDaysByAuditor = aggregateTrainingDays(state.trainingRows, state.filter.start, state.filter.end);
+      var trainingMinutesByAuditor = aggregateTrainingMinutes(state.trainingRows, state.filter.start, state.filter.end);
+
       /* 2. Project-wise Audit Summary */
       var projRowsHtml = agg.byType.map(function(t){
         return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td></tr>';
       }).join("");
-      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(ov.count)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td></tr>';
+      /* Patient Tickets and CSAT Audits aren't scored audit types, so they show "—" for Avg Audit
+         Score; both fold into the Total row's count below (matching Total Assigned in the Allocation
+         Summary table). Training is shown for visibility but deliberately excluded from that Total,
+         same reasoning as Training Days/Time being excluded from Total Assigned there — training
+         isn't audit-assignment work. */
+      projRowsHtml += [
+        {type:"Patient Tickets", count:ticketsInRange},
+        {type:"CSAT Audits", count:csatInRange},
+        {type:"Training", count:trainingInRange}
+      ].map(function(t){
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td></tr>';
+      }).join("");
+      var projGrandTotal = ov.count + ticketsInRange + csatInRange;
+      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td></tr>';
       document.getElementById("projectTableBody").innerHTML = projRowsHtml;
 
       /* 3. Auditor-wise Allocation Summary */
@@ -1209,14 +1264,17 @@
       var audRowsHtml = auditorAgg.length ? auditorAgg.map(function(a){
         return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.pds)+'</td><td class="num tnum">'+fmtInt(a.mounjaro)+'</td><td class="num tnum">'+fmtInt(a.cancellation)+'</td>'+
           '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.tickets)+'</td><td class="num tnum">'+fmtInt(a.csat)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td>'+
-          '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':a.avgPerWorkingDay.toFixed(1))+'</td></tr>';
-      }).join("") : '<tr><td colspan="11" class="empty-note">No allocation data for this range.</td></tr>';
+          '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':a.avgPerWorkingDay.toFixed(1))+'</td>'+
+          '<td class="num tnum">'+fmtMinutes(trainingMinutesByAuditor[a.auditor])+'</td></tr>';
+      }).join("") : '<tr><td colspan="12" class="empty-note">No allocation data for this range.</td></tr>';
       if(auditorAgg.length){
         var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.tickets+=x.tickets;a.csat+=x.csat;a.total+=x.total;a.workingDays+=x.workingDays; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,tickets:0,csat:0,total:0,workingDays:0});
         var avgAll = audTotal.workingDays ? (audTotal.total/audTotal.workingDays) : null;
+        var trainingMinutesTotal = Object.keys(trainingMinutesByAuditor).reduce(function(sum,k){ return sum + trainingMinutesByAuditor[k]; }, 0);
         audRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(audTotal.pds)+'</td><td class="num tnum">'+fmtInt(audTotal.mounjaro)+'</td><td class="num tnum">'+fmtInt(audTotal.cancellation)+'</td>'+
           '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.tickets)+'</td><td class="num tnum">'+fmtInt(audTotal.csat)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td>'+
-          '<td class="num tnum">&mdash;</td><td class="num tnum">'+(avgAll===null?'—':avgAll.toFixed(1))+'</td></tr>';
+          '<td class="num tnum">&mdash;</td><td class="num tnum">'+(avgAll===null?'—':avgAll.toFixed(1))+'</td>'+
+          '<td class="num tnum">'+fmtMinutes(trainingMinutesTotal)+'</td></tr>';
       }
       document.getElementById("auditorTableBody").innerHTML = audRowsHtml;
     } else {
@@ -1224,7 +1282,7 @@
       document.getElementById("mtdStats").innerHTML = "";
       document.getElementById("overallKpiRow").innerHTML = '<div class="kpi"><div class="lbl">Status</div><div class="val" style="font-size:14px">Connecting…</div></div>';
       document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="3" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
-      document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="11" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
+      document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="12" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
     }
 
     /* PDS Cancellation — reason mix */
@@ -1234,16 +1292,21 @@
       cancelAgg = aggregateCancellation(cancelRowsSrc, state.filter.start, state.filter.end);
       document.getElementById("cancelDesc").textContent = "Genuine-cancellation review, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+".";
     } else {
-      cancelAgg = {genuineYes: state.cancelSummary.genuineYes, genuineNo: state.cancelSummary.genuineNo, totalReviewed: state.cancelSummary.totalReviewed, topReasons: state.cancelSummary.topReasons};
+      /* No genuine/not-genuine split available for the static cumulative snapshot (it only ever
+         stored one combined reason mix) — both toggle states fall back to that combined list until
+         the live, range-filtered cancellation rows load in. */
+      cancelAgg = {genuineYes: state.cancelSummary.genuineYes, genuineNo: state.cancelSummary.genuineNo, totalReviewed: state.cancelSummary.totalReviewed, topReasons: state.cancelSummary.topReasons, topReasonsYes: state.cancelSummary.topReasons, topReasonsNo: state.cancelSummary.topReasons};
       document.getElementById("cancelDesc").textContent = "Genuine-cancellation review, cumulative snapshot as of "+fmtDateLabel(state.cancelSummary.asOf)+" (connecting for live, range-filtered data…).";
     }
     document.getElementById("gcSplit").innerHTML =
-      '<div class="gc-pill yes"><div class="v tnum">'+fmtInt(cancelAgg.genuineYes)+'</div><div class="k">Genuine</div></div>'+
-      '<div class="gc-pill no"><div class="v tnum">'+fmtInt(cancelAgg.genuineNo)+'</div><div class="k">Not genuine</div></div>';
-    var maxReason = Math.max.apply(null, cancelAgg.topReasons.map(function(r){return r.count;}).concat([1]));
-    document.getElementById("reasonList").innerHTML = cancelAgg.topReasons.length ? cancelAgg.topReasons.map(function(r){
+      '<div class="gc-pill yes'+(state.reasonToggle==="yes"?" active":"")+'" data-reason-toggle="yes"><div class="v tnum">'+fmtInt(cancelAgg.genuineYes)+'</div><div class="k">Genuine</div></div>'+
+      '<div class="gc-pill no'+(state.reasonToggle==="no"?" active":"")+'" data-reason-toggle="no"><div class="v tnum">'+fmtInt(cancelAgg.genuineNo)+'</div><div class="k">Not genuine</div></div>';
+    var activeReasons = state.reasonToggle==="no" ? cancelAgg.topReasonsNo : cancelAgg.topReasonsYes;
+    document.getElementById("reasonToggleLabel").textContent = (state.reasonToggle==="no" ? "Not genuine" : "Genuine") + " cancellation reasons";
+    var maxReason = Math.max.apply(null, activeReasons.map(function(r){return r.count;}).concat([1]));
+    document.getElementById("reasonList").innerHTML = activeReasons.length ? activeReasons.map(function(r){
       return '<div class="reason-row"><span class="nm">'+esc(r.reason)+'</span><div class="track"><i style="width:'+clampPct(r.count/maxReason*100)+'%"></i></div><span class="v tnum">'+fmtInt(r.count)+'</span></div>';
-    }).join("") : '<div class="empty-note">No cancellation reasons logged for this range.</div>';
+    }).join("") : '<div class="empty-note">No '+(state.reasonToggle==="no"?"not genuine":"genuine")+' cancellation reasons logged for this range.</div>';
 
     /* Auditor working time — combined from every source that logs Audit start/end Time: PDS
        Cancellation + PDS WLP (Mounjaro) + GLP + Patient Tickets + CSAT audits, plus Training
@@ -1279,6 +1342,16 @@
       document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="4" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
     }
   }
+
+  /* Genuine / Not genuine reason-mix toggle — gcSplit's innerHTML is rebuilt every render(), so this
+     listener is attached once to the container (event delegation) rather than on the pills directly. */
+  document.getElementById("gcSplit").addEventListener("click", function(ev){
+    var pill = ev.target.closest ? ev.target.closest(".gc-pill") : null;
+    if(!pill || !pill.dataset || !pill.dataset.reasonToggle) return;
+    if(state.reasonToggle === pill.dataset.reasonToggle) return;
+    state.reasonToggle = pill.dataset.reasonToggle;
+    render();
+  });
 
   render();
 
