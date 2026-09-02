@@ -445,7 +445,7 @@
   var FILE_CS      = "19utnwA01R-poW79N2RlkzbzrTHdozns6Jo8TQjGMjqw";
   var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"; /* PDS Cancellations – Audit Sheet_updated */
   var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"; /* "WLP Audits" workbook — dedicated source for BOTH WLP sub-programs, per explicit request */
-  var WLP_SOURCE_GID   = "1328268744"; /* "BS WLP Audits" tab — feeds the "WLP - Non Pharma" type */
+  var WLP_SOURCE_TAB = "BS WLP Audits"; /* tab inside the same workbook — feeds the "WLP - Non Pharma" type. Looked up BY NAME, not by gid: this workbook's tab gids have been observed to get reassigned to a DIFFERENT tab (confirmed 2026-09-02 — the gid this code previously hardcoded for "BS WLP Audits" had been reassigned to "PDS-Mounjaro", so every "WLP - Non Pharma" figure was silently reading Mounjaro's own data a second time under a different label, which is what made it look 100% duplicate). Name-based lookup (already how MOUNJARO_SOURCE_TAB works below) side-steps that entirely. */
   var MOUNJARO_SOURCE_TAB = "PDS-Mounjaro"; /* tab inside the same workbook — feeds the "PDS- Mounjaro" type. Column letters for both tabs are resolved live by header label (see resolveWlpColumns) since the two tabs no longer share the same layout. */
   var FILE_TRAINING = "1NQ7mxCPLjjHOM_R_s1QPGo4nUMTs03xfIa3S_eN6Ey8"; /* "Trainer Acknowledgement (Responses)" form log */
   var TRAINING_GID  = "456645703";
@@ -1113,9 +1113,11 @@
        (loadMounjaroSourceLive / loadWlpSourceLive), fetched independently of the Merge Overall Sheet
        rows above (which now only carries PDS / Non Pharma) — concatenated here so every aggregator
        below sees all types under their existing labels without needing their own code paths.
-       wlpSourceRows is deduped against mounjaroSourceRows first (see dedupeWlpAgainstMounjaro) since
-       "BS WLP Audits" has been directly verified to hold copied-over Mounjaro rows for every auditor
-       except Dr. Abhishek — without this, those audits would count twice, once under each type. */
+       wlpSourceRows is still run through dedupeWlpAgainstMounjaro as a safety net against exact
+       cross-listed rows, but as of 2026-09-02 the two tabs are confirmed to hold entirely distinct
+       audits (0 overlapping Appt IDs) — the earlier "100% duplicate" finding was this code reading
+       the wrong tab (WLP_SOURCE_TAB was pinned to a gid that had been reassigned to "PDS-Mounjaro"
+       itself), not a real data problem. Fixed by looking "BS WLP Audits" up by name instead of gid. */
     var wlpRowsDeduped = dedupeWlpAgainstMounjaro(state.wlpSourceRows, state.mounjaroSourceRows);
     var combinedAuditRows = (auditRowsSrc || state.mounjaroSourceRows || wlpRowsDeduped)
       ? (auditRowsSrc || []).concat(state.mounjaroSourceRows || []).concat(wlpRowsDeduped || [])
@@ -1721,7 +1723,7 @@
       return out;
     });
   }
-  function loadWlpSourceLive(){ return loadWlpWorkbookTabLive("BS WLP Audits", WLP_SOURCE_GID, "WLP - Non Pharma"); }
+  function loadWlpSourceLive(){ return loadWlpWorkbookTabLive(WLP_SOURCE_TAB, null, "WLP - Non Pharma"); }
   function loadMounjaroSourceLive(){ return loadWlpWorkbookTabLive(MOUNJARO_SOURCE_TAB, null, "PDS- Mounjaro"); }
   /* "BS WLP Audits" and "PDS-Mounjaro" are two independently-maintained tabs in the same workbook,
      but for every auditor except Dr. Abhishek, "BS WLP Audits" has been directly verified (same
