@@ -296,15 +296,27 @@
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;margin-bottom:30px" id="auditorCancelGrid">
-  <div class="panel">
-    <p class="section-label" style="margin-bottom:4px"><span class="n">03</span> Auditor&#8209;wise Allocation Summary</p>
-    <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit, ticket, or CSAT review. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets (escalation ticket audits) and CSAT Audits (negative-review appointment audits) are now included as their own columns, folded into Total Assigned. Training Time (from logged session duration) is shown for reference only and is not folded into Total Assigned, since training isn&rsquo;t audit-assignment work.</p>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th><th class="num">Training Time</th></tr></thead>
-        <tbody id="auditorTableBody"></tbody>
-      </table>
+<div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;margin-bottom:30px;min-width:0" id="auditorCancelGrid">
+  <div class="col" style="min-width:0">
+    <div class="panel">
+      <p class="section-label" style="margin-bottom:4px"><span class="n">03</span> Auditor&#8209;wise Allocation Summary</p>
+      <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit, ticket, or CSAT review. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets (escalation ticket audits) and CSAT Audits (negative-review appointment audits) are now included as their own columns, folded into Total Assigned. Training Time (from logged session duration) is shown for reference only and is not folded into Total Assigned, since training isn&rsquo;t audit-assignment work.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th><th class="num">Training Time</th></tr></thead>
+          <tbody id="auditorTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Auditor working time</h2>
+      <p class="desc" id="cancelTimeDesc">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits &mdash; every source that logs start/end time &mdash; plus logged Training session duration. "Training Days" counts training days even when no duration was logged.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Training Days</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg/Day</th></tr></thead>
+          <tbody id="cancelTimeBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div class="panel">
@@ -314,14 +326,6 @@
     <div class="gc-split" id="gcSplit"></div>
     <p class="desc" id="reasonToggleLabel" style="margin:0 0 6px;font-weight:600"></p>
     <div id="reasonList"></div>
-    <h2 style="margin-top:18px;font-size:14px">Auditor working time</h2>
-    <p class="desc" id="cancelTimeDesc" style="margin-bottom:10px">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits &mdash; every source that logs start/end time &mdash; plus logged Training session duration. "Training Days" counts training days even when no duration was logged.</p>
-    <div class="tbl-wrap tbl-compact">
-      <table>
-        <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num" title="Training Days">Train. Days</th><th class="num" title="Total Time">Total Time</th><th class="num" title="Working Days">Work Days</th><th class="num" title="Avg Time/Day">Avg/Day</th></tr></thead>
-        <tbody id="cancelTimeBody"></tbody>
-      </table>
-    </div>
   </div>
 </div>
 
@@ -330,7 +334,7 @@
   <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined. Sorted newest date first.</p>
   <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
     <table>
-      <thead><tr><th>Date</th><th>Auditor</th><th class="num">Reviews</th><th class="num">Time Spent</th></tr></thead>
+      <thead><tr><th>Date</th><th>Auditor</th><th class="num">Reviews</th><th class="num">Start Time</th><th class="num">End Time</th><th class="num">Span (hrs)</th><th class="num">Time Spent</th></tr></thead>
       <tbody id="dailyTimeBody"></tbody>
     </table>
   </div>
@@ -547,6 +551,15 @@
     return h>0 ? (h+"h "+r+"m") : (r+"m");
   }
   function clampPct(n){ return Math.max(0, Math.min(100, n)); }
+  /* seconds-since-midnight (from parseTimeAMPM) -> "9:05 AM" */
+  function fmtTimeOfDay(sec){
+    if(sec===null||sec===undefined||isNaN(sec)) return "—";
+    var s = ((sec%86400)+86400)%86400;
+    var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+    var ap = h>=12 ? "PM" : "AM";
+    var h12 = h%12; if(h12===0) h12=12;
+    return h12+":"+(m<10?"0":"")+m+" "+ap;
+  }
   function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   /* Source sheets sometimes drop the period after "Dr"/"Dt" (e.g. "Dt Mubaraka" vs "Dt. Mubaraka"),
      which would otherwise split one auditor into two rows across every panel. Normalize at parse
@@ -884,7 +897,8 @@
         genuine: idxGenuine!==-1 ? (r[idxGenuine]||"").trim() : "",
         reason: (r[idxReason]||"").trim(),
         auditor: idxAuditor!==-1 ? canonicalAuditorName(r[idxAuditor]) : "",
-        minutes: minutes
+        minutes: minutes,
+        startSec: startSec, endSec: endSec
       });
     }
     return out;
@@ -929,7 +943,7 @@
         var mins = d/60;
         if(mins>0 && mins<=180) minutes = mins;
       }
-      out.push({ date: iso, genuine: "", reason: "", auditor: canonicalAuditorName(r[idxAuditor]), minutes: minutes });
+      out.push({ date: iso, genuine: "", reason: "", auditor: canonicalAuditorName(r[idxAuditor]), minutes: minutes, startSec: startSec, endSec: endSec });
     }
     return out;
   }
@@ -973,17 +987,36 @@
     return {byAuditor:list, totalMinutes:totalMinutes};
   }
 
-  /* per (date, auditor) — exact hours/minutes spent on a given day, newest first */
+  /* per (date, auditor) — exact hours/minutes spent on a given day, newest first. Also tracks the
+     earliest logged Audit start Time and latest logged Audit End Time across that day's rows, plus
+     the elapsed span between them — which is NOT the same number as "minutes" (the sum of each
+     individual audit's own duration): span covers first-clock-in to last-clock-out including any
+     gaps/breaks between audits, while minutes only counts time actually inside an audit. Rows with
+     no start/end on this source (e.g. Training, which only logs a duration) simply don't move the
+     min/max. */
   function dailyCancellationTime(rows, start, end){
     var byKey = {};
     rows.forEach(function(r){
       if(!r.date || r.date<start || r.date>end) return;
       if(r.minutes===null || !r.auditor) return;
       var key = r.date+"|"+r.auditor;
-      if(!byKey[key]) byKey[key] = {date:r.date, auditor:r.auditor, minutes:0, count:0};
-      byKey[key].minutes += r.minutes; byKey[key].count += 1;
+      if(!byKey[key]) byKey[key] = {date:r.date, auditor:r.auditor, minutes:0, count:0, minStart:null, maxEnd:null};
+      var b = byKey[key];
+      b.minutes += r.minutes; b.count += 1;
+      if(r.startSec!==null && r.startSec!==undefined && (b.minStart===null || r.startSec<b.minStart)) b.minStart = r.startSec;
+      if(r.endSec!==null && r.endSec!==undefined && (b.maxEnd===null || r.endSec>b.maxEnd)) b.maxEnd = r.endSec;
     });
-    return Object.keys(byKey).map(function(k){ return byKey[k]; }).sort(function(a,b){
+    return Object.keys(byKey).map(function(k){
+      var b = byKey[k];
+      var spanHours = null;
+      if(b.minStart!==null && b.maxEnd!==null){
+        var diffSec = b.maxEnd - b.minStart;
+        if(diffSec < 0) diffSec += 86400; /* guard against a rare overnight-audit wraparound */
+        spanHours = diffSec / 3600;
+      }
+      b.spanHours = spanHours;
+      return b;
+    }).sort(function(a,b){
       if(a.date!==b.date) return a.date<b.date ? 1 : -1;
       return b.minutes-a.minutes;
     });
@@ -1335,13 +1368,15 @@
     /* Daily Working Time — exact hrs/min per auditor per day, same combined sources as above */
     if(workRowsSrc){
       var dailyTime = dailyCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Sorted newest date first.";
+      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Start Time / End Time are that day's earliest logged start and latest logged end; Span (hrs) is the elapsed time between them, which can run longer than Time Spent since Time Spent only sums each audit's own duration and doesn't count gaps between audits. Sorted newest date first.";
       document.getElementById("dailyTimeBody").innerHTML = dailyTime.length ? dailyTime.map(function(d){
-        return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtMinutes(d.minutes)+'</td></tr>';
-      }).join("") : '<tr><td colspan="4" class="empty-note">No timed audits for this range.</td></tr>';
+        return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td>'+
+          '<td class="num tnum">'+fmtTimeOfDay(d.minStart)+'</td><td class="num tnum">'+fmtTimeOfDay(d.maxEnd)+'</td>'+
+          '<td class="num tnum">'+(d.spanHours===null?'—':d.spanHours.toFixed(1))+'</td><td class="num tnum">'+fmtMinutes(d.minutes)+'</td></tr>';
+      }).join("") : '<tr><td colspan="7" class="empty-note">No timed audits for this range.</td></tr>';
     } else {
       document.getElementById("dailyTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
-      document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="4" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
+      document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="7" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
     }
   }
 
@@ -1852,7 +1887,7 @@
           var d = endSec-startSec; if(d<0) d+=86400;
           var mins = d/60; if(mins>0 && mins<=180) minutes = mins;
         }
-        out.push({date: iso, auditor: auditor, minutes: minutes});
+        out.push({date: iso, auditor: auditor, minutes: minutes, startSec: startSec, endSec: endSec});
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -1883,7 +1918,7 @@
           var d = endSec-startSec; if(d<0) d+=86400;
           var mins = d/60; if(mins>0 && mins<=180) minutes = mins;
         }
-        out.push({date: iso, auditor: auditor, minutes: minutes});
+        out.push({date: iso, auditor: auditor, minutes: minutes, startSec: startSec, endSec: endSec});
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
