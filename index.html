@@ -424,7 +424,7 @@
   var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"; /* PDS Cancellations – Audit Sheet_updated */
   var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"; /* "WLP Audits" workbook — dedicated source for BOTH WLP sub-programs, per explicit request */
   var WLP_SOURCE_GID   = "1328268744"; /* "BS WLP Audits" tab — feeds the "WLP - Non Pharma" type */
-  var MOUNJARO_SOURCE_TAB = "PDS-Mounjaro"; /* tab inside the same workbook — feeds the "PDS- Mounjaro" type (same column layout: K/L/AO/C/H) */
+  var MOUNJARO_SOURCE_TAB = "PDS-Mounjaro"; /* tab inside the same workbook — feeds the "PDS- Mounjaro" type. Column letters for both tabs are resolved live by header label (see resolveWlpColumns) since the two tabs no longer share the same layout. */
   var FILE_TRAINING = "1NQ7mxCPLjjHOM_R_s1QPGo4nUMTs03xfIa3S_eN6Ey8"; /* "Trainer Acknowledgement (Responses)" form log */
   var TRAINING_GID  = "456645703";
   var FILE_TICKETS  = "1NKOgta897n5SJH38fx-Q3rGiCmfd-x0zEUuAliVhhG4"; /* "Patient escalation Tickets - Audit", "Tickets 2026" tab */
@@ -1557,22 +1557,58 @@
      rows in the same 6-field shape as loadAuditSummaryLive so they concatenate cleanly at render
      time. Both tabs share the identical column layout: K=Date of Audit, L=Auditor Name,
      AO=Attained %, C=Doctor Name, H=Doctor Type.
-     Note: "PDS-Mounjaro" and "BS WLP Audits" have been verified (row-by-row, across multiple date
-     windows, checked directly against each other in this same workbook — not just via the old
-     Merge Overall Sheet mirror) to hold byte-for-byte identical data. This is a source-level
-     duplication in the underlying sheets themselves, not a dashboard mapping issue — wiring both
-     tabs in as instructed means "PDS– Mounjaro" and "WLP - Non Pharma" will keep showing identical
-     figures everywhere on this dashboard, and combined totals (Total Audits, Manual QA Audits,
-     Doctors Covered, Auditor-wise Allocation grand totals) double-count these audits under both
-     labels until the source sheets themselves are deduplicated upstream. */
-  function loadWlpWorkbookTabLive(sheetName, gid, typeLabel){
-    var floor = isoDateNDaysAgo(400);
-    var tq = "select K,L,AO,C,H where K >= date '"+floor+"'";
+     Note: "PDS-Mounjaro" and "BS WLP Audits" were previously verified to hold byte-for-byte
+     identical data, but as of 2026-09-02 that is no longer true — "BS WLP Audits" was restructured
+     upstream (columns inserted/removed, row set trimmed to genuine Non-Pharma WLP audits only), so
+     the two tabs now hold genuinely distinct data. Because a source sheet's column layout can change
+     at any time and this workbook has already drifted once (an "Order ID" column was removed from
+     "BS WLP Audits", shifting every field after it left by one letter — K/L/AO/C/H became J/K/AN/C/G,
+     which is what caused WLP-Non-Pharma figures to read as 0 for auditors including Dr. Abhishek),
+     column letters are no longer hardcoded. Instead each tab's header row is fetched live and
+     matched by label ("Date of Audit", "Auditor Name", "Attained %", "Doctor Name", "Doctor Type")
+     to resolve the current column letters before every fetch, so a future column shift in either
+     tab self-corrects instead of silently zeroing an auditor's numbers. */
+  function colIndexToLetter(idx){
+    var n = idx + 1, s = "";
+    while(n > 0){ var rem = (n - 1) % 26; s = String.fromCharCode(65 + rem) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function resolveWlpColumns(sheetName, gid){
     var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
-    var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent("select * limit 1");
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
+      function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
+      var map = {
+        dateOfAudit: find(/date of audit/i),
+        auditorName: find(/auditor name/i),
+        attained: find(/attained/i),
+        doctorName: find(/^doctor name$/i),
+        doctorType: find(/^doctor type$/i)
+      };
+      if(!map.dateOfAudit || !map.auditorName || !map.doctorName || !map.doctorType){
+        throw new Error("could not resolve WLP columns for " + sheetName);
+      }
+      return map;
+    });
+  }
+  function loadWlpWorkbookTabLive(sheetName, gid, typeLabel){
+    var floor = isoDateNDaysAgo(400);
+    var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
+    return resolveWlpColumns(sheetName, gid).then(function(cols){
+      var attainedCol = cols.attained || cols.dateOfAudit; /* fall back rather than break the whole fetch if score header text ever changes */
+      var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType].join(",");
+      var tq = "select " + selectCols + " where " + cols.dateOfAudit + " >= date '"+floor+"'";
+      var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      });
     }).then(function(csvText){
       var rows = parseCSV(csvText);
       if(rows.length < 2) throw new Error("no rows parsed");
