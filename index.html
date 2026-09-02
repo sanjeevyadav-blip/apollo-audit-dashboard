@@ -113,7 +113,7 @@
   .panel .desc{font-size:12px;color:var(--ink-soft);margin:0 0 16px}
 
   /* ===== Audit type stage tiles ===== */
-  .stage-row{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .stage-row{ display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
   .stage{ border:1px solid var(--line); border-radius:9px; padding:11px 10px; background:var(--surface-2); border-top:3px solid var(--accent); }
   .stage.flag{border-top-color:var(--warn)}
   .stage.empty{border-top-color:var(--line-strong)}
@@ -287,7 +287,7 @@
     <p class="desc" style="margin-bottom:14px">"Working Days" = dates the auditor was assigned &ge;1 audit. "Avg Audits/Day" = Total Assigned &divide; Working Days &mdash; i.e. audit <b>count</b> per working day, not time. Days off aren&rsquo;t averaged in. Patient Tickets &amp; CSAT Audits aren&rsquo;t tracked in the audit checklist system, so they're not part of this live table.</p>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th></tr></thead>
+        <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">GLP</th><th class="num">WLP Non Pharma</th><th class="num">Total Assigned</th><th class="num">Working Days</th><th class="num">Avg Audits/Day</th></tr></thead>
         <tbody id="auditorTableBody"></tbody>
       </table>
     </div>
@@ -381,7 +381,7 @@
 
     <div class="panel">
       <h2>Auditor Quality Score &mdash; leaderboard</h2>
-      <p class="desc" id="leaderboardDesc">Manually reviewed audits this period, across GLP / PDS Audit / Non Pharma / WLP.</p>
+      <p class="desc" id="leaderboardDesc">Manually reviewed audits this period, across GLP / PDS Audit / Non Pharma / WLP / WLP Non Pharma.</p>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Auditor</th><th class="num">Audits</th><th>Weighted score</th></tr></thead>
@@ -422,8 +422,14 @@
   var FILE_AUDIT   = "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA";
   var FILE_CS      = "19utnwA01R-poW79N2RlkzbzrTHdozns6Jo8TQjGMjqw";
   var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"; /* PDS Cancellations – Audit Sheet_updated */
+  /* "WLP Audits" workbook, "BS WLP Audits" tab — a separate, additional live source (not the same
+     as the existing "WLP - Non Pharma" type below, which comes from the Merge Overall Sheet's GLP
+     rows). Kept side-by-side as its own distinct type rather than merged into that one. */
+  var FILE_WLP_NONPHARMA = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ";
+  var WLP_NONPHARMA_GID = "1328268744";
+  var WLP_NONPHARMA_TYPE = "WLP Non Pharma";
   var SERVER = "Google Drive";
-  var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
+  var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma","WLP Non Pharma"];
   /* "Merge Overall Sheet" tab inside FILE_AUDIT is the live per-audit master log (Audit type, Date of
      Audit, Auditor Name, Attained % score) — replaces the old Review of Audit Coverage.xlsx, which
      wasn't a native Google Sheet and couldn't be fetched cross-origin from the browser (that's the
@@ -488,11 +494,12 @@
   state.auditRows = null; /* raw live rows [dateISO, type, auditorName, scoreFraction|null, doctorName, doctorType], once fetched — PDS/PDS-Mounjaro/Non Pharma/WLP from Merge Overall Sheet; also feeds the leaderboard + doctor-coverage panels */
   state.cancelRows = null; /* raw live rows, once fetched — PDS Cancellation only (used for reason-mix, and the PDS Cancellation column above) */
   state.workTimeRows = null; /* combined timed rows: PDS Cancellation + PDS WLP (Mounjaro) + GLP — used for working-time panels */
+  state.wlpNonPharmaRows = null; /* raw live rows, same shape as state.auditRows, once fetched — "WLP Non Pharma" (BS Audits) tab, a separate additive source */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlp:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlp:null };
 
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
@@ -615,10 +622,11 @@
       if(type==="PDS- Mounjaro") return "mounjaro";
       if(type==="Non Pharma") return "nonPharma";
       if(type==="WLP - Non Pharma") return "wlp";
+      if(type===WLP_NONPHARMA_TYPE) return "wlpNonPharma";
       return null;
     }
     function ensure(name){
-      if(!by[name]) by[name] = {auditor:name, pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,total:0,days:{}};
+      if(!by[name]) by[name] = {auditor:name, pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,wlpNonPharma:0,total:0,days:{}};
       return by[name];
     }
     auditRows.forEach(function(r){
@@ -686,8 +694,8 @@
      PDS Cancellation isn't points-scored (genuine/not-genuine only), so it gets a real live total with
      zero'd score bands rather than a fabricated score. */
   function aggregateScoreBands(auditRows, cancelRows, start, end){
-    var RAW_NAME = { "PDS":"PDS Audit", "PDS- Mounjaro":"PDS WLP", "Non Pharma":"Non Pharma Audit", "WLP - Non Pharma":"GLP" };
-    var DISPLAY_ORDER = ["GLP","PDS Audit","PDS WLP","Non Pharma Audit"];
+    var RAW_NAME = { "PDS":"PDS Audit", "PDS- Mounjaro":"PDS WLP", "Non Pharma":"Non Pharma Audit", "WLP - Non Pharma":"GLP", "WLP Non Pharma":"WLP Non Pharma" };
+    var DISPLAY_ORDER = ["GLP","PDS Audit","PDS WLP","Non Pharma Audit","WLP Non Pharma"];
     var byType = {};
     DISPLAY_ORDER.forEach(function(n){ byType[n] = {name:n, zero:0, s95:0, s90:0, sub90:0, total:0}; });
     auditRows.forEach(function(r){
@@ -919,14 +927,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0);
-    if(liveCount===3){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlp?1:0);
+    if(liveCount===4){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlp){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -938,6 +946,7 @@
     if(lastError.project) notes.push("Audit summary sheet (also feeds leaderboard & doctor coverage): "+lastError.project);
     if(lastError.cancel) notes.push("Cancellation sheet: "+lastError.cancel);
     if(lastError.cs) notes.push("CS ticket sheet: "+lastError.cs);
+    if(lastError.wlp) notes.push("WLP Non Pharma sheet: "+lastError.wlp);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1006,6 +1015,12 @@
 
     var auditRowsSrc = state.auditRows;
     var cancelRowsForAgg = state.cancelRows || [];
+    /* WLP Non Pharma (BS Audits) is a separate, additive live source — its rows use the exact
+       same [dateISO, type, auditor, score, doctorName, doctorType] shape as auditRowsSrc, so they
+       just concat straight in. Kept as its own array (state.wlpNonPharmaRows) rather than merged
+       into auditRowsSrc at fetch time, since the two load independently and shouldn't block each
+       other. Gating (scoreLive/auditLive below) still keys off the primary source only. */
+    var combinedAuditRows = auditRowsSrc ? auditRowsSrc.concat(state.wlpNonPharmaRows || []) : [];
 
     /* KPI strip, Auto-Scored stage row, Project Wise Audit report (score bands), Auditor
        leaderboard and Doctor coverage — all follow the date range selected via the chip row /
@@ -1014,14 +1029,14 @@
     var scoreLive = state.auditRows && state.cancelRows;
     var auditLive = !!state.auditRows;
     var scoreByType = scoreLive
-      ? aggregateScoreBands(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end)
+      ? aggregateScoreBands(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end)
       : state.score.byType;
     var totals = computeTotals(scoreByType);
     var leaderboardRows = auditLive
-      ? aggregateLeaderboard(auditRowsSrc, state.filter.start, state.filter.end)
+      ? aggregateLeaderboard(combinedAuditRows, state.filter.start, state.filter.end)
       : state.auditors;
     var doctorRows = auditLive
-      ? aggregateDoctorCoverage(auditRowsSrc, state.filter.start, state.filter.end)
+      ? aggregateDoctorCoverage(combinedAuditRows, state.filter.start, state.filter.end)
       : state.doctors;
     var manualTotal = leaderboardRows.reduce(function(a,x){return a+x.count;},0);
     var manualAuditorCount = leaderboardRows.length;
@@ -1030,7 +1045,7 @@
 
     /* KPI strip */
     var kpis = [
-      {lbl:"Total Audits", val: fmtInt(totals.grandTotal), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP + PDS Cancellation, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
+      {lbl:"Total Audits", val: fmtInt(totals.grandTotal), sub: scoreLive ? "GLP + PDS Audit + Non Pharma + WLP + WLP Non Pharma + PDS Cancellation, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" (live)" : "GLP + PDS Audit + Non Pharma + WLP, latest audited day"},
       {lbl:"Zero-Score (Critical)", val: fmtInt(totals.zero), sub: totals.total ? fmtPct(totals.zero/totals.total*100,1)+" of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)" : "no scored calls yet", cls:"crit"},
       {lbl:"Pass Rate ≥90%", val: totals.pass===null?"—":fmtPct(totals.pass,1), sub:"of "+fmtInt(totals.total)+" scored calls (excl. Cancellation)", cls:"good"},
       {lbl:"Manual QA Audits", val: fmtInt(manualTotal), sub:"completed by "+manualAuditorCount+" auditor"+(manualAuditorCount===1?"":"s")},
@@ -1063,7 +1078,7 @@
 
     /* Auditor leaderboard */
     var sortedAuditors = leaderboardRows.slice().sort(function(a,b){return b.count-a.count;});
-    document.getElementById("leaderboardDesc").textContent = fmtInt(manualTotal)+" manually reviewed audits "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+", across GLP / PDS Audit / Non Pharma / WLP.";
+    document.getElementById("leaderboardDesc").textContent = fmtInt(manualTotal)+" manually reviewed audits "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+", across GLP / PDS Audit / Non Pharma / WLP / WLP Non Pharma.";
     document.getElementById("leaderboardBody").innerHTML = sortedAuditors.length ? sortedAuditors.map(function(a){
       var warn = a.avgScore<90 ? " warn" : "";
       return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td>'+
@@ -1080,7 +1095,7 @@
 
     if(auditRowsSrc){
       /* MTD banner — always current month, independent of the filter above */
-      var mtdAgg = aggregateProject(auditRowsSrc, cancelRowsForAgg, monthStartOf(state.dataMaxDate), state.dataMaxDate);
+      var mtdAgg = aggregateProject(combinedAuditRows, cancelRowsForAgg, monthStartOf(state.dataMaxDate), state.dataMaxDate);
       document.getElementById("mtdRangeLabel").textContent = fmtMonthLabel(state.dataMaxDate)+" · through "+fmtDateLabel(state.dataMaxDate);
       var mtdStats = [
         {k:"Total Audits Completed", v:fmtInt(mtdAgg.overall.count)},
@@ -1091,9 +1106,9 @@
       }).join("");
 
       /* 1. Overall Audit Summary (date-filtered) */
-      var agg = aggregateProject(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end);
+      var agg = aggregateProject(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
       var ov = agg.overall;
-      var auditorAggForKpi = aggregateAuditors(auditRowsSrc, cancelRowsForAgg, state.filter.start, state.filter.end);
+      var auditorAggForKpi = aggregateAuditors(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
       var overallKpis = [
         {lbl:"Total Audits Completed", val:fmtInt(ov.count)},
         {lbl:"Average Audit Score", val:fmtPct(ov.avgScore,1), cls: (ov.avgScore!==null && ov.avgScore<90) ? "warn" : "good"},
@@ -1116,14 +1131,14 @@
       var auditorAgg = auditorAggForKpi;
       var audRowsHtml = auditorAgg.length ? auditorAgg.map(function(a){
         return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.pds)+'</td><td class="num tnum">'+fmtInt(a.mounjaro)+'</td><td class="num tnum">'+fmtInt(a.cancellation)+'</td>'+
-          '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td>'+
+          '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.wlpNonPharma)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td>'+
           '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':a.avgPerWorkingDay.toFixed(1))+'</td></tr>';
-      }).join("") : '<tr><td colspan="9" class="empty-note">No allocation data for this range.</td></tr>';
+      }).join("") : '<tr><td colspan="10" class="empty-note">No allocation data for this range.</td></tr>';
       if(auditorAgg.length){
-        var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.total+=x.total;a.workingDays+=x.workingDays; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,total:0,workingDays:0});
+        var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.wlpNonPharma+=x.wlpNonPharma;a.total+=x.total;a.workingDays+=x.workingDays; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,wlpNonPharma:0,total:0,workingDays:0});
         var avgAll = audTotal.workingDays ? (audTotal.total/audTotal.workingDays) : null;
         audRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(audTotal.pds)+'</td><td class="num tnum">'+fmtInt(audTotal.mounjaro)+'</td><td class="num tnum">'+fmtInt(audTotal.cancellation)+'</td>'+
-          '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td>'+
+          '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.wlpNonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td>'+
           '<td class="num tnum">&mdash;</td><td class="num tnum">'+(avgAll===null?'—':avgAll.toFixed(1))+'</td></tr>';
       }
       document.getElementById("auditorTableBody").innerHTML = audRowsHtml;
@@ -1132,7 +1147,7 @@
       document.getElementById("mtdStats").innerHTML = "";
       document.getElementById("overallKpiRow").innerHTML = '<div class="kpi"><div class="lbl">Status</div><div class="val" style="font-size:14px">Connecting…</div></div>';
       document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="3" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
-      document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="9" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
+      document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="10" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
     }
 
     /* PDS Cancellation — reason mix */
@@ -1487,6 +1502,44 @@
     });
   }
 
+  /* "WLP Non Pharma" (BS Audits) — a separate live source, confirmed against real rows (same
+     "MM-DD-YYYY" date format and "NN%" Attained % format as the Merge Overall Sheet). Columns:
+     K=Date of Audit, L=Auditor Name, AO=Attained %, C=Doctor Name, H=Doctor Type. Rows come back
+     in the same [dateISO, type, auditor, score, doctorName, doctorType] shape as auditRowsSrc and
+     get concatenated with it at render time (see combinedAuditRows in renderFilteredSections),
+     rather than replacing anything already on the dashboard. */
+  var WLP_NONPHARMA_CSV_URL = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_NONPHARMA + "/gviz/tq?tqx=out:csv&gid=" + WLP_NONPHARMA_GID;
+  function loadWlpNonPharmaLive(){
+    var floor = isoDateNDaysAgo(400);
+    var tq = "select K,L,AO,C,H where K >= date '"+floor+"'";
+    var url = WLP_NONPHARMA_CSV_URL + "&tq=" + encodeURIComponent(tq);
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r || r.length<3) continue;
+        var iso = parseDateMDY(r[0]);
+        if(!iso) continue;
+        var auditor = canonicalAuditorName(r[1]);
+        var scoreRaw = (r[2]||"").trim();
+        var score = null;
+        if(scoreRaw){
+          var num = parseFloat(scoreRaw.replace("%",""));
+          if(!isNaN(num)) score = num/100;
+        }
+        var doctorName = (r[3]||"").trim();
+        var doctorType = (r[4]||"").trim();
+        out.push([iso, WLP_NONPHARMA_TYPE, auditor, score, doctorName, doctorType]);
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+
   /* PDS WLP (Mounjaro), GLP, plain PDS and Non Pharma checklists all log Audit start/end Time too
      (their header row just buries those columns among many blank ones — confirmed against the raw
      sheet directly, not by lossy AI-summarized previews), so their rows can join the working-time
@@ -1536,6 +1589,16 @@
     }).catch(function(e){
       liveOK.cs = false;
       lastError.cs = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadWlpNonPharmaLive().then(function(rows){
+      state.wlpNonPharmaRows = rows;
+      liveOK.wlp = true; lastError.wlp = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.wlp = false;
+      lastError.wlp = "couldn’t reach the live sheet" + (state.wlpNonPharmaRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
