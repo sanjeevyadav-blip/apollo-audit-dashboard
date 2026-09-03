@@ -221,6 +221,7 @@
   .gc-split{display:flex;gap:12px;margin-bottom:14px}
   .gc-pill{flex:1;text-align:center;border-radius:8px;padding:9px 6px;border:1px solid var(--line);cursor:pointer;transition:box-shadow .12s,opacity .12s;opacity:.62}
   .gc-pill .v{font-family:var(--font-mono);font-weight:600;font-size:19px}
+  .gc-pill .v .of{font-size:12px;font-weight:500;color:var(--ink-soft)}
   .gc-pill .k{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
   .gc-pill.yes{background:var(--good-soft);border-color:var(--accent-soft-line)}
   .gc-pill.no{background:var(--crit-soft);border-color:#f0c6bd}
@@ -322,16 +323,33 @@
   <div class="panel">
     <h2>PDS Cancellation &mdash; reason mix</h2>
     <p class="desc" id="cancelDesc">Genuine-cancellation review, selected range.</p>
-    <p class="desc" style="margin-bottom:6px">Click Genuine or Not genuine to see that group&rsquo;s reason breakdown below.</p>
+    <p class="desc" style="margin-bottom:6px">Click Genuine or Not genuine to see that group&rsquo;s reason breakdown below. Each pill also shows its share of all PDS Cancellation audits reviewed in this range.</p>
     <div class="gc-split" id="gcSplit"></div>
     <p class="desc" id="reasonToggleLabel" style="margin:0 0 6px;font-weight:600"></p>
     <div id="reasonList"></div>
   </div>
 </div>
 
+<div class="panel" style="margin-bottom:30px" id="projectTimePanel">
+  <h2>Project&#8209;wise Time Spent &mdash; by auditor</h2>
+  <p class="desc" id="projectTimeDesc">Same combined Audit Start/End Time sources as Auditor working time above, broken out per project instead of summed into one figure.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Training</th><th class="num">Total</th></tr></thead>
+      <tbody id="projectTimeBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <div class="panel" style="margin-bottom:30px" id="dailyTimePanel">
   <h2>Daily Working Time &mdash; by auditor &amp; date</h2>
   <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined. Sorted newest date first.</p>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+    <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
+    <select id="dailyTimeAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
+      <option value="all">All auditors</option>
+    </select>
+  </div>
   <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
     <table>
       <thead><tr><th>Date</th><th>Auditor</th><th class="num">Reviews</th><th class="num">Start Time</th><th class="num">End Time</th><th class="num">Span (hrs)</th><th class="num">Time Spent</th></tr></thead>
@@ -535,6 +553,7 @@
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
+  state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false };
@@ -898,7 +917,8 @@
         reason: (r[idxReason]||"").trim(),
         auditor: idxAuditor!==-1 ? canonicalAuditorName(r[idxAuditor]) : "",
         minutes: minutes,
-        startSec: startSec, endSec: endSec
+        startSec: startSec, endSec: endSec,
+        project: "PDS Cancellation"
       });
     }
     return out;
@@ -906,7 +926,7 @@
   /* Same "Date of Audit / Auditor Name / Audit start Time / Audit End Time" columns as the cancellation
      sheet, but these checklists (PDS WLP/Mounjaro, GLP) don't have a "Reason for the cancellation"
      column — parseCancellationCsv would bail out on that, so this variant only requires date+time. */
-  function parseAuditTimeCsv(csvText){
+  function parseAuditTimeCsv(csvText, project){
     var rows = parseCSV(csvText);
     if(!rows.length) return [];
     /* Some checklist tabs (PDS Audit Sheet, Non Pharma Audit Sheet) have 1-2 grouped/point-value
@@ -943,18 +963,22 @@
         var mins = d/60;
         if(mins>0 && mins<=180) minutes = mins;
       }
-      out.push({ date: iso, genuine: "", reason: "", auditor: canonicalAuditorName(r[idxAuditor]), minutes: minutes, startSec: startSec, endSec: endSec });
+      out.push({ date: iso, genuine: "", reason: "", auditor: canonicalAuditorName(r[idxAuditor]), minutes: minutes, startSec: startSec, endSec: endSec, project: project });
     }
     return out;
   }
   function aggregateCancellation(rows, start, end){
     /* topReasons stays the combined (Genuine + Not genuine) mix for anything still reading it;
        topReasonsYes/topReasonsNo split the same tally by the "Genuine Cancellation" flag so the
-       gc-pill toggle can show one group's reasons at a time. */
-    var yes=0, no=0, reasons={}, reasonsYes={}, reasonsNo={};
+       gc-pill toggle can show one group's reasons at a time. totalAll counts every PDS Cancellation
+       row in range regardless of the Genuine/Not-genuine flag (some rows leave it blank) — this is
+       what the gc-pill fraction (e.g. "64 / 69") is shown out of, matching the same count the
+       Project-wise Audit Summary's "PDS Cancellation" row uses. */
+    var yes=0, no=0, totalAll=0, reasons={}, reasonsYes={}, reasonsNo={};
     rows.forEach(function(r){
       if(r.date && (r.date<start || r.date>end)) return;
       if(!r.date) return;
+      totalAll++;
       if(r.genuine==="Yes") yes++;
       else if(r.genuine==="No") no++;
       if(r.reason){
@@ -967,7 +991,24 @@
       return Object.keys(obj).map(function(k){return {reason:k, count:obj[k]};})
         .sort(function(a,b){return b.count-a.count;}).slice(0,8);
     }
-    return {genuineYes:yes, genuineNo:no, totalReviewed:yes+no, topReasons:topOf(reasons), topReasonsYes:topOf(reasonsYes), topReasonsNo:topOf(reasonsNo)};
+    return {genuineYes:yes, genuineNo:no, totalReviewed:yes+no, totalAll:totalAll, topReasons:topOf(reasons), topReasonsYes:topOf(reasonsYes), topReasonsNo:topOf(reasonsNo)};
+  }
+  /* Project-wise Time Spent — same combined Audit Start/End Time sources as aggregateCancellationTime/
+     dailyCancellationTime, but grouped by (auditor, project) instead of collapsing every project into
+     one total. Requires each row to carry a `project` label (set at parse time — see
+     parseCancellationCsv/parseAuditTimeCsv/loadTrainingLive/loadTicketsLive/loadCsatLive). */
+  var PROJECT_TIME_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma","Patient Tickets","CSAT Audits","Training"];
+  function aggregateProjectTime(rows, start, end){
+    var byAuditor = {};
+    rows.forEach(function(r){
+      if(!r.date || r.date<start || r.date>end) return;
+      if(r.minutes===null || !r.auditor || !r.project) return;
+      if(!byAuditor[r.auditor]) byAuditor[r.auditor] = {auditor:r.auditor, projects:{}, total:0};
+      var b = byAuditor[r.auditor];
+      b.projects[r.project] = (b.projects[r.project]||0) + r.minutes;
+      b.total += r.minutes;
+    });
+    return Object.keys(byAuditor).map(function(k){ return byAuditor[k]; }).sort(function(a,b){return b.total-a.total;});
   }
   function aggregateCancellationTime(rows, start, end){
     var byAuditor = {};
@@ -1330,12 +1371,12 @@
       /* No genuine/not-genuine split available for the static cumulative snapshot (it only ever
          stored one combined reason mix) — both toggle states fall back to that combined list until
          the live, range-filtered cancellation rows load in. */
-      cancelAgg = {genuineYes: state.cancelSummary.genuineYes, genuineNo: state.cancelSummary.genuineNo, totalReviewed: state.cancelSummary.totalReviewed, topReasons: state.cancelSummary.topReasons, topReasonsYes: state.cancelSummary.topReasons, topReasonsNo: state.cancelSummary.topReasons};
+      cancelAgg = {genuineYes: state.cancelSummary.genuineYes, genuineNo: state.cancelSummary.genuineNo, totalReviewed: state.cancelSummary.totalReviewed, totalAll: state.cancelSummary.totalReviewed, topReasons: state.cancelSummary.topReasons, topReasonsYes: state.cancelSummary.topReasons, topReasonsNo: state.cancelSummary.topReasons};
       document.getElementById("cancelDesc").textContent = "Genuine-cancellation review, cumulative snapshot as of "+fmtDateLabel(state.cancelSummary.asOf)+" (connecting for live, range-filtered data…).";
     }
     document.getElementById("gcSplit").innerHTML =
-      '<div class="gc-pill yes'+(state.reasonToggle==="yes"?" active":"")+'" data-reason-toggle="yes"><div class="v tnum">'+fmtInt(cancelAgg.genuineYes)+'</div><div class="k">Genuine</div></div>'+
-      '<div class="gc-pill no'+(state.reasonToggle==="no"?" active":"")+'" data-reason-toggle="no"><div class="v tnum">'+fmtInt(cancelAgg.genuineNo)+'</div><div class="k">Not genuine</div></div>';
+      '<div class="gc-pill yes'+(state.reasonToggle==="yes"?" active":"")+'" data-reason-toggle="yes"><div class="v tnum">'+fmtInt(cancelAgg.genuineYes)+'<span class="of tnum"> / '+fmtInt(cancelAgg.totalAll)+'</span></div><div class="k">Genuine</div></div>'+
+      '<div class="gc-pill no'+(state.reasonToggle==="no"?" active":"")+'" data-reason-toggle="no"><div class="v tnum">'+fmtInt(cancelAgg.genuineNo)+'<span class="of tnum"> / '+fmtInt(cancelAgg.totalAll)+'</span></div><div class="k">Not genuine</div></div>';
     var activeReasons = state.reasonToggle==="no" ? cancelAgg.topReasonsNo : cancelAgg.topReasonsYes;
     document.getElementById("reasonToggleLabel").textContent = (state.reasonToggle==="no" ? "Not genuine" : "Genuine") + " cancellation reasons";
     var maxReason = Math.max.apply(null, activeReasons.map(function(r){return r.count;}).concat([1]));
@@ -1365,15 +1406,45 @@
       document.getElementById("cancelTimeBody").innerHTML = '<tr><td colspan="6" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
     }
 
-    /* Daily Working Time — exact hrs/min per auditor per day, same combined sources as above */
+    /* Project-wise Time Spent — same combined sources as Auditor working time above, broken out
+       per project (audit type) instead of summed into one figure. */
     if(workRowsSrc){
-      var dailyTime = dailyCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Start Time / End Time are that day's earliest logged start and latest logged end; Span (hrs) is the elapsed time between them, which can run longer than Time Spent since Time Spent only sums each audit's own duration and doesn't count gaps between audits. Sorted newest date first.";
+      var projTime = aggregateProjectTime(workRowsSrc, state.filter.start, state.filter.end);
+      document.getElementById("projectTimeDesc").textContent = "Time spent per project, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — same Audit Start/End Time sources as Auditor working time above (plus logged Training session duration), broken out by project instead of combined into one figure.";
+      document.getElementById("projectTimeBody").innerHTML = projTime.length ? projTime.map(function(a){
+        var cells = PROJECT_TIME_ORDER.map(function(p){ return '<td class="num tnum">'+fmtMinutes(a.projects[p])+'</td>'; }).join("");
+        return '<tr><td>'+esc(a.auditor)+'</td>'+cells+'<td class="num tnum" style="font-weight:600">'+fmtMinutes(a.total)+'</td></tr>';
+      }).join("") : '<tr><td colspan="'+(PROJECT_TIME_ORDER.length+2)+'" class="empty-note">No timed audits for this range.</td></tr>';
+    } else {
+      document.getElementById("projectTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
+      document.getElementById("projectTimeBody").innerHTML = '<tr><td colspan="'+(PROJECT_TIME_ORDER.length+2)+'" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
+    }
+
+    /* Daily Working Time — exact hrs/min per auditor per day, same combined sources as above.
+       dailyTimeAuditorFilter narrows only this table to one auditor (or "all") — the dropdown's
+       option list is rebuilt every render from whoever actually has timed rows in the current date
+       range, and falls back to "all" if the previously-selected auditor has none in the new range. */
+    if(workRowsSrc){
+      var dailyTimeAll = dailyCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
+      var dailyAuditorNames = Array.prototype.filter.call(
+        dailyTimeAll.reduce(function(acc,d){ if(acc.indexOf(d.auditor)===-1) acc.push(d.auditor); return acc; }, []).sort(),
+        function(nm){ return !!nm; }
+      );
+      var dailySel = document.getElementById("dailyTimeAuditorFilter");
+      if(state.dailyTimeAuditorFilter!=="all" && dailyAuditorNames.indexOf(state.dailyTimeAuditorFilter)===-1){
+        state.dailyTimeAuditorFilter = "all";
+      }
+      dailySel.innerHTML = '<option value="all">All auditors</option>' + dailyAuditorNames.map(function(nm){
+        return '<option value="'+esc(nm)+'"'+(state.dailyTimeAuditorFilter===nm?' selected':'')+'>'+esc(nm)+'</option>';
+      }).join("");
+      dailySel.value = state.dailyTimeAuditorFilter;
+      var dailyTime = state.dailyTimeAuditorFilter==="all" ? dailyTimeAll : dailyTimeAll.filter(function(d){ return d.auditor===state.dailyTimeAuditorFilter; });
+      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Start Time / End Time are that day's earliest logged start and latest logged end; Span (hrs) is the elapsed time between them, which can run longer than Time Spent since Time Spent only sums each audit's own duration and doesn't count gaps between audits. Sorted newest date first."+(state.dailyTimeAuditorFilter!=="all" ? " Filtered to "+esc(state.dailyTimeAuditorFilter)+"." : "");
       document.getElementById("dailyTimeBody").innerHTML = dailyTime.length ? dailyTime.map(function(d){
         return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td>'+
           '<td class="num tnum">'+fmtTimeOfDay(d.minStart)+'</td><td class="num tnum">'+fmtTimeOfDay(d.maxEnd)+'</td>'+
           '<td class="num tnum">'+(d.spanHours===null?'—':d.spanHours.toFixed(1))+'</td><td class="num tnum">'+fmtMinutes(d.minutes)+'</td></tr>';
-      }).join("") : '<tr><td colspan="7" class="empty-note">No timed audits for this range.</td></tr>';
+      }).join("") : '<tr><td colspan="7" class="empty-note">No timed audits for this range'+(state.dailyTimeAuditorFilter!=="all" ? " for "+esc(state.dailyTimeAuditorFilter) : "")+'.</td></tr>';
     } else {
       document.getElementById("dailyTimeDesc").textContent = "Connecting for live Audit Start/End Time data…";
       document.getElementById("dailyTimeBody").innerHTML = '<tr><td colspan="7" class="empty-note">Connecting to live sheets for working-time data…</td></tr>';
@@ -1388,6 +1459,13 @@
     if(state.reasonToggle === pill.dataset.reasonToggle) return;
     state.reasonToggle = pill.dataset.reasonToggle;
     render();
+  });
+
+  /* Daily Working Time auditor filter — narrows only that one table; every other panel (including
+     Auditor working time and Project-wise Time Spent above it) stays unaffected. */
+  document.getElementById("dailyTimeAuditorFilter").addEventListener("change", function(e){
+    state.dailyTimeAuditorFilter = e.target.value;
+    renderFilteredSections();
   });
 
   render();
@@ -1825,13 +1903,18 @@
      total. Each source degrades to [] on its own if unreachable, so a hiccup on one tab doesn't kill
      the others or the Cancellation-based time. */
   function loadWorkTimeExtraLive(){
-    var urls = [WLP_MOUNJARO_CSV_URL, GLP_WLP_CSV_URL, PDS_AUDIT_CSV_URL, NON_PHARMA_CSV_URL];
-    return Promise.all(urls.map(function(u){
-      return fetch(u + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    var sources = [
+      {url: WLP_MOUNJARO_CSV_URL, project: "PDS- Mounjaro"},
+      {url: GLP_WLP_CSV_URL, project: "WLP - Non Pharma"},
+      {url: PDS_AUDIT_CSV_URL, project: "PDS"},
+      {url: NON_PHARMA_CSV_URL, project: "Non Pharma"}
+    ];
+    return Promise.all(sources.map(function(s){
+      return fetch(s.url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
       }).then(function(csvText){
-        return parseAuditTimeCsv(csvText);
+        return parseAuditTimeCsv(csvText, s.project);
       }).catch(function(){ return []; });
     })).then(function(results){ return results.reduce(function(a,r){ return a.concat(r); }, []); });
   }
@@ -1856,7 +1939,7 @@
         var minsRaw = (r[2]||"").trim();
         var mins = null;
         if(minsRaw){ var num = parseFloat(minsRaw); if(!isNaN(num) && num>0 && num<=480) mins = num; }
-        names.forEach(function(nm){ out.push({date: iso, auditor: nm, minutes: mins}); });
+        names.forEach(function(nm){ out.push({date: iso, auditor: nm, minutes: mins, project: "Training"}); });
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -1887,7 +1970,7 @@
           var d = endSec-startSec; if(d<0) d+=86400;
           var mins = d/60; if(mins>0 && mins<=180) minutes = mins;
         }
-        out.push({date: iso, auditor: auditor, minutes: minutes, startSec: startSec, endSec: endSec});
+        out.push({date: iso, auditor: auditor, minutes: minutes, startSec: startSec, endSec: endSec, project: "Patient Tickets"});
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -1918,7 +2001,7 @@
           var d = endSec-startSec; if(d<0) d+=86400;
           var mins = d/60; if(mins>0 && mins<=180) minutes = mins;
         }
-        out.push({date: iso, auditor: auditor, minutes: minutes, startSec: startSec, endSec: endSec});
+        out.push({date: iso, auditor: auditor, minutes: minutes, startSec: startSec, endSec: endSec, project: "CSAT Audits"});
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
