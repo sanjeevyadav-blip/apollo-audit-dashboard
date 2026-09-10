@@ -371,10 +371,16 @@
 
     <div class="panel">
       <h2>Doctor&#8209;wise Audit Summary</h2>
-      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Sorted by audits completed.</p>
+      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Sorted descending by audits completed (ties broken alphabetically). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet.</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
+        <select id="doctorWiseAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
+          <option value="all">All auditors</option>
+        </select>
+      </div>
       <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
         <table>
-          <thead><tr><th>Doctor Name</th><th>Doctor Type</th><th class="num">Audits Completed</th><th class="num">Avg Score</th></tr></thead>
+          <thead><tr><th>Doctor Name</th><th>Doctor Type</th><th class="num">Audits Completed</th><th class="num">Avg Score</th><th class="num">Orders</th></tr></thead>
           <tbody id="doctorWiseBody"></tbody>
         </table>
       </div>
@@ -475,6 +481,8 @@
   var TICKETS_GID   = "2075545445";
   var FILE_CSAT     = "1ZpL8LwvgG_QNeSbqKtQ5SAmL8wrLg2cbfsXt-AfeDmM"; /* "CSAT Rating & Patient Review", "Negative Review Appointments" tab */
   var CSAT_GID      = "1513006442";
+  var FILE_ORDERS   = "1XObT_WGM7pUIjVWC_1it6yHtTRSf8m2ARPSp6KCyINg"; /* per-doctor Orders volume sheet, explicitly provided as the source for the Doctor-wise Audit Summary's "Orders" column */
+  var ORDERS_GID    = "330090925";
   var SERVER = "Google Drive";
   var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   /* "Merge Overall Sheet" tab inside FILE_AUDIT is the live per-audit master log (Audit type, Date of
@@ -551,13 +559,15 @@
   state.trainingRows = null; /* {date,auditor,minutes} from the Trainer Acknowledgement sheet — feeds the Training Days column + Total Time on the working-time table */
   state.ticketRows = null; /* {date,auditor,minutes} from the Patient escalation Tickets sheet ("Tickets 2026") — feeds Allocation Summary's Patient Tickets column + working-time panels */
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
+  state.orderRows = null; /* {date,doctor,orders} from the per-doctor Orders sheet — feeds the Doctor-wise Audit Summary's "Orders" column, matched to that table's doctor names via normalizeDoctorKey */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
+  state.doctorWiseAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Doctor-wise Audit Summary table, no other panel */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, training:null, tickets:null, csat:null };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false, orders:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, training:null, tickets:null, csat:null, orders:null };
 
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
@@ -586,6 +596,14 @@
   function canonicalAuditorName(raw){
     var s = String(raw||"").trim().replace(/\s+/g," ");
     return s.replace(/^(Dr|Dt)\.?\s+/i, function(m,p1){ return p1.charAt(0).toUpperCase()+p1.slice(1).toLowerCase()+". "; });
+  }
+  /* Doctor names are spelled inconsistently ACROSS sheets from different owners (e.g. "Dr R Rashmitha"
+     vs "Dr. R Rashmitha", extra spacing, stray punctuation) in a way canonicalAuditorName's stricter
+     pattern doesn't fully absorb. Used only to MATCH a doctor across two sheets (the Orders sheet
+     against the Merge Overall Sheet's Doctor Name) — never shown to the user, who always sees the
+     original spelling from whichever sheet drives that table. */
+  function normalizeDoctorKey(raw){
+    return String(raw||"").trim().toLowerCase().replace(/^dr\.?\s+/,"").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
   }
   /* The Trainer Acknowledgement sheet's "Trainer Name" field is free-text and wildly inconsistent
      ("Dr.Preethi", "DR PREETHI", "dr preethi k", "Dr Divya Bhanu", "DrDivyaBhanu", co-trainer pairs
@@ -825,11 +843,12 @@
   /* Doctor-wise Audit Summary — one row per individual doctor (not grouped by doctor type, unlike
      aggregateDoctorCoverage above), across every audit type combined. Feeds the "Doctor-wise Audit
      Summary" panel. */
-  function aggregateDoctorWise(auditRows, start, end){
+  function aggregateDoctorWise(auditRows, start, end, auditorFilter){
     var by = {};
     auditRows.forEach(function(r){
-      var date=r[0], score=r[3], doctorName=r[4], doctorType=r[5];
+      var date=r[0], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
       if(date<start || date>end || !doctorName) return;
+      if(auditorFilter && auditorFilter!=="all" && auditor!==auditorFilter) return;
       if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
       var b = by[doctorName];
       b.count += 1;
@@ -839,7 +858,25 @@
     return Object.keys(by).map(function(k){
       var b = by[k];
       return { doctor:b.doctor, doctorType:b.doctorType, count:b.count, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
-    }).sort(function(a,b){return b.count-a.count;});
+    }).sort(function(a,b){
+      /* Descending by audits completed; ties broken alphabetically by doctor name so the ranking is
+         fully deterministic instead of depending on object key insertion order. */
+      if(b.count!==a.count) return b.count-a.count;
+      return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
+    });
+  }
+  /* Orders — per-doctor order volume from the dedicated Orders sheet (date, doctor FULLNAME, Orders),
+     summed within the selected range. Matched onto Doctor-wise Audit Summary rows by normalizeDoctorKey
+     since the two sheets don't spell doctor names identically. */
+  function aggregateDoctorOrders(orderRows, start, end){
+    var by = {};
+    (orderRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.doctor) return;
+      var key = normalizeDoctorKey(r.doctor);
+      if(!key) return;
+      by[key] = (by[key]||0) + (r.orders||0);
+    });
+    return by;
   }
 
   /* ---------- live score-band breakdown (Auto-Scored Volume by Audit Type / Project Wise Audit report) ----------
@@ -1091,14 +1128,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0);
-    if(liveCount===8){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0)+(liveOK.orders?1:0);
+    if(liveCount===9){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.training || lastError.tickets || lastError.csat){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.training || lastError.tickets || lastError.csat || lastError.orders){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -1115,6 +1152,7 @@
     if(lastError.training) notes.push("Training sheet: "+lastError.training);
     if(lastError.tickets) notes.push("Patient Tickets sheet: "+lastError.tickets);
     if(lastError.csat) notes.push("CSAT sheet: "+lastError.csat);
+    if(lastError.orders) notes.push("Orders sheet: "+lastError.orders);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1270,14 +1308,39 @@
 
     /* Doctor-wise Audit Summary — individual doctor breakdown (same source rows as Doctor coverage
        above, just grouped per-doctor instead of per-doctor-type). No static-snapshot fallback since
-       this panel is new, so it just waits for live data rather than showing stale placeholder rows. */
-    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end) : [];
+       this panel is new, so it just waits for live data rather than showing stale placeholder rows.
+       doctorWiseAuditorFilter narrows this one table to a single auditor's doctors; its own dropdown
+       is rebuilt each render from whoever has audits in the current date range, same pattern as
+       dailyTimeAuditorFilter above. Orders (per-doctor order volume, selected range) is joined in
+       from the separate Orders sheet via normalizeDoctorKey, independent of this auditor filter. */
+    var doctorWiseSel = document.getElementById("doctorWiseAuditorFilter");
+    if(auditLive){
+      var doctorWiseAuditorNames = Array.prototype.filter.call(
+        combinedAuditRows.reduce(function(acc,r){
+          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && acc.indexOf(r[2])===-1) acc.push(r[2]);
+          return acc;
+        }, []).sort(),
+        function(nm){ return !!nm; }
+      );
+      if(state.doctorWiseAuditorFilter!=="all" && doctorWiseAuditorNames.indexOf(state.doctorWiseAuditorFilter)===-1){
+        state.doctorWiseAuditorFilter = "all";
+      }
+      doctorWiseSel.innerHTML = '<option value="all">All auditors</option>' + doctorWiseAuditorNames.map(function(nm){
+        return '<option value="'+esc(nm)+'"'+(state.doctorWiseAuditorFilter===nm?' selected':'')+'>'+esc(nm)+'</option>';
+      }).join("");
+      doctorWiseSel.value = state.doctorWiseAuditorFilter;
+    } else {
+      doctorWiseSel.innerHTML = '<option value="all">All auditors</option>';
+    }
+    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter) : [];
+    var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, state.filter.start, state.filter.end) : null;
+    doctorWiseRows.forEach(function(d){ d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null; });
     document.getElementById("doctorWiseDesc").textContent = auditLive
-      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted by audits completed.")
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted descending by audits completed."+(state.doctorWiseAuditorFilter!=="all" ? " Filtered to "+esc(state.doctorWiseAuditorFilter)+"." : ""))
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
-      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td></tr>';
-    }).join("") : '<tr><td colspan="4" class="empty-note">'+(auditLive ? "No audited doctors found for this range." : "Connecting to the live audit summary sheet…")+'</td></tr>';
+      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+(state.doctorWiseAuditorFilter!=="all" ? " for "+esc(state.doctorWiseAuditorFilter) : "")+"." : "Connecting to the live audit summary sheet…")+'</td></tr>';
 
     if(combinedAuditRows){
       /* MTD banner — always current month, independent of the filter above */
@@ -1465,6 +1528,12 @@
      Auditor working time and Project-wise Time Spent above it) stays unaffected. */
   document.getElementById("dailyTimeAuditorFilter").addEventListener("change", function(e){
     state.dailyTimeAuditorFilter = e.target.value;
+    renderFilteredSections();
+  });
+
+  /* Doctor-wise Audit Summary auditor filter — same pattern, narrows only that one table. */
+  document.getElementById("doctorWiseAuditorFilter").addEventListener("change", function(e){
+    state.doctorWiseAuditorFilter = e.target.value;
     renderFilteredSections();
   });
 
@@ -2008,6 +2077,31 @@
     });
   }
 
+  /* Orders — dedicated per-doctor order-volume sheet (A=appointment_date, B=FULLNAME, C=Orders),
+     explicitly provided as the source for the Doctor-wise Audit Summary's "Orders" column. */
+  function loadOrdersLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_ORDERS + "/gviz/tq?tqx=out:csv&gid=" + ORDERS_GID + "&tq=" + encodeURIComponent("select A,B,C");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var iso = parseFlexMDY(r[0]); if(!iso) continue;
+        var doctor = (r[1]||"").trim(); if(!doctor) continue;
+        var ordersRaw = (r[2]||"").trim();
+        var orders = ordersRaw ? parseFloat(ordersRaw) : 0;
+        if(isNaN(orders)) orders = 0;
+        out.push({date: iso, doctor: doctor, orders: orders});
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+
   function refreshAll(){
     loadAuditSummaryLive().then(function(rows){
       state.auditRows = rows;
@@ -2090,6 +2184,16 @@
     }).catch(function(e){
       liveOK.csat = false;
       lastError.csat = "couldn’t reach the live sheet" + (state.csatRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadOrdersLive().then(function(rows){
+      state.orderRows = rows;
+      liveOK.orders = true; lastError.orders = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.orders = false;
+      lastError.orders = "couldn’t reach the live sheet" + (state.orderRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
