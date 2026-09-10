@@ -372,11 +372,23 @@
     <div class="panel">
       <h2>Doctor&#8209;wise Audit Summary</h2>
       <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet; Audit % = Audits Completed &divide; Orders. Sorted descending by Orders once that sheet has loaded (by audits completed until then), ties broken alphabetically.</p>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-        <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
-        <select id="doctorWiseAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
-          <option value="all">All auditors</option>
-        </select>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
+          <select id="doctorWiseAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
+            <option value="all">All auditors</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Audit type</span>
+          <select id="doctorWiseTypeFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
+            <option value="all">All types</option>
+            <option value="PDS">PDS</option>
+            <option value="PDS- Mounjaro">PDS&ndash; Mounjaro</option>
+            <option value="Non Pharma">Non Pharma</option>
+            <option value="WLP - Non Pharma">WLP Non Pharma</option>
+          </select>
+        </div>
       </div>
       <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
         <table>
@@ -564,6 +576,7 @@
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
   state.doctorWiseAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Doctor-wise Audit Summary table, no other panel */
+  state.doctorWiseTypeFilter = "all"; /* "all", or one of "PDS"/"PDS- Mounjaro"/"Non Pharma"/"WLP - Non Pharma" — same table, combines with the auditor filter above */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false, orders:false };
@@ -843,12 +856,13 @@
   /* Doctor-wise Audit Summary — one row per individual doctor (not grouped by doctor type, unlike
      aggregateDoctorCoverage above), across every audit type combined. Feeds the "Doctor-wise Audit
      Summary" panel. */
-  function aggregateDoctorWise(auditRows, start, end, auditorFilter){
+  function aggregateDoctorWise(auditRows, start, end, auditorFilter, typeFilter){
     var by = {};
     auditRows.forEach(function(r){
-      var date=r[0], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
+      var date=r[0], type=r[1], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
       if(date<start || date>end || !doctorName) return;
       if(auditorFilter && auditorFilter!=="all" && auditor!==auditorFilter) return;
+      if(typeFilter && typeFilter!=="all" && type!==typeFilter) return;
       if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
       var b = by[doctorName];
       b.count += 1;
@@ -1309,15 +1323,21 @@
     /* Doctor-wise Audit Summary — individual doctor breakdown (same source rows as Doctor coverage
        above, just grouped per-doctor instead of per-doctor-type). No static-snapshot fallback since
        this panel is new, so it just waits for live data rather than showing stale placeholder rows.
-       doctorWiseAuditorFilter narrows this one table to a single auditor's doctors; its own dropdown
-       is rebuilt each render from whoever has audits in the current date range, same pattern as
-       dailyTimeAuditorFilter above. Orders (per-doctor order volume, selected range) is joined in
-       from the separate Orders sheet via normalizeDoctorKey, independent of this auditor filter. */
+       doctorWiseAuditorFilter and doctorWiseTypeFilter combine to narrow this one table only; the
+       auditor dropdown is rebuilt each render from whoever has audits (of the selected type, if one
+       is picked) in the current date range, same pattern as dailyTimeAuditorFilter above — the type
+       dropdown's 4 options are fixed (only PDS/PDS-Mounjaro/Non Pharma/WLP-Non Pharma rows carry a
+       doctor name, per the desc text below). Orders (per-doctor order volume, selected range) is
+       joined in from the separate Orders sheet via normalizeDoctorKey, independent of both filters. */
     var doctorWiseSel = document.getElementById("doctorWiseAuditorFilter");
+    var doctorWiseTypeSel = document.getElementById("doctorWiseTypeFilter");
+    doctorWiseTypeSel.value = state.doctorWiseTypeFilter;
     if(auditLive){
       var doctorWiseAuditorNames = Array.prototype.filter.call(
         combinedAuditRows.reduce(function(acc,r){
-          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && acc.indexOf(r[2])===-1) acc.push(r[2]);
+          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2]
+             && (state.doctorWiseTypeFilter==="all" || r[1]===state.doctorWiseTypeFilter)
+             && acc.indexOf(r[2])===-1) acc.push(r[2]);
           return acc;
         }, []).sort(),
         function(nm){ return !!nm; }
@@ -1332,7 +1352,7 @@
     } else {
       doctorWiseSel.innerHTML = '<option value="all">All auditors</option>';
     }
-    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter) : [];
+    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter, state.doctorWiseTypeFilter) : [];
     var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, state.filter.start, state.filter.end) : null;
     doctorWiseRows.forEach(function(d){
       d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null;
@@ -1349,12 +1369,16 @@
         return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
       });
     }
+    var doctorWiseFilterMsg = "";
+    if(state.doctorWiseAuditorFilter!=="all" && state.doctorWiseTypeFilter!=="all") doctorWiseFilterMsg = " Filtered to "+esc(state.doctorWiseAuditorFilter)+", "+esc(state.doctorWiseTypeFilter)+".";
+    else if(state.doctorWiseAuditorFilter!=="all") doctorWiseFilterMsg = " Filtered to "+esc(state.doctorWiseAuditorFilter)+".";
+    else if(state.doctorWiseTypeFilter!=="all") doctorWiseFilterMsg = " Filtered to "+esc(state.doctorWiseTypeFilter)+".";
     document.getElementById("doctorWiseDesc").textContent = auditLive
-      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted descending by "+(doctorOrdersByKey ? "Orders" : "audits completed")+"."+(state.doctorWiseAuditorFilter!=="all" ? " Filtered to "+esc(state.doctorWiseAuditorFilter)+"." : ""))
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted descending by "+(doctorOrdersByKey ? "Orders" : "audits completed")+"."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
       return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
-    }).join("") : '<tr><td colspan="6" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+(state.doctorWiseAuditorFilter!=="all" ? " for "+esc(state.doctorWiseAuditorFilter) : "")+"." : "Connecting to the live audit summary sheet…")+'</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
 
     if(combinedAuditRows){
       /* MTD banner — always current month, independent of the filter above */
@@ -1548,6 +1572,12 @@
   /* Doctor-wise Audit Summary auditor filter — same pattern, narrows only that one table. */
   document.getElementById("doctorWiseAuditorFilter").addEventListener("change", function(e){
     state.doctorWiseAuditorFilter = e.target.value;
+    renderFilteredSections();
+  });
+
+  /* Doctor-wise Audit Summary audit-type filter — combines with the auditor filter above. */
+  document.getElementById("doctorWiseTypeFilter").addEventListener("change", function(e){
+    state.doctorWiseTypeFilter = e.target.value;
     renderFilteredSections();
   });
 
