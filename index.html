@@ -371,7 +371,7 @@
 
     <div class="panel">
       <h2>Doctor&#8209;wise Audit Summary</h2>
-      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Sorted descending by audits completed (ties broken alphabetically). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet.</p>
+      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet; Audit % = Audits Completed &divide; Orders. Sorted descending by Orders once that sheet has loaded (by audits completed until then), ties broken alphabetically.</p>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
         <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
         <select id="doctorWiseAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
@@ -380,7 +380,7 @@
       </div>
       <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
         <table>
-          <thead><tr><th>Doctor Name</th><th>Doctor Type</th><th class="num">Audits Completed</th><th class="num">Avg Score</th><th class="num">Orders</th></tr></thead>
+          <thead><tr><th>Doctor Name</th><th>Doctor Type</th><th class="num">Audits Completed</th><th class="num">Avg Score</th><th class="num">Orders</th><th class="num">Audit %</th></tr></thead>
           <tbody id="doctorWiseBody"></tbody>
         </table>
       </div>
@@ -1334,13 +1334,27 @@
     }
     var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter) : [];
     var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, state.filter.start, state.filter.end) : null;
-    doctorWiseRows.forEach(function(d){ d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null; });
+    doctorWiseRows.forEach(function(d){
+      d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null;
+      d.auditPct = (d.orders!==null && d.orders>0) ? (d.count/d.orders*100) : null;
+    });
+    /* Once the Orders sheet has loaded, rank by Orders descending (ties broken by audits completed,
+       then alphabetically) — that's the metric this table is meant to be ranked on now. Before it
+       loads, d.orders is null for every row, so fall back to aggregateDoctorWise's own audits-completed
+       ordering rather than collapsing everyone into one alphabetical tie. */
+    if(doctorOrdersByKey){
+      doctorWiseRows.sort(function(a,b){
+        if(b.orders!==a.orders) return b.orders-a.orders;
+        if(b.count!==a.count) return b.count-a.count;
+        return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
+      });
+    }
     document.getElementById("doctorWiseDesc").textContent = auditLive
-      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted descending by audits completed."+(state.doctorWiseAuditorFilter!=="all" ? " Filtered to "+esc(state.doctorWiseAuditorFilter)+"." : ""))
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted descending by "+(doctorOrdersByKey ? "Orders" : "audits completed")+"."+(state.doctorWiseAuditorFilter!=="all" ? " Filtered to "+esc(state.doctorWiseAuditorFilter)+"." : ""))
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
-      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td></tr>';
-    }).join("") : '<tr><td colspan="5" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+(state.doctorWiseAuditorFilter!=="all" ? " for "+esc(state.doctorWiseAuditorFilter) : "")+"." : "Connecting to the live audit summary sheet…")+'</td></tr>';
+      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+(state.doctorWiseAuditorFilter!=="all" ? " for "+esc(state.doctorWiseAuditorFilter) : "")+"." : "Connecting to the live audit summary sheet…")+'</td></tr>';
 
     if(combinedAuditRows){
       /* MTD banner — always current month, independent of the filter above */
