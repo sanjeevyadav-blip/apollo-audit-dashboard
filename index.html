@@ -568,6 +568,7 @@
   state.extraTimeRows = null; /* timed rows from the extra WLP/GLP/PDS/Non-Pharma checklist tabs (loadWorkTimeExtraLive) */
   state.wlpSourceRows = null; /* raw live rows, same 6-field shape as state.auditRows, fetched from the dedicated "BS WLP Audits" tab and typed "WLP - Non Pharma" — concatenated onto state.auditRows at render time to feed that type everywhere (KPI/stage row/score bands/leaderboard/doctor coverage/project + auditor tables) */
   state.mounjaroSourceRows = null; /* same shape, fetched from the "PDS-Mounjaro" tab (same WLP Audits workbook) and typed "PDS- Mounjaro" — concatenated the same way, replacing the old Merge Overall Sheet "PDS WLP" source */
+  state.nonPharmaSourceRows = null; /* same 6-field shape, fetched from the "Non Pharma Audit Sheet" tab (FILE_AUDIT workbook) and typed "Non Pharma" — confirmed live on 2026-09-16 that Merge Overall Sheet no longer carries ANY "Non Pharma Audit" rows (the AUDIT_TYPE_MAP mapping there is now dead, kept only in case that ever resumes), which is why Non Pharma had been stuck at 0 everywhere; concatenated onto state.auditRows the same way the WLP/Mounjaro rows are */
   state.trainingRows = null; /* {date,auditor,minutes} from the Trainer Acknowledgement sheet — feeds the Training Days column + Total Time on the working-time table */
   state.ticketRows = null; /* {date,auditor,minutes} from the Patient escalation Tickets sheet ("Tickets 2026") — feeds Allocation Summary's Patient Tickets column + working-time panels */
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
@@ -579,8 +580,8 @@
   state.doctorWiseTypeFilter = "all"; /* "all", or one of "PDS"/"PDS- Mounjaro"/"Non Pharma"/"WLP - Non Pharma" — same table, combines with the auditor filter above */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, training:false, tickets:false, csat:false, orders:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, training:null, tickets:null, csat:null, orders:null };
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null };
 
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
@@ -1142,14 +1143,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0)+(liveOK.orders?1:0);
-    if(liveCount===9){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.nonPharmaSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0)+(liveOK.orders?1:0);
+    if(liveCount===10){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.training || lastError.tickets || lastError.csat || lastError.orders){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.nonPharmaSource || lastError.training || lastError.tickets || lastError.csat || lastError.orders){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -1163,6 +1164,7 @@
     if(lastError.cs) notes.push("CS ticket sheet: "+lastError.cs);
     if(lastError.wlpSource) notes.push("WLP - Non Pharma (BS WLP Audits) sheet: "+lastError.wlpSource);
     if(lastError.mounjaroSource) notes.push("PDS- Mounjaro (PDS-Mounjaro tab) sheet: "+lastError.mounjaroSource);
+    if(lastError.nonPharmaSource) notes.push("Non Pharma (Non Pharma Audit Sheet) sheet: "+lastError.nonPharmaSource);
     if(lastError.training) notes.push("Training sheet: "+lastError.training);
     if(lastError.tickets) notes.push("Patient Tickets sheet: "+lastError.tickets);
     if(lastError.csat) notes.push("CSAT sheet: "+lastError.csat);
@@ -1237,16 +1239,21 @@
     var cancelRowsForAgg = state.cancelRows || [];
     /* "PDS- Mounjaro" and "WLP - Non Pharma" rows both come from the dedicated WLP Audits workbook
        (loadMounjaroSourceLive / loadWlpSourceLive), fetched independently of the Merge Overall Sheet
-       rows above (which now only carries PDS / Non Pharma) — concatenated here so every aggregator
-       below sees all types under their existing labels without needing their own code paths.
+       rows above (which now only carries PDS) — concatenated here so every aggregator below sees all
+       types under their existing labels without needing their own code paths.
        wlpSourceRows is still run through dedupeWlpAgainstMounjaro as a safety net against exact
        cross-listed rows, but as of 2026-09-02 the two tabs are confirmed to hold entirely distinct
        audits (0 overlapping Appt IDs) — the earlier "100% duplicate" finding was this code reading
        the wrong tab (WLP_SOURCE_TAB was pinned to a gid that had been reassigned to "PDS-Mounjaro"
-       itself), not a real data problem. Fixed by looking "BS WLP Audits" up by name instead of gid. */
+       itself), not a real data problem. Fixed by looking "BS WLP Audits" up by name instead of gid.
+       "Non Pharma" rows likewise come from their own dedicated tab now (loadNonPharmaAuditLive, the
+       "Non Pharma Audit Sheet" tab in the FILE_AUDIT workbook) — Merge Overall Sheet stopped carrying
+       any "Non Pharma Audit"-typed rows at some point (confirmed live 2026-09-16: zero such rows in
+       the whole sheet), which had silently zeroed out Non Pharma everywhere downstream (Project-wise
+       Audit Summary, Doctor-wise Audit Summary, leaderboard, doctor coverage) until this was added. */
     var wlpRowsDeduped = dedupeWlpAgainstMounjaro(state.wlpSourceRows, state.mounjaroSourceRows);
-    var combinedAuditRows = (auditRowsSrc || state.mounjaroSourceRows || wlpRowsDeduped)
-      ? (auditRowsSrc || []).concat(state.mounjaroSourceRows || []).concat(wlpRowsDeduped || [])
+    var combinedAuditRows = (auditRowsSrc || state.mounjaroSourceRows || wlpRowsDeduped || state.nonPharmaSourceRows)
+      ? (auditRowsSrc || []).concat(state.mounjaroSourceRows || []).concat(wlpRowsDeduped || []).concat(state.nonPharmaSourceRows || [])
       : null;
 
     /* KPI strip, Auto-Scored stage row, Project Wise Audit report (score bands), Auditor
@@ -1951,6 +1958,68 @@
   }
   function loadWlpSourceLive(){ return loadWlpWorkbookTabLive(WLP_SOURCE_TAB, null, "WLP - Non Pharma"); }
   function loadMounjaroSourceLive(){ return loadWlpWorkbookTabLive(MOUNJARO_SOURCE_TAB, null, "PDS- Mounjaro"); }
+
+  /* "Non Pharma Audit Sheet" (FILE_AUDIT workbook) is Non Pharma's own completed-audit log — it used
+     to also feed a "Non Pharma Audit" row into Merge Overall Sheet, but confirmed live on 2026-09-16
+     that stopped (zero "Non Pharma Audit" rows anywhere in Merge Overall Sheet now), which is why
+     Non Pharma had been reading 0 everywhere. Same multi-row grouped-header layout as the checklist
+     tabs parseAuditTimeCsv already handles for start/end time on this exact sheet: gviz's own header
+     detection lands on row 1 (mostly blank category labels), not row 3 where the real field names
+     live, so "Auditor Name" is found by scanning the raw rows directly rather than trusting gviz's
+     inferred header. "Doctor Name"/"Doctor Type" are labeled on that same row and found the same way.
+     "Date of Audit" and "Attained %" are NOT labeled at all even on that row (blank cells, exactly the
+     quirk parseAuditTimeCsv already works around for start/end time) — Date of Audit sits one column
+     before Auditor Name, same as the time-tracking parse; Attained % sits 31 columns after Auditor
+     Name (confirmed against a live row on 2026-09-16: Total Score/Attained %/Achieved % immediately
+     follow the last checklist question column). That offset is fragile if this sheet's column count
+     ever changes, so the value is sanity-checked (must look like a plausible 0–200% figure) before
+     being trusted — a future shift here degrades to a blank score rather than a wrong one. */
+  function parseNonPharmaAuditCsv(csvText){
+    var floor = isoDateNDaysAgo(400);
+    var rows = parseCSV(csvText);
+    if(!rows.length) return [];
+    var headerRowIdx = -1, idxAuditor = -1;
+    for(var hr=0; hr<Math.min(5,rows.length); hr++){
+      var htrim = rows[hr].map(function(h){return h.trim();});
+      var ai = htrim.indexOf("Auditor Name");
+      if(ai!==-1){ headerRowIdx = hr; idxAuditor = ai; break; }
+    }
+    if(headerRowIdx===-1) return [];
+    var header = rows[headerRowIdx].map(function(h){return h.trim();});
+    var idxAuditDate = idxAuditor - 1;
+    var idxDoctorName = header.indexOf("Doctor Name");
+    var idxDoctorType = header.indexOf("Doctor Type");
+    var idxAttained = idxAuditor + 31;
+    var out = [];
+    for(var i=headerRowIdx+1;i<rows.length;i++){
+      var r = rows[i];
+      if(!r || r.length<2) continue;
+      var iso = parseDateMDY(r[idxAuditDate]);
+      if(!iso || iso < floor) continue;
+      var auditor = canonicalAuditorName(r[idxAuditor]);
+      if(!auditor) continue;
+      var doctorName = idxDoctorName!==-1 ? (r[idxDoctorName]||"").trim() : "";
+      var doctorType = idxDoctorType!==-1 ? (r[idxDoctorType]||"").trim() : "";
+      var score = null;
+      var scoreRaw = (r[idxAttained]||"").trim();
+      if(scoreRaw){
+        var num = parseFloat(scoreRaw.replace("%",""));
+        if(!isNaN(num) && num>=0 && num<=200) score = num/100;
+      }
+      out.push([iso, "Non Pharma", auditor, score, doctorName, doctorType]);
+    }
+    return out;
+  }
+  function loadNonPharmaAuditLive(){
+    return fetch(NON_PHARMA_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var out = parseNonPharmaAuditCsv(csvText);
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
   /* "BS WLP Audits" and "PDS-Mounjaro" are two independently-maintained tabs in the same workbook,
      but for every auditor except Dr. Abhishek, "BS WLP Audits" has been directly verified (same
      Appt ID, same Doctor Name, same Date of Audit, in the same order) to hold an exact copy of
@@ -2198,6 +2267,16 @@
     }).catch(function(e){
       liveOK.mounjaroSource = false;
       lastError.mounjaroSource = "couldn’t reach the live sheet" + (state.mounjaroSourceRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadNonPharmaAuditLive().then(function(rows){
+      state.nonPharmaSourceRows = rows;
+      liveOK.nonPharmaSource = true; lastError.nonPharmaSource = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.nonPharmaSource = false;
+      lastError.nonPharmaSource = "couldn’t reach the live sheet" + (state.nonPharmaSourceRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
 
