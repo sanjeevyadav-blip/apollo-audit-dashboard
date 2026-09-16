@@ -583,6 +583,46 @@
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false };
   var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null };
 
+  /* Guards every row-returning live source against a Google Sheets basic "Filter" (Data > Create a
+     filter — as opposed to a personal "Filter view") being left active on the source sheet. A basic
+     filter hides rows for EVERYONE looking at that sheet — Google's own docs: it changes what
+     "everyone using the spreadsheet sees", vs. a Filter view which affects only whoever has that view
+     open — and this dashboard's anonymous gviz/export fetches read that same shared rendered state,
+     not the raw grid. So if someone filters "PDS Audit rows down to just mine, this week" while working
+     in the sheet, the fetch still succeeds, just with far fewer rows — there's no error to catch and
+     no fetch-URL trick that avoids it (export and gviz both reflect an active basic filter by design;
+     that's the feature's whole point). The only real fix is sheet hygiene: use Filter views, never a
+     basic Filter, on any of these live source sheets. This can't undo a live filter, but it stops the
+     dashboard from silently trusting a suspiciously small count as ground truth: each source's highest
+     row count ever seen is tracked in localStorage (survives reloads, though not shared across other
+     people's browsers), and a fresh fetch coming in under half of that high-water mark is treated like
+     a fetch failure — the last good (larger) dataset stays on screen and the status chip/fetch-notes
+     say why, instead of quietly rendering an undercount. Doesn't cover loadCsLive (not a rows array)
+     or the individual checklist tabs inside loadWorkTimeExtraLive (aggregated before this can see
+     their row counts) — a filter on one of those still degrades silently. */
+  var ROW_GUARD_KEY = "apolloAuditDashboard_rowHighWater_v1";
+  var rowHighWater = {};
+  try {
+    var savedHighWater = localStorage.getItem(ROW_GUARD_KEY);
+    if(savedHighWater) rowHighWater = JSON.parse(savedHighWater) || {};
+  } catch(e){ rowHighWater = {}; }
+  function saveRowHighWater(){
+    try { localStorage.setItem(ROW_GUARD_KEY, JSON.stringify(rowHighWater)); } catch(e){}
+  }
+  function guardRowCountDrop(sourceKey, rows){
+    var count = rows.length;
+    var prevHigh = rowHighWater[sourceKey] || 0;
+    if(count > prevHigh){
+      rowHighWater[sourceKey] = count;
+      saveRowHighWater();
+      return null;
+    }
+    if(prevHigh > 20 && count < prevHigh * 0.5){
+      return "row count dropped sharply (" + prevHigh + " → " + count + ") — looks like a Filter (not a Filter view) is active on the source sheet, hiding rows from everyone including this dashboard; showing the last good data instead";
+    }
+    return null;
+  }
+
   /* ---------- formatting ---------- */
   function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
   function fmtPct(n,d){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(d===undefined?1:d)+"%"; }
@@ -2217,6 +2257,8 @@
 
   function refreshAll(){
     loadAuditSummaryLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("project", rows);
+      if(dropMsg){ liveOK.project = false; lastError.project = dropMsg; render(); return; }
       state.auditRows = rows;
       state.dataMaxDate = rows.reduce(function(m,r){return r[0]>m?r[0]:m;}, rows[0][0]);
       if(activeChip){ var r2 = chipRange(activeChip); state.filter.start = r2.start; state.filter.end = r2.end; }
@@ -2230,6 +2272,8 @@
 
     Promise.all([loadCancellationLive(), loadWorkTimeExtraLive()]).then(function(results){
       var cancelRows = results[0], extraRows = results[1];
+      var dropMsg = guardRowCountDrop("cancel", cancelRows);
+      if(dropMsg){ liveOK.cancel = false; lastError.cancel = dropMsg; render(); return; }
       state.cancelRows = cancelRows;
       state.extraTimeRows = extraRows;
       liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now();
@@ -2251,6 +2295,8 @@
     });
 
     loadWlpSourceLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("wlpSource", rows);
+      if(dropMsg){ liveOK.wlpSource = false; lastError.wlpSource = dropMsg; render(); return; }
       state.wlpSourceRows = rows;
       liveOK.wlpSource = true; lastError.wlpSource = null; state.fetchedAt = Date.now();
       render();
@@ -2261,6 +2307,8 @@
     });
 
     loadMounjaroSourceLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("mounjaroSource", rows);
+      if(dropMsg){ liveOK.mounjaroSource = false; lastError.mounjaroSource = dropMsg; render(); return; }
       state.mounjaroSourceRows = rows;
       liveOK.mounjaroSource = true; lastError.mounjaroSource = null; state.fetchedAt = Date.now();
       render();
@@ -2271,6 +2319,8 @@
     });
 
     loadNonPharmaAuditLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("nonPharmaSource", rows);
+      if(dropMsg){ liveOK.nonPharmaSource = false; lastError.nonPharmaSource = dropMsg; render(); return; }
       state.nonPharmaSourceRows = rows;
       liveOK.nonPharmaSource = true; lastError.nonPharmaSource = null; state.fetchedAt = Date.now();
       render();
@@ -2281,6 +2331,8 @@
     });
 
     loadTrainingLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("training", rows);
+      if(dropMsg){ liveOK.training = false; lastError.training = dropMsg; render(); return; }
       state.trainingRows = rows;
       liveOK.training = true; lastError.training = null; state.fetchedAt = Date.now();
       render();
@@ -2291,6 +2343,8 @@
     });
 
     loadTicketsLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("tickets", rows);
+      if(dropMsg){ liveOK.tickets = false; lastError.tickets = dropMsg; render(); return; }
       state.ticketRows = rows;
       liveOK.tickets = true; lastError.tickets = null; state.fetchedAt = Date.now();
       render();
@@ -2301,6 +2355,8 @@
     });
 
     loadCsatLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("csat", rows);
+      if(dropMsg){ liveOK.csat = false; lastError.csat = dropMsg; render(); return; }
       state.csatRows = rows;
       liveOK.csat = true; lastError.csat = null; state.fetchedAt = Date.now();
       render();
@@ -2311,6 +2367,8 @@
     });
 
     loadOrdersLive().then(function(rows){
+      var dropMsg = guardRowCountDrop("orders", rows);
+      if(dropMsg){ liveOK.orders = false; lastError.orders = dropMsg; render(); return; }
       state.orderRows = rows;
       liveOK.orders = true; lastError.orders = null; state.fetchedAt = Date.now();
       render();
