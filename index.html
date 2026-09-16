@@ -161,6 +161,10 @@
   td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
   tr:last-child td{border-bottom:none}
   td.num, th.num{text-align:right;font-family:var(--font-mono)}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--ink)}
+  .sort-arrow{display:inline-block;margin-left:4px;font-size:9px;opacity:.4}
+  .sort-arrow.active{opacity:1;color:var(--accent-ink)}
   .score-bar{display:inline-flex;align-items:center;gap:7px}
   .score-bar .track{width:56px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
   .score-bar .track i{display:block;height:100%;background:var(--good)}
@@ -371,7 +375,7 @@
 
     <div class="panel">
       <h2>Doctor&#8209;wise Audit Summary</h2>
-      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet; Audit % = Audits Completed &divide; Orders. Sorted descending by Orders once that sheet has loaded (by audits completed until then), ties broken alphabetically.</p>
+      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet; Audit % = Audits Completed &divide; Orders. Click any column heading to sort by it.</p>
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
@@ -379,20 +383,17 @@
             <option value="all">All auditors</option>
           </select>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Audit type</span>
-          <select id="doctorWiseTypeFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
-            <option value="all">All types</option>
-            <option value="PDS">PDS</option>
-            <option value="PDS- Mounjaro">PDS&ndash; Mounjaro</option>
-            <option value="Non Pharma">Non Pharma</option>
-            <option value="WLP - Non Pharma">WLP Non Pharma</option>
-          </select>
-        </div>
       </div>
       <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
-        <table>
-          <thead><tr><th>Doctor Name</th><th>Doctor Type</th><th class="num">Audits Completed</th><th class="num">Avg Score</th><th class="num">Orders</th><th class="num">Audit %</th></tr></thead>
+        <table id="doctorWiseTable">
+          <thead><tr>
+            <th class="sortable" data-sort="doctor">Doctor Name<span class="sort-arrow" data-arrow="doctor"></span></th>
+            <th class="sortable" data-sort="doctorType">Doctor Type<span class="sort-arrow" data-arrow="doctorType"></span></th>
+            <th class="num sortable" data-sort="count">Audits Completed<span class="sort-arrow" data-arrow="count"></span></th>
+            <th class="num sortable" data-sort="avgScore">Avg Score<span class="sort-arrow" data-arrow="avgScore"></span></th>
+            <th class="num sortable" data-sort="orders">Orders<span class="sort-arrow" data-arrow="orders"></span></th>
+            <th class="num sortable" data-sort="auditPct">Audit %<span class="sort-arrow" data-arrow="auditPct"></span></th>
+          </tr></thead>
           <tbody id="doctorWiseBody"></tbody>
         </table>
       </div>
@@ -577,7 +578,8 @@
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
   state.doctorWiseAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Doctor-wise Audit Summary table, no other panel */
-  state.doctorWiseTypeFilter = "all"; /* "all", or one of "PDS"/"PDS- Mounjaro"/"Non Pharma"/"WLP - Non Pharma" — same table, combines with the auditor filter above */
+  state.doctorWiseSortCol = "orders"; /* which Doctor-wise Audit Summary column is currently sorted — "doctor"/"doctorType"/"count"/"avgScore"/"orders"/"auditPct", set by clicking a column heading */
+  state.doctorWiseSortDir = "desc"; /* "asc" or "desc" for the column above; default (Orders, desc) matches the table's original fixed sort */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false };
@@ -897,13 +899,12 @@
   /* Doctor-wise Audit Summary — one row per individual doctor (not grouped by doctor type, unlike
      aggregateDoctorCoverage above), across every audit type combined. Feeds the "Doctor-wise Audit
      Summary" panel. */
-  function aggregateDoctorWise(auditRows, start, end, auditorFilter, typeFilter){
+  function aggregateDoctorWise(auditRows, start, end, auditorFilter){
     var by = {};
     auditRows.forEach(function(r){
-      var date=r[0], type=r[1], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
+      var date=r[0], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
       if(date<start || date>end || !doctorName) return;
       if(auditorFilter && auditorFilter!=="all" && auditor!==auditorFilter) return;
-      if(typeFilter && typeFilter!=="all" && type!==typeFilter) return;
       if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
       var b = by[doctorName];
       b.count += 1;
@@ -1370,21 +1371,17 @@
     /* Doctor-wise Audit Summary — individual doctor breakdown (same source rows as Doctor coverage
        above, just grouped per-doctor instead of per-doctor-type). No static-snapshot fallback since
        this panel is new, so it just waits for live data rather than showing stale placeholder rows.
-       doctorWiseAuditorFilter and doctorWiseTypeFilter combine to narrow this one table only; the
-       auditor dropdown is rebuilt each render from whoever has audits (of the selected type, if one
-       is picked) in the current date range, same pattern as dailyTimeAuditorFilter above — the type
-       dropdown's 4 options are fixed (only PDS/PDS-Mounjaro/Non Pharma/WLP-Non Pharma rows carry a
-       doctor name, per the desc text below). Orders (per-doctor order volume, selected range) is
-       joined in from the separate Orders sheet via normalizeDoctorKey, independent of both filters. */
+       doctorWiseAuditorFilter narrows this one table to a single auditor's doctors; its own dropdown
+       is rebuilt each render from whoever has audits in the current date range, same pattern as
+       dailyTimeAuditorFilter above. Orders (per-doctor order volume, selected range) is joined in
+       from the separate Orders sheet via normalizeDoctorKey, independent of the auditor filter.
+       Every column heading is click-to-sort (state.doctorWiseSortCol/Dir, toggled by the listeners
+       near the bottom of the script) rather than a single fixed ranking. */
     var doctorWiseSel = document.getElementById("doctorWiseAuditorFilter");
-    var doctorWiseTypeSel = document.getElementById("doctorWiseTypeFilter");
-    doctorWiseTypeSel.value = state.doctorWiseTypeFilter;
     if(auditLive){
       var doctorWiseAuditorNames = Array.prototype.filter.call(
         combinedAuditRows.reduce(function(acc,r){
-          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2]
-             && (state.doctorWiseTypeFilter==="all" || r[1]===state.doctorWiseTypeFilter)
-             && acc.indexOf(r[2])===-1) acc.push(r[2]);
+          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && acc.indexOf(r[2])===-1) acc.push(r[2]);
           return acc;
         }, []).sort(),
         function(nm){ return !!nm; }
@@ -1399,29 +1396,50 @@
     } else {
       doctorWiseSel.innerHTML = '<option value="all">All auditors</option>';
     }
-    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter, state.doctorWiseTypeFilter) : [];
+    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter) : [];
     var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, state.filter.start, state.filter.end) : null;
     doctorWiseRows.forEach(function(d){
       d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null;
       d.auditPct = (d.orders!==null && d.orders>0) ? (d.count/d.orders*100) : null;
     });
-    /* Once the Orders sheet has loaded, rank by Orders descending (ties broken by audits completed,
-       then alphabetically) — that's the metric this table is meant to be ranked on now. Before it
-       loads, d.orders is null for every row, so fall back to aggregateDoctorWise's own audits-completed
-       ordering rather than collapsing everyone into one alphabetical tie. */
-    if(doctorOrdersByKey){
-      doctorWiseRows.sort(function(a,b){
-        if(b.orders!==a.orders) return b.orders-a.orders;
-        if(b.count!==a.count) return b.count-a.count;
-        return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
-      });
-    }
-    var doctorWiseFilterMsg = "";
-    if(state.doctorWiseAuditorFilter!=="all" && state.doctorWiseTypeFilter!=="all") doctorWiseFilterMsg = " Filtered to "+esc(state.doctorWiseAuditorFilter)+", "+esc(state.doctorWiseTypeFilter)+".";
-    else if(state.doctorWiseAuditorFilter!=="all") doctorWiseFilterMsg = " Filtered to "+esc(state.doctorWiseAuditorFilter)+".";
-    else if(state.doctorWiseTypeFilter!=="all") doctorWiseFilterMsg = " Filtered to "+esc(state.doctorWiseTypeFilter)+".";
+    /* Generic click-to-sort: whichever column the user last clicked (state.doctorWiseSortCol) ranks
+       the table, in the direction they chose (state.doctorWiseSortDir). Text columns (doctor,
+       doctorType) compare alphabetically; the rest compare numerically. A row missing that column's
+       value (orders/auditPct null before the Orders sheet loads) always sorts to the bottom regardless
+       of direction, rather than colliding with 0 — a doctor with genuinely 0 orders is worse than one
+       we simply don't know yet. Doctor name is always the final tiebreaker for a stable, deterministic
+       order. */
+    var DOCTOR_WISE_TEXT_COLS = { doctor:true, doctorType:true };
+    doctorWiseRows.sort(function(a,b){
+      var col = state.doctorWiseSortCol, dir = state.doctorWiseSortDir === "asc" ? 1 : -1;
+      var av = a[col], bv = b[col];
+      if(av===null && bv===null){ /* fall through to name tiebreak below */ }
+      else if(av===null) return 1;
+      else if(bv===null) return -1;
+      else if(DOCTOR_WISE_TEXT_COLS[col]){
+        if(av!==bv) return dir * (av<bv ? -1 : 1);
+      } else {
+        if(av!==bv) return dir * (av-bv);
+      }
+      return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
+    });
+    var DOCTOR_WISE_COL_LABEL = { doctor:"Doctor Name", doctorType:"Doctor Type", count:"Audits Completed", avgScore:"Avg Score", orders:"Orders", auditPct:"Audit %" };
+    Array.prototype.forEach.call(document.querySelectorAll("#doctorWiseTable .sort-arrow"), function(el){
+      var col = el.getAttribute("data-arrow");
+      if(col === state.doctorWiseSortCol){
+        el.textContent = state.doctorWiseSortDir === "asc" ? "▲" : "▼";
+        el.className = "sort-arrow active";
+      } else {
+        el.textContent = "⇅";
+        el.className = "sort-arrow";
+      }
+    });
+    var doctorWiseFilterMsg = state.doctorWiseAuditorFilter!=="all" ? " Filtered to "+esc(state.doctorWiseAuditorFilter)+"." : "";
+    var doctorWiseSortDirLabel = DOCTOR_WISE_TEXT_COLS[state.doctorWiseSortCol]
+      ? (state.doctorWiseSortDir==="asc" ? "A to Z" : "Z to A")
+      : (state.doctorWiseSortDir==="asc" ? "low to high" : "high to low");
     document.getElementById("doctorWiseDesc").textContent = auditLive
-      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted descending by "+(doctorOrdersByKey ? "Orders" : "audits completed")+"."+doctorWiseFilterMsg)
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
       return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
@@ -1622,10 +1640,22 @@
     renderFilteredSections();
   });
 
-  /* Doctor-wise Audit Summary audit-type filter — combines with the auditor filter above. */
-  document.getElementById("doctorWiseTypeFilter").addEventListener("change", function(e){
-    state.doctorWiseTypeFilter = e.target.value;
-    renderFilteredSections();
+  /* Doctor-wise Audit Summary column sorting — click a heading to sort by it (ascending on first
+     click of a new column; clicking the already-active column flips direction). Headings are static
+     markup (only the arrow glyphs get rewritten each render), so these listeners are attached once
+     here rather than re-bound on every render. */
+  var DOCTOR_WISE_SORT_DEFAULT_DIR = { doctor:"asc", doctorType:"asc", count:"desc", avgScore:"desc", orders:"desc", auditPct:"desc" };
+  Array.prototype.forEach.call(document.querySelectorAll("#doctorWiseTable th.sortable"), function(th){
+    th.addEventListener("click", function(){
+      var col = th.getAttribute("data-sort");
+      if(state.doctorWiseSortCol === col){
+        state.doctorWiseSortDir = state.doctorWiseSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.doctorWiseSortCol = col;
+        state.doctorWiseSortDir = DOCTOR_WISE_SORT_DEFAULT_DIR[col] || "asc";
+      }
+      renderFilteredSections();
+    });
   });
 
   render();
