@@ -509,7 +509,7 @@
      Merge Overall Sheet mirror, per explicit request. "GLP" is left unmapped too since no raw row in
      this sheet has ever used that value (confirmed via exhaustive scan) — "WLP - Non Pharma" is sourced
      the same way, from the "BS WLP Audits" tab (loadWlpSourceLive). */
-  var AUDIT_TYPE_MAP = { "PDS Audit":"PDS", "Non Pharma Audit":"Non Pharma" };
+  var AUDIT_TYPE_MAP = { "PDS Audit":"PDS" }; /* "Non Pharma Audit" used to map here too, but Merge Overall Sheet is now explicitly excluded for that type in loadAuditSummaryLive's query below — see that function's comment for why */
 
   /* ---------- last-published static snapshot (fallback / initial paint) ---------- */
   var STATIC_SNAPSHOT = {
@@ -569,7 +569,7 @@
   state.extraTimeRows = null; /* timed rows from the extra WLP/GLP/PDS/Non-Pharma checklist tabs (loadWorkTimeExtraLive) */
   state.wlpSourceRows = null; /* raw live rows, same 6-field shape as state.auditRows, fetched from the dedicated "BS WLP Audits" tab and typed "WLP - Non Pharma" — concatenated onto state.auditRows at render time to feed that type everywhere (KPI/stage row/score bands/leaderboard/doctor coverage/project + auditor tables) */
   state.mounjaroSourceRows = null; /* same shape, fetched from the "PDS-Mounjaro" tab (same WLP Audits workbook) and typed "PDS- Mounjaro" — concatenated the same way, replacing the old Merge Overall Sheet "PDS WLP" source */
-  state.nonPharmaSourceRows = null; /* same 6-field shape, fetched from the "Non Pharma Audit Sheet" tab (FILE_AUDIT workbook) and typed "Non Pharma" — confirmed live on 2026-09-16 that Merge Overall Sheet no longer carries ANY "Non Pharma Audit" rows (the AUDIT_TYPE_MAP mapping there is now dead, kept only in case that ever resumes), which is why Non Pharma had been stuck at 0 everywhere; concatenated onto state.auditRows the same way the WLP/Mounjaro rows are */
+  state.nonPharmaSourceRows = null; /* same 6-field shape, fetched from the "Non Pharma Audit Sheet" tab (FILE_AUDIT workbook) and typed "Non Pharma" — the sole source for this type now (Merge Overall Sheet is explicitly excluded for "Non Pharma Audit" in loadAuditSummaryLive's query, after it flip-flopped between carrying zero and carrying an exact duplicate of this tab's rows within 24 hours, which had caused Non Pharma to read as 0 and then as roughly double its real count); concatenated onto state.auditRows the same way the WLP/Mounjaro rows are */
   state.trainingRows = null; /* {date,auditor,minutes} from the Trainer Acknowledgement sheet — feeds the Training Days column + Total Time on the working-time table */
   state.ticketRows = null; /* {date,auditor,minutes} from the Patient escalation Tickets sheet ("Tickets 2026") — feeds Allocation Summary's Patient Tickets column + working-time panels */
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
@@ -584,24 +584,28 @@
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false };
   var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null };
+  var rowDropWarning = { project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null }; /* set by checkRowCountDrop below — diagnostic only, never blocks real data from rendering (see that function's comment) */
 
-  /* Guards every row-returning live source against a Google Sheets basic "Filter" (Data > Create a
-     filter — as opposed to a personal "Filter view") being left active on the source sheet. A basic
-     filter hides rows for EVERYONE looking at that sheet — Google's own docs: it changes what
-     "everyone using the spreadsheet sees", vs. a Filter view which affects only whoever has that view
-     open — and this dashboard's anonymous gviz/export fetches read that same shared rendered state,
-     not the raw grid. So if someone filters "PDS Audit rows down to just mine, this week" while working
-     in the sheet, the fetch still succeeds, just with far fewer rows — there's no error to catch and
-     no fetch-URL trick that avoids it (export and gviz both reflect an active basic filter by design;
-     that's the feature's whole point). The only real fix is sheet hygiene: use Filter views, never a
-     basic Filter, on any of these live source sheets. This can't undo a live filter, but it stops the
-     dashboard from silently trusting a suspiciously small count as ground truth: each source's highest
-     row count ever seen is tracked in localStorage (survives reloads, though not shared across other
-     people's browsers), and a fresh fetch coming in under half of that high-water mark is treated like
-     a fetch failure — the last good (larger) dataset stays on screen and the status chip/fetch-notes
-     say why, instead of quietly rendering an undercount. Doesn't cover loadCsLive (not a rows array)
-     or the individual checklist tabs inside loadWorkTimeExtraLive (aggregated before this can see
-     their row counts) — a filter on one of those still degrades silently. */
+  /* Flags (but no longer withholds) a sharp row-count drop on any live source, as a heads-up that a
+     Google Sheets basic "Filter" (Data > Create a filter — as opposed to a personal "Filter view")
+     might be active on the source sheet: a basic filter hides rows for EVERYONE looking at that
+     sheet, including this dashboard's anonymous fetches, since gviz reads the same shared rendered
+     state a Filter view doesn't touch. This used to also SUBSTITUTE the last good (larger) dataset
+     for the new one whenever a drop looked too sharp, on the theory that a smaller number was more
+     likely wrong than right. In practice that backfired hard: PDS-Mounjaro's row count legitimately
+     dropped from 2,323 to 910 between two testing sessions (rows genuinely removed/archived upstream,
+     nothing to do with a Filter), and the guard responded by holding onto the stale 2,323-row dataset
+     from THIS BROWSER's own earlier testing forever after, which on a real viewer's browser would
+     instead mean holding nothing at all on first load — displaying 0 for an entire audit type with no
+     way to tell it apart from a real zero. There is no way to distinguish "a Filter is hiding rows"
+     from "someone legitimately cleaned up the sheet" from outside, so blocking on that guess is worse
+     than just showing whatever the sheet currently, verifiably returns. Now it only records a warning
+     (surfaced in the fetch-notes area, without changing the status chip or touching liveOK/lastError)
+     so a person can go check the sheet for an active Filter if the drop looks wrong — the real,
+     current fetch result is always what renders. Each source's highest row count ever seen is still
+     tracked in localStorage (survives reloads, not shared across other people's browsers) purely to
+     compute that warning. Doesn't cover loadCsLive (not a rows array) or the individual checklist
+     tabs inside loadWorkTimeExtraLive (aggregated before this can see their row counts). */
   var ROW_GUARD_KEY = "apolloAuditDashboard_rowHighWater_v1";
   var rowHighWater = {};
   try {
@@ -611,7 +615,7 @@
   function saveRowHighWater(){
     try { localStorage.setItem(ROW_GUARD_KEY, JSON.stringify(rowHighWater)); } catch(e){}
   }
-  function guardRowCountDrop(sourceKey, rows){
+  function checkRowCountDrop(sourceKey, rows){
     var count = rows.length;
     var prevHigh = rowHighWater[sourceKey] || 0;
     if(count > prevHigh){
@@ -620,7 +624,7 @@
       return null;
     }
     if(prevHigh > 20 && count < prevHigh * 0.5){
-      return "row count dropped sharply (" + prevHigh + " → " + count + ") — looks like a Filter (not a Filter view) is active on the source sheet, hiding rows from everyone including this dashboard; showing the last good data instead";
+      return "row count dropped sharply (" + prevHigh + " → " + count + ") — could be a Filter (not a Filter view) active on the source sheet, or could just be a real change upstream; worth a quick check if this number looks wrong";
     }
     return null;
   }
@@ -1210,6 +1214,15 @@
     if(lastError.tickets) notes.push("Patient Tickets sheet: "+lastError.tickets);
     if(lastError.csat) notes.push("CSAT sheet: "+lastError.csat);
     if(lastError.orders) notes.push("Orders sheet: "+lastError.orders);
+    if(rowDropWarning.project) notes.push("Audit summary sheet: "+rowDropWarning.project);
+    if(rowDropWarning.cancel) notes.push("Cancellation sheet: "+rowDropWarning.cancel);
+    if(rowDropWarning.wlpSource) notes.push("WLP - Non Pharma (BS WLP Audits) sheet: "+rowDropWarning.wlpSource);
+    if(rowDropWarning.mounjaroSource) notes.push("PDS- Mounjaro (PDS-Mounjaro tab) sheet: "+rowDropWarning.mounjaroSource);
+    if(rowDropWarning.nonPharmaSource) notes.push("Non Pharma (Non Pharma Audit Sheet) sheet: "+rowDropWarning.nonPharmaSource);
+    if(rowDropWarning.training) notes.push("Training sheet: "+rowDropWarning.training);
+    if(rowDropWarning.tickets) notes.push("Patient Tickets sheet: "+rowDropWarning.tickets);
+    if(rowDropWarning.csat) notes.push("CSAT sheet: "+rowDropWarning.csat);
+    if(rowDropWarning.orders) notes.push("Orders sheet: "+rowDropWarning.orders);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1892,18 +1905,25 @@
     return d.getUTCFullYear()+"-"+pad2(d.getUTCMonth()+1)+"-"+pad2(d.getUTCDate());
   }
 
-  /* Merge Overall Sheet is the live per-audit master log across PDS/PDS-Mounjaro/Non Pharma/GLP
-     (it also has some PDS Cancellation rows, but the dedicated FILE_CANCEL sheet is the fuller,
-     already-validated source for that type, so cancellations are excluded here via the WHERE clause
-     and pulled from FILE_CANCEL instead). Columns: N=Audit type, O=Date of Audit, Q=Auditor Name,
-     S=Attained % (matches the old score field 1:1 — confirmed against raw sheet values), plus
-     H=Doctor Name, L=Doctor Type (feeds the leaderboard + doctor-coverage panels, confirmed live
-     against real rows — e.g. "Dr. Ravulapati Triveni" / "ATHS_PHARMA"). The tq= query runs
-     server-side on Google's end, so only these 6 columns and ~13 months of rows come down the wire
-     instead of the sheet's full multi-megabyte export. */
+  /* Merge Overall Sheet is the live per-audit master log, but only PDS is actually sourced from it
+     now — PDS-Mounjaro and WLP-Non Pharma have their own dedicated tabs (loadMounjaroSourceLive /
+     loadWlpSourceLive), PDS Cancellation has its own fuller, already-validated sheet (FILE_CANCEL),
+     and Non Pharma has its own dedicated tab too (loadNonPharmaAuditLive). "Non Pharma Audit" is
+     explicitly excluded here for that last reason: confirmed live that Merge Overall Sheet stopped
+     carrying it entirely on 2026-09-16, then — with no warning — started carrying the exact same
+     1,589 rows already covered by the dedicated tab again as of 2026-09-17, silently double-counting
+     every Non Pharma audit once each fetch was combined. This sheet has proven too volatile for that
+     one type to trust from here at all, in either direction, so it's excluded unconditionally rather
+     than re-added — Non Pharma comes exclusively from its own tab from now on, matching Mounjaro/WLP.
+     Columns: N=Audit type, O=Date of Audit, Q=Auditor Name, S=Attained % (matches the old score field
+     1:1 — confirmed against raw sheet values), plus H=Doctor Name, L=Doctor Type (feeds the
+     leaderboard + doctor-coverage panels, confirmed live against real rows — e.g. "Dr. Ravulapati
+     Triveni" / "ATHS_PHARMA"). The tq= query runs server-side on Google's end, so only these 6
+     columns and ~13 months of rows come down the wire instead of the sheet's full multi-megabyte
+     export. */
   function loadAuditSummaryLive(){
     var floor = isoDateNDaysAgo(400);
-    var tq = "select N,O,Q,S,H,L where O >= date '"+floor+"' and N <> 'PDS Cancellation'";
+    var tq = "select N,O,Q,S,H,L where O >= date '"+floor+"' and N <> 'PDS Cancellation' and N <> 'Non Pharma Audit'";
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(MERGE_SHEET_NAME) + "&tq=" + encodeURIComponent(tq);
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
@@ -2287,8 +2307,7 @@
 
   function refreshAll(){
     loadAuditSummaryLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("project", rows);
-      if(dropMsg){ liveOK.project = false; lastError.project = dropMsg; render(); return; }
+      rowDropWarning.project = checkRowCountDrop("project", rows);
       state.auditRows = rows;
       state.dataMaxDate = rows.reduce(function(m,r){return r[0]>m?r[0]:m;}, rows[0][0]);
       if(activeChip){ var r2 = chipRange(activeChip); state.filter.start = r2.start; state.filter.end = r2.end; }
@@ -2302,8 +2321,7 @@
 
     Promise.all([loadCancellationLive(), loadWorkTimeExtraLive()]).then(function(results){
       var cancelRows = results[0], extraRows = results[1];
-      var dropMsg = guardRowCountDrop("cancel", cancelRows);
-      if(dropMsg){ liveOK.cancel = false; lastError.cancel = dropMsg; render(); return; }
+      rowDropWarning.cancel = checkRowCountDrop("cancel", cancelRows);
       state.cancelRows = cancelRows;
       state.extraTimeRows = extraRows;
       liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now();
@@ -2325,8 +2343,7 @@
     });
 
     loadWlpSourceLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("wlpSource", rows);
-      if(dropMsg){ liveOK.wlpSource = false; lastError.wlpSource = dropMsg; render(); return; }
+      rowDropWarning.wlpSource = checkRowCountDrop("wlpSource", rows);
       state.wlpSourceRows = rows;
       liveOK.wlpSource = true; lastError.wlpSource = null; state.fetchedAt = Date.now();
       render();
@@ -2337,8 +2354,7 @@
     });
 
     loadMounjaroSourceLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("mounjaroSource", rows);
-      if(dropMsg){ liveOK.mounjaroSource = false; lastError.mounjaroSource = dropMsg; render(); return; }
+      rowDropWarning.mounjaroSource = checkRowCountDrop("mounjaroSource", rows);
       state.mounjaroSourceRows = rows;
       liveOK.mounjaroSource = true; lastError.mounjaroSource = null; state.fetchedAt = Date.now();
       render();
@@ -2349,8 +2365,7 @@
     });
 
     loadNonPharmaAuditLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("nonPharmaSource", rows);
-      if(dropMsg){ liveOK.nonPharmaSource = false; lastError.nonPharmaSource = dropMsg; render(); return; }
+      rowDropWarning.nonPharmaSource = checkRowCountDrop("nonPharmaSource", rows);
       state.nonPharmaSourceRows = rows;
       liveOK.nonPharmaSource = true; lastError.nonPharmaSource = null; state.fetchedAt = Date.now();
       render();
@@ -2361,8 +2376,7 @@
     });
 
     loadTrainingLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("training", rows);
-      if(dropMsg){ liveOK.training = false; lastError.training = dropMsg; render(); return; }
+      rowDropWarning.training = checkRowCountDrop("training", rows);
       state.trainingRows = rows;
       liveOK.training = true; lastError.training = null; state.fetchedAt = Date.now();
       render();
@@ -2373,8 +2387,7 @@
     });
 
     loadTicketsLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("tickets", rows);
-      if(dropMsg){ liveOK.tickets = false; lastError.tickets = dropMsg; render(); return; }
+      rowDropWarning.tickets = checkRowCountDrop("tickets", rows);
       state.ticketRows = rows;
       liveOK.tickets = true; lastError.tickets = null; state.fetchedAt = Date.now();
       render();
@@ -2385,8 +2398,7 @@
     });
 
     loadCsatLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("csat", rows);
-      if(dropMsg){ liveOK.csat = false; lastError.csat = dropMsg; render(); return; }
+      rowDropWarning.csat = checkRowCountDrop("csat", rows);
       state.csatRows = rows;
       liveOK.csat = true; lastError.csat = null; state.fetchedAt = Date.now();
       render();
@@ -2397,8 +2409,7 @@
     });
 
     loadOrdersLive().then(function(rows){
-      var dropMsg = guardRowCountDrop("orders", rows);
-      if(dropMsg){ liveOK.orders = false; lastError.orders = dropMsg; render(); return; }
+      rowDropWarning.orders = checkRowCountDrop("orders", rows);
       state.orderRows = rows;
       liveOK.orders = true; lastError.orders = null; state.fetchedAt = Date.now();
       render();
