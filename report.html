@@ -101,9 +101,76 @@
     display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
   footer code{ font-family:var(--font-mono); background:var(--surface-2); border:1px solid var(--line); padding:1px 5px; border-radius:4px; }
   @media (max-width:560px){ .filter-range{margin-left:0;text-align:left;width:100%} }
+
+  /* ===== 01 funnel: Consult -> Lead -> Completed ===== */
+  .funnel{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:10px;margin-bottom:12px}
+  .fstep{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px 15px;box-shadow:var(--shadow);border-top:3px solid var(--line-strong);min-width:0}
+  .fstep.hl{border-top-color:var(--accent)}
+  .fstep .lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .fstep .val{font-family:var(--font-mono);font-size:30px;font-weight:600;letter-spacing:-.01em;margin-top:6px}
+  .fstep.hl .val{color:var(--accent-ink)}
+  .fstep .sub{font-size:11px;color:var(--ink-soft);margin-top:3px}
+  .fconv{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:96px;color:var(--ink-soft);text-align:center}
+  .fconv .pct{font-family:var(--font-mono);font-weight:600;font-size:16px;color:var(--ink)}
+  .fconv .k{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:1px}
+  .fconv svg{width:44px;height:12px;margin-top:6px;color:var(--line-strong)}
+  /* ratio cards with 0–100 meters */
+  .ratio-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  .ratio{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 15px 13px;box-shadow:var(--shadow);min-width:0}
+  .ratio .lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);min-height:30px}
+  .ratio .val{font-family:var(--font-mono);font-size:23px;font-weight:600;margin:4px 0 10px}
+  .ratio .formula{font-size:10.5px;color:var(--ink-soft);margin-top:8px}
+  .meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+  .meter i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  .meter i.warn{background:var(--warn)}
+  .note{font-size:11px;color:var(--ink-soft);margin:4px 0 26px;padding:8px 12px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--surface-2)}
+  /* in-table meters */
+  .meter-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+  .meter-cell .track{width:64px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .meter-cell .track i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  .meter-cell .track i.warn{background:var(--warn)}
+  .meter-cell .t{min-width:50px;text-align:right}
+  /* 02 lead vs completed bullet bars */
+  .cov-legend{display:flex;gap:18px;font-size:11px;color:var(--ink-soft);margin:0 0 8px;flex-wrap:wrap}
+  .cov-legend span{display:inline-flex;align-items:center;gap:6px}
+  .cov-legend i{width:14px;height:9px;border-radius:2px;display:inline-block}
+  .cov-legend .sw-lead{background:var(--accent-soft);border:1px solid var(--accent-soft-line)}
+  .cov-legend .sw-done{background:var(--accent)}
+  .cov-row{display:grid;grid-template-columns:150px 1fr 170px;align-items:center;gap:12px;padding:6px 0;font-size:12px}
+  .cov-row + .cov-row{border-top:1px solid var(--line)}
+  .cov-row .nm{font-weight:500}
+  .cov-row .track{position:relative;height:16px;cursor:default}
+  .cov-row .lead{position:absolute;left:0;top:0;bottom:0;background:var(--accent-soft);border:1px solid var(--accent-soft-line);border-left:none;border-radius:0 4px 4px 0}
+  .cov-row .done{position:absolute;left:0;top:4px;bottom:4px;background:var(--accent);border-radius:0 4px 4px 0}
+  .cov-row .figs{text-align:right;font-family:var(--font-mono);color:var(--ink-soft);font-size:11.5px}
+  .cov-row .figs b{color:var(--ink)}
+  /* 03 total-assigned bar */
+  .tot-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+  .tot-cell .track{width:80px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+  .tot-cell .track i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  @media (max-width:900px){
+    .funnel{grid-template-columns:1fr}
+    .fconv{flex-direction:row;gap:10px;min-width:0;padding:2px 0}
+    .fconv svg{transform:rotate(90deg);margin-top:0}
+    .ratio-row{grid-template-columns:repeat(2,1fr)}
+    .cov-row{grid-template-columns:110px 1fr}
+    .cov-row .figs{grid-column:1/-1;text-align:left}
+  }
+
+  /* ===== Page toggle (Full dashboard <-> Audit Coverage Report) ===== */
+  .page-toggle-wrap{position:sticky;top:10px;z-index:50;display:flex;justify-content:center;margin:0 0 20px;pointer-events:none}
+  .page-toggle{pointer-events:auto;display:inline-flex;gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:99px;box-shadow:var(--shadow)}
+  .page-toggle a{display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:99px;font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:none;letter-spacing:.01em;transition:background .15s,color .15s;white-space:nowrap}
+  .page-toggle a:hover{color:var(--ink);background:var(--surface-2)}
+  .page-toggle a[aria-current="page"]{background:var(--accent);color:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .page-toggle svg{width:15px;height:15px;flex:none}
+  .page-toggle .pg{font-family:var(--font-mono);font-size:10px;opacity:.75;letter-spacing:.06em}
+  @media (max-width:560px){ .page-toggle a{padding:8px 12px;font-size:11.5px} .page-toggle .pg{display:none} }
 </style>
 </head>
 <body>
+
+<div class="page-toggle-wrap"><nav class="page-toggle" aria-label="Switch page"><a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="1.5" y="1.5" width="5.5" height="7" rx="1.2"/><rect x="9" y="1.5" width="5.5" height="4" rx="1.2"/><rect x="9" y="7.5" width="5.5" height="7" rx="1.2"/><rect x="1.5" y="10.5" width="5.5" height="4" rx="1.2"/></svg><span class="pg">PAGE 1</span>Full Dashboard</a><a href="report.html" aria-current="page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z" stroke-linejoin="round"/><path d="M9.5 1.5v3h3"/><path d="M5.5 12.5v-2.5M8 12.5V8M10.5 12.5V9.5" stroke-linecap="round"/></svg><span class="pg">PAGE 2</span>Audit Coverage Report</a></nav></div>
 
 <div class="top">
   <div class="top-id">
@@ -116,7 +183,6 @@
   <div class="top-meta">
     <span class="status-chip off" id="statusChip"><span class="dot"></span><span id="statusText">Loading&hellip;</span></span>
     <span>Data through: <b id="periodLabel">&mdash;</b></span>
-    <a href="index.html">&larr; Full dashboard</a>
   </div>
 </div>
 
@@ -130,17 +196,14 @@
   <div class="filter-range" id="filterRangeLabel"></div>
 </div>
 
-<div class="panel">
-  <div class="tbl-wrap">
-    <table class="metric-tbl">
-      <tbody id="overallTableBody"></tbody>
-    </table>
-  </div>
-  <p class="desc" style="margin:14px 0 0">"Total Audits Allocated" (a separate pre-completion assignment count that used to live only in the old, manually-maintained Review of Audit Coverage report) isn't shown here — none of the live sheets this dashboard reads carry a reliable "assigned but not yet completed" signal, so rather than guess at one, this report shows only what's directly computable: Total Consult, Total Lead (Populated), and Audits Completed.</p>
-</div>
+<div class="funnel" id="funnel"></div>
+<div class="ratio-row" id="ratioRow"></div>
+<p class="note">"Total Audits Allocated" from the old manual report isn't shown &mdash; none of the live sheets carry a reliable "assigned but not yet completed" signal, so this page shows only what's directly computable: Total Consult, Total Lead (Populated) and Audits Completed.</p>
 
 <div class="panel">
   <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
+  <div class="cov-legend"><span><i class="sw-lead"></i>Total Lead (populated for audit)</span><span><i class="sw-done"></i>Audits Completed</span></div>
+  <div id="covBars" style="margin-bottom:18px"></div>
   <div class="tbl-wrap">
     <table>
       <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th><th class="num">Populated Coverage</th></tr></thead>
@@ -753,17 +816,32 @@
     var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
     var leadGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (leadByType[k]||0); }, 0);
 
-    /* ---- 01 Overall Audit Summary ---- */
-    function metricRow(lbl, val, hl){ return '<tr'+(hl?' class="hl"':'')+'><td>'+esc(lbl)+'</td><td class="v">'+val+'</td></tr>'; }
-    var overallRows = "";
-    overallRows += metricRow("Total Consult Volume", (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—");
-    overallRows += metricRow("Total Audits Populated (Total Lead)", (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—");
-    overallRows += metricRow("Audits Completed by the Auditors", haveAnyAuditRows ? fmtInt(ov.count) : "—", true);
-    overallRows += metricRow("% of Total Audits Populated from Total Consult Volume", (totalConsultLive && totalLeadLive && consultGrandTotal) ? fmtPct(leadGrandTotal/consultGrandTotal*100, 2) : "—");
-    overallRows += metricRow("% Audited (Audits Completed ÷ Total Consult Volume)", (totalConsultLive && haveAnyAuditRows && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 2) : "—", true);
-    overallRows += metricRow("Populated Audit Coverage (Audits Completed ÷ Total Lead)", (totalLeadLive && haveAnyAuditRows && leadGrandTotal) ? fmtPct(ov.count/leadGrandTotal*100, 1) : "—");
-    overallRows += metricRow("Average Audit Score", haveAnyAuditRows ? fmtPct(ov.avgScore,1) : "—", true);
-    document.getElementById("overallTableBody").innerHTML = overallRows;
+    /* ---- 01 Overall Audit Summary: Consult -> Lead -> Completed funnel + ratio meters ---- */
+    var consultOk = totalConsultLive && consultGrandTotal, leadOk = totalLeadLive && leadGrandTotal;
+    var pctPopulated = (consultOk && leadOk) ? leadGrandTotal/consultGrandTotal*100 : null;
+    var pctAudited = (consultOk && haveAnyAuditRows) ? ov.count/consultGrandTotal*100 : null;
+    var pctCoverage = (leadOk && haveAnyAuditRows) ? Math.min(100, ov.count/leadGrandTotal*100) : null;
+    var ARROW = '<svg viewBox="0 0 44 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M1 6h40M36 1.5 41.5 6 36 10.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    function fstep(lbl, val, sub, hl){ return '<div class="fstep'+(hl?' hl':'')+'"><div class="lbl">'+esc(lbl)+'</div><div class="val tnum">'+val+'</div><div class="sub">'+esc(sub)+'</div></div>'; }
+    function fconv(pct, k, d){ return '<div class="fconv"><div class="pct tnum">'+fmtPct(pct, d)+'</div><div class="k">'+esc(k)+'</div>'+ARROW+'</div>'; }
+    document.getElementById("funnel").innerHTML =
+      fstep("Total Consult Volume", consultOk ? fmtInt(consultGrandTotal) : "—", "All 5 audit types · Extract 1") +
+      fconv(pctPopulated, "populated for audit", 2) +
+      fstep("Total Audits Populated", leadOk ? fmtInt(leadGrandTotal) : "—", "Total Lead in audit sheets") +
+      fconv(pctCoverage, "of leads audited", 1) +
+      fstep("Audits Completed", haveAnyAuditRows ? fmtInt(ov.count) : "—", "By the auditors, in range", true);
+    function ratio(lbl, pct, d, formula, warn){
+      var w = pct===null ? 0 : Math.max(0, Math.min(100, pct));
+      return '<div class="ratio"><div class="lbl">'+esc(lbl)+'</div><div class="val tnum">'+fmtPct(pct, d)+'</div>'+
+        '<div class="meter" title="'+esc(lbl)+': '+fmtPct(pct, d)+' of 100%"><i'+(warn?' class="warn"':'')+' style="width:'+w.toFixed(2)+'%"></i></div>'+
+        '<div class="formula">'+esc(formula)+'</div></div>';
+    }
+    var avgScore = haveAnyAuditRows ? ov.avgScore : null;
+    document.getElementById("ratioRow").innerHTML =
+      ratio("% Populated from Consult", pctPopulated, 2, "Total Lead ÷ Total Consult") +
+      ratio("% Audited", pctAudited, 2, "Audits Completed ÷ Total Consult") +
+      ratio("Populated Audit Coverage", pctCoverage, 1, "Audits Completed ÷ Total Lead") +
+      ratio("Average Audit Score", avgScore, 1, (avgScore!==null && avgScore<90) ? "Below the 90% bar" : "Across scored audit types", avgScore!==null && avgScore<90);
 
     /* ---- 02 Project-wise Audit Summary ---- */
     function totalConsultCell(type){ var denom = consultByType[type]; return (totalConsultLive && denom) ? fmtInt(denom) : "—"; }
@@ -775,15 +853,21 @@
       if(pct > 100){
         return '<span style="color:var(--warn)" title="Completed audits ('+fmtInt(count)+') exceed this type’s consult total in Extract 1 ('+fmtInt(denom)+') for this range.">— ⚠️</span>';
       }
-      return fmtPct(pct, 1);
+      return meterCell(pct, 1);
     }
+    function meterCell(pct, d, warn){
+      if(pct===null || pct===undefined || isNaN(pct)) return "—";
+      var w = Math.max(0, Math.min(100, pct));
+      return '<span class="meter-cell"><span class="track"><i'+(warn?' class="warn"':'')+' style="width:'+w.toFixed(2)+'%"></i></span><span class="t">'+fmtPct(pct, d)+'</span></span>';
+    }
+    function scoreCell(v, d){ return (v===null||v===undefined) ? "—" : meterCell(v, d, v<90); }
     function coverageCell(type, count){
       var lead = leadByType[type];
       if(!totalLeadLive || !lead) return "—";
-      return fmtPct(Math.min(100, count/lead*100), 1);
+      return meterCell(Math.min(100, count/lead*100), 1);
     }
     var projRowsHtml = agg.byType.map(function(t){
-      return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td><td class="num tnum">'+coverageCell(t.type, t.count)+'</td></tr>';
+      return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+scoreCell(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td><td class="num tnum">'+coverageCell(t.type, t.count)+'</td></tr>';
     }).join("");
     var ticketsInRange = (state.ticketRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
     var csatInRange = (state.csatRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
@@ -796,15 +880,31 @@
     var projGrandTotal = ov.count + ticketsInRange + csatInRange;
     var totalConsultTxt = (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—";
     var totalLeadTxt = (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—";
-    var totalAuditPct = (totalConsultLive && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 1) : "—";
-    var totalCoverage = (totalLeadLive && leadGrandTotal) ? fmtPct(Math.min(100, ov.count/leadGrandTotal*100), 1) : "—";
-    projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td><td class="num tnum">'+totalCoverage+'</td></tr>';
+    var totalAuditPct = (totalConsultLive && consultGrandTotal) ? meterCell(ov.count/consultGrandTotal*100, 1) : "—";
+    var totalCoverage = (totalLeadLive && leadGrandTotal) ? meterCell(Math.min(100, ov.count/leadGrandTotal*100), 1) : "—";
+    projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+scoreCell(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td><td class="num tnum">'+totalCoverage+'</td></tr>';
+    /* Lead vs Completed bullet bars: light bar = Total Lead, solid inner bar = Audits Completed,
+       both on one shared linear scale (max Total Lead across types) so lengths compare honestly. */
+    var covMax = TYPE_ORDER.reduce(function(m,k){ return Math.max(m, leadByType[k]||0, (agg.byType.filter(function(x){return x.type===k;})[0]||{count:0}).count); }, 0);
+    var covHtml = (totalLeadLive && haveAnyAuditRows && covMax) ? agg.byType.map(function(t){
+      var lead = leadByType[t.type]||0, done = t.count;
+      var cov = lead ? Math.min(100, done/lead*100) : null;
+      var tip = t.type+" — Total Lead "+fmtInt(lead)+", Audits Completed "+fmtInt(done)+(cov===null?"":" ("+fmtPct(cov,1)+" covered)")+", pending "+fmtInt(Math.max(0,lead-done));
+      return '<div class="cov-row"><div class="nm">'+esc(t.type)+'</div><div class="track" title="'+esc(tip)+'">'+
+        '<div class="lead" style="width:'+(lead/covMax*100).toFixed(2)+'%"></div>'+
+        '<div class="done" style="width:'+(Math.min(done,Math.max(lead,done))/covMax*100).toFixed(2)+'%"></div></div>'+
+        '<div class="figs"><b>'+fmtInt(done)+'</b> / '+fmtInt(lead)+' · '+(cov===null?"—":fmtPct(cov,1))+'</div></div>';
+    }).join("") : '<p class="empty-note">Connecting to the live audit sheets…</p>';
+    document.getElementById("covBars").innerHTML = covHtml;
+
     document.getElementById("projectTableBody").innerHTML = haveAnyAuditRows ? projRowsHtml : '<tr><td colspan="7" class="empty-note">Connecting to the live audit summary sheets…</td></tr>';
 
     /* ---- 03 Auditor-wise Allocation Summary ---- */
+    var audMax = auditorAgg.reduce(function(m,a){ return Math.max(m,a.total); }, 0);
+    function totCell(n){ var w = audMax ? n/audMax*100 : 0; return '<span class="tot-cell"><span class="track" title="'+fmtInt(n)+' assigned"><i style="width:'+w.toFixed(2)+'%"></i></span><b>'+fmtInt(n)+'</b></span>'; }
     var audRowsHtml = auditorAgg.length ? auditorAgg.map(function(a){
       return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.pds)+'</td><td class="num tnum">'+fmtInt(a.mounjaro)+'</td><td class="num tnum">'+fmtInt(a.cancellation)+'</td>'+
-        '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.tickets)+'</td><td class="num tnum">'+fmtInt(a.csat)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td></tr>';
+        '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.tickets)+'</td><td class="num tnum">'+fmtInt(a.csat)+'</td><td class="num tnum">'+totCell(a.total)+'</td></tr>';
     }).join("") : '<tr><td colspan="9" class="empty-note">No allocation data for this range.</td></tr>';
     if(auditorAgg.length){
       var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.tickets+=x.tickets;a.csat+=x.csat;a.total+=x.total; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,tickets:0,csat:0,total:0});

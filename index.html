@@ -249,9 +249,21 @@
     .svc-compare{flex-wrap:wrap}
     .filter-range{margin-left:0;text-align:left;width:100%}
   }
+
+  /* ===== Page toggle (Full dashboard <-> Audit Coverage Report) ===== */
+  .page-toggle-wrap{position:sticky;top:10px;z-index:50;display:flex;justify-content:center;margin:0 0 20px;pointer-events:none}
+  .page-toggle{pointer-events:auto;display:inline-flex;gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:99px;box-shadow:var(--shadow)}
+  .page-toggle a{display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:99px;font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:none;letter-spacing:.01em;transition:background .15s,color .15s;white-space:nowrap}
+  .page-toggle a:hover{color:var(--ink);background:var(--surface-2)}
+  .page-toggle a[aria-current="page"]{background:var(--accent);color:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .page-toggle svg{width:15px;height:15px;flex:none}
+  .page-toggle .pg{font-family:var(--font-mono);font-size:10px;opacity:.75;letter-spacing:.06em}
+  @media (max-width:560px){ .page-toggle a{padding:8px 12px;font-size:11.5px} .page-toggle .pg{display:none} }
 </style>
 </head>
 <body>
+
+<div class="page-toggle-wrap"><nav class="page-toggle" aria-label="Switch page"><a href="index.html" aria-current="page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="1.5" y="1.5" width="5.5" height="7" rx="1.2"/><rect x="9" y="1.5" width="5.5" height="4" rx="1.2"/><rect x="9" y="7.5" width="5.5" height="7" rx="1.2"/><rect x="1.5" y="10.5" width="5.5" height="4" rx="1.2"/></svg><span class="pg">PAGE 1</span>Full Dashboard</a><a href="report.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z" stroke-linejoin="round"/><path d="M9.5 1.5v3h3"/><path d="M5.5 12.5v-2.5M8 12.5V8M10.5 12.5V9.5" stroke-linecap="round"/></svg><span class="pg">PAGE 2</span>Audit Coverage Report</a></nav></div>
 
 <div class="top">
   <div class="top-id">
@@ -265,7 +277,6 @@
     <span class="status-chip off" id="statusChip"><span class="dot"></span><span id="statusText">Loading&hellip;</span></span>
     <span>Data through: <b id="periodLabel">&mdash;</b></span>
     <span id="asOfLine">Snapshot: <b id="asOfLabel">&mdash;</b> <button class="refresh-btn" id="refreshBtn" type="button" style="display:none">Refresh</button></span>
-    <a href="report.html" style="font-size:11.5px;font-weight:600">Audit Coverage Report &rarr;</a>
   </div>
 </div>
 
@@ -394,6 +405,16 @@
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
           <select id="doctorWiseAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
             <option value="all">All auditors</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Project Type</span>
+          <select id="doctorWiseTypeFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
+            <option value="all">All project types</option>
+            <option value="PDS">PDS</option>
+            <option value="PDS- Mounjaro">PDS- Mounjaro</option>
+            <option value="Non Pharma">Non Pharma</option>
+            <option value="WLP - Non Pharma">WLP - Non Pharma</option>
           </select>
         </div>
       </div>
@@ -595,6 +616,7 @@
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
+  state.doctorWiseTypeFilter = "all"; /* "all", or one TYPE_ORDER key — narrows only the Doctor-wise Audit Summary table (PDS Cancellation not offered: its rows carry no doctor name) */
   state.doctorWiseAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Doctor-wise Audit Summary table, no other panel */
   state.doctorWiseSortCol = "orders"; /* which Doctor-wise Audit Summary column is currently sorted — "doctor"/"doctorType"/"count"/"avgScore"/"orders"/"auditPct", set by clicking a column heading */
   state.doctorWiseSortDir = "desc"; /* "asc" or "desc" for the column above; default (Orders, desc) matches the table's original fixed sort */
@@ -932,11 +954,12 @@
   /* Doctor-wise Audit Summary — one row per individual doctor (not grouped by doctor type, unlike
      aggregateDoctorCoverage above), across every audit type combined. Feeds the "Doctor-wise Audit
      Summary" panel. */
-  function aggregateDoctorWise(auditRows, start, end, auditorFilter){
+  function aggregateDoctorWise(auditRows, start, end, auditorFilter, typeFilter){
     var by = {};
     auditRows.forEach(function(r){
-      var date=r[0], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
+      var date=r[0], type=r[1], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
       if(date<start || date>end || !doctorName) return;
+      if(typeFilter && typeFilter!=="all" && type!==typeFilter) return;
       if(auditorFilter && auditorFilter!=="all" && auditor!==auditorFilter) return;
       if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
       var b = by[doctorName];
@@ -1427,7 +1450,7 @@
     if(auditLive){
       var doctorWiseAuditorNames = Array.prototype.filter.call(
         combinedAuditRows.reduce(function(acc,r){
-          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && acc.indexOf(r[2])===-1) acc.push(r[2]);
+          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && (state.doctorWiseTypeFilter==="all" || r[1]===state.doctorWiseTypeFilter) && acc.indexOf(r[2])===-1) acc.push(r[2]);
           return acc;
         }, []).sort(),
         function(nm){ return !!nm; }
@@ -1442,7 +1465,7 @@
     } else {
       doctorWiseSel.innerHTML = '<option value="all">All auditors</option>';
     }
-    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter) : [];
+    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter, state.doctorWiseTypeFilter) : [];
     var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, state.filter.start, state.filter.end) : null;
     doctorWiseRows.forEach(function(d){
       d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null;
@@ -1480,12 +1503,16 @@
         el.className = "sort-arrow";
       }
     });
-    var doctorWiseFilterMsg = state.doctorWiseAuditorFilter!=="all" ? " Filtered to "+esc(state.doctorWiseAuditorFilter)+"." : "";
+    var doctorWiseFilterParts = [];
+    if(state.doctorWiseTypeFilter!=="all") doctorWiseFilterParts.push(state.doctorWiseTypeFilter);
+    if(state.doctorWiseAuditorFilter!=="all") doctorWiseFilterParts.push(state.doctorWiseAuditorFilter);
+    var doctorWiseFilterMsg = doctorWiseFilterParts.length ? " Filtered to "+doctorWiseFilterParts.join(" · ")+"." : "";
+    if(state.doctorWiseTypeFilter!=="all") doctorWiseFilterMsg += " Orders isn't split by project type, so Audit % here compares this type's audits against the doctor's total orders.";
     var doctorWiseSortDirLabel = DOCTOR_WISE_TEXT_COLS[state.doctorWiseSortCol]
       ? (state.doctorWiseSortDir==="asc" ? "A to Z" : "Z to A")
       : (state.doctorWiseSortDir==="asc" ? "low to high" : "high to low");
     document.getElementById("doctorWiseDesc").textContent = auditLive
-      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined. Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(state.doctorWiseTypeFilter==="all" ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
       return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
@@ -1728,6 +1755,10 @@
   /* Doctor-wise Audit Summary auditor filter — same pattern, narrows only that one table. */
   document.getElementById("doctorWiseAuditorFilter").addEventListener("change", function(e){
     state.doctorWiseAuditorFilter = e.target.value;
+    renderFilteredSections();
+  });
+  document.getElementById("doctorWiseTypeFilter").addEventListener("change", function(e){
+    state.doctorWiseTypeFilter = e.target.value;
     renderFilteredSections();
   });
 
