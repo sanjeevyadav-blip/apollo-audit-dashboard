@@ -291,15 +291,17 @@
   <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Audit Type</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
+      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
       <tbody id="projectTableBody"></tbody>
       <!-- Patient Tickets, CSAT Audits and Training are appended as extra rows at render time (not
            scored audit types, so they carry no Avg Audit Score) — see the "2. Project-wise Audit
            Summary" block in render(). Training is shown here but, like the Allocation Summary table,
            deliberately excluded from the Total row's count since it isn't audit-assignment work.
-           "% Audited" = Audits Completed ÷ the full consult/appointment volume for that type from the
-           live "Extract 1" sheet (Total Audits Completed ÷ Audit assigned) — shows "—" for Patient
-           Tickets/CSAT/Training (not tracked in Extract 1) or if that sheet hasn't loaded yet. -->
+           "Total Consult" is the full consult/appointment volume for that type from the live
+           "Extract 1" sheet — only the 5 real audit-type rows have it (Patient Tickets/CSAT/Training
+           show "—", not tracked in Extract 1). "% Audited" = Audits Completed ÷ that Total Consult
+           figure (Total Audits Completed ÷ Audit assigned) — also "—" for those same three rows, or
+           for any row if Extract 1 hasn't loaded yet. -->
     </table>
   </div>
 </div>
@@ -1519,47 +1521,56 @@
       /* 2. Project-wise Audit Summary */
       var totalConsultLive = !!(state.totalConsultRows && state.totalConsultRows.length);
       var consultByType = aggregateTotalConsultByType(state.totalConsultRows, state.filter.start, state.filter.end);
+      function totalConsultCell(type){
+        var denom = consultByType[type];
+        return (totalConsultLive && denom) ? fmtInt(denom) : "—";
+      }
+      /* Checked directly against the live source tabs (2026-09-25): the Audits Completed counts for
+         PDS- Mounjaro and WLP - Non Pharma ("GLP" on screen) match their "Date of Audit" row counts
+         in the dedicated PDS-Mounjaro / BS WLP Audits tabs exactly (1,301 and 780 for 1–24 Sep) — no
+         double-counting on that side. The >100% only shows up because Extract 1's own "PDS Mounjaro"/
+         "GLP" consult totals for the same days (577 / 715) are smaller than that, i.e. Extract 1 isn't
+         a complete consult count for these two WLP-tracked programs specifically (PDS/Non Pharma/
+         Cancellation all come back well under 100%, consistent with Extract 1 being complete for
+         those). A percentage over 100% would just read as "broken" at a glance, so rather than show a
+         number that's arithmetically correct but built on a denominator we know is short, this shows
+         "—" for those cases too (with a tooltip) — same treatment as no denominator at all. */
       function auditPctCell(type, count){
         var denom = consultByType[type];
         if(!totalConsultLive || !denom) return "—";
         var pct = count/denom*100;
-        var txt = fmtPct(pct, 1);
-        /* PDS- Mounjaro and WLP - Non Pharma ("GLP" on screen) have come back over 100% against
-           Extract 1's own consult totals for those two types (e.g. 1,301 completed vs. 577 in Extract
-           1 for PDS- Mounjaro on 2026-09-25) — completed audits outnumbering the sheet's own consult
-           count for that type. That means Extract 1 likely isn't a complete count of consults for
-           these two WLP-sourced types specifically (PDS/Non Pharma/Cancellation all come back sane,
-           well under 100%). Flagging rather than hiding it — the number itself is arithmetically
-           correct given what's in Extract 1 today, just probably not the true denominator for these
-           two rows specifically; worth checking with whoever owns Extract 1. */
         if(pct > 100){
-          return '<span style="color:var(--warn);font-weight:600" title="Completed audits ('+fmtInt(count)+') exceed this type’s consult total in Extract 1 ('+fmtInt(denom)+') for this range — Extract 1 is probably not a complete count of consults for this type; worth checking with whoever owns that sheet.">'+txt+' ⚠️</span>';
+          return '<span style="color:var(--warn)" title="Completed audits ('+fmtInt(count)+') exceed this type’s consult total in Extract 1 ('+fmtInt(denom)+') for this range, so this % would read over 100% — Extract 1 is probably not a complete count of consults for this type. Showing — instead of a misleading number; worth checking with whoever owns that sheet.">— ⚠️</span>';
         }
-        return txt;
+        return fmtPct(pct, 1);
       }
       var projRowsHtml = agg.byType.map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
       }).join("");
       /* Patient Tickets and CSAT Audits aren't scored audit types, so they show "—" for Avg Audit
          Score; both fold into the Total row's count below (matching Total Assigned in the Allocation
          Summary table). Training is shown for visibility but deliberately excluded from that Total,
          same reasoning as Training Days/Time being excluded from Total Assigned there — training
          isn't audit-assignment work. None of the three have a consult-volume denominator in Extract 1
-         either, so "% Audited" is always "—" for them. */
+         either, so Total Consult and % Audited are always "—" for them. */
       projRowsHtml += [
         {type:"Patient Tickets", count:ticketsInRange},
         {type:"CSAT Audits", count:csatInRange},
         {type:"Training", count:trainingInRange}
       ].map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
       }).join("");
       var projGrandTotal = ov.count + ticketsInRange + csatInRange;
-      /* Total row's % Audited compares like-for-like: ov.count (the same audit-type rows Extract 1
-         covers) against the sum of Extract 1's consult volume across those same types — Tickets/
-         CSAT/Training are excluded from both sides, same as the Total row elsewhere on this table. */
+      /* Total row's Total Consult / % Audited compare like-for-like: ov.count (the same audit-type
+         rows Extract 1 covers) against the sum of Extract 1's consult volume across those same types
+         — Tickets/CSAT/Training are excluded from both sides, same as the Total row elsewhere on this
+         table. The grand total itself still includes PDS- Mounjaro / WLP - Non Pharma's consult
+         volume even though those two rows show "—" individually, since the mismatch is specific to
+         those two rows, not to the overall total (which stays under 100% either way). */
       var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
+      var totalConsultTxt = (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—";
       var totalAuditPct = (totalConsultLive && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 1) : "—";
-      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
+      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
       document.getElementById("projectTableBody").innerHTML = projRowsHtml;
 
       /* 3. Auditor-wise Allocation Summary */
@@ -1584,7 +1595,7 @@
       document.getElementById("mtdRangeLabel").textContent = "Connecting for live audit summary data…";
       document.getElementById("mtdStats").innerHTML = "";
       document.getElementById("overallKpiRow").innerHTML = '<div class="kpi"><div class="lbl">Status</div><div class="val" style="font-size:14px">Connecting…</div></div>';
-      document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="4" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
+      document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="5" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
       document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="12" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
     }
 
