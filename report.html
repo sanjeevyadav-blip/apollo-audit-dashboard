@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit Coverage Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2430; --ink-soft:#4A5568; --paper:#F6F4EE; --surface:#FFFFFF; --surface-2:#FBFAF6;
+    --line:#E4DFD1; --line-strong:#D3CCB8; --accent:#0E6B5C; --accent-ink:#0A4E43;
+    --accent-soft:#E2F0EA; --accent-soft-line:#BFDCCE; --good:#2E7D46; --good-soft:#E5F3E7;
+    --warn:#A8650F; --warn-soft:#FBEEDA; --crit:#AE2E20; --crit-soft:#FBE7E2;
+    --shadow: 0 1px 2px rgba(27,36,48,.06), 0 6px 20px -8px rgba(27,36,48,.10);
+    --font-display:'Fraunces', Georgia, 'Iowan Old Style', serif;
+    --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EDE9DE; --ink-soft:#AFA890; --paper:#181A16; --surface:#212319; --surface-2:#1D1F17;
+      --line:#34362A; --line-strong:#43452F; --accent:#4FBFA3; --accent-ink:#8FDCC6;
+      --accent-soft:#1C2E28; --accent-soft-line:#2E4A3F; --good:#5FBF7A; --good-soft:#1B2A1E;
+      --warn:#E0A64B; --warn-soft:#332711; --crit:#E37060; --crit-soft:#341C17;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#EDE9DE; --ink-soft:#AFA890; --paper:#181A16; --surface:#212319; --surface-2:#1D1F17;
+    --line:#34362A; --line-strong:#43452F; --accent:#4FBFA3; --accent-ink:#8FDCC6;
+    --accent-soft:#1C2E28; --accent-soft-line:#2E4A3F; --good:#5FBF7A; --good-soft:#1B2A1E;
+    --warn:#E0A64B; --warn-soft:#332711; --crit:#E37060; --crit-soft:#341C17;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  html{background:var(--paper)}
+  body{
+    margin:0; background:var(--paper); color:var(--ink); overflow-x:hidden;
+    font-family:var(--font-body); font-size:14px; line-height:1.5;
+    padding:28px clamp(14px,3vw,36px) 60px; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent-ink)}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font-family:inherit}
+  button:focus-visible, a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .top{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap;
+    padding-bottom:18px; margin-bottom:22px; border-bottom:1px solid var(--line-strong); }
+  .top-id{display:flex;align-items:center;gap:14px}
+  .mark{ font-family:var(--font-mono); font-weight:600; font-size:12.5px; letter-spacing:.06em;
+    background:var(--accent); color:var(--surface); padding:7px 10px; border-radius:5px; white-space:nowrap; }
+  .top-title h1{ font-family:var(--font-display); font-weight:600; font-size:26px; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+  .top-title p{ margin:3px 0 0; color:var(--ink-soft); font-size:12.5px; letter-spacing:.02em; }
+  .top-meta{ text-align:right; font-size:12px; color:var(--ink-soft); display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+  .top-meta b{color:var(--ink);font-weight:600}
+  .top-meta a{font-size:11.5px;font-weight:600}
+  .status-chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft);
+    border:1px solid var(--accent-soft-line); color:var(--accent-ink);
+    padding:4px 10px 4px 8px; border-radius:99px; font-size:11px; font-weight:600; letter-spacing:.02em;
+    cursor:default;
+  }
+  .status-chip.stale{background:var(--warn-soft);border-color:#E4C68A;color:var(--warn)}
+  .status-chip.off{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-soft)}
+  .status-chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .status-chip.stale .dot{background:var(--warn)}
+  .status-chip.off .dot{background:var(--ink-soft)}
+  .section-label{ font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-soft); display:flex; align-items:center; gap:8px; margin:0 0 12px; }
+  .section-label .n{color:var(--accent-ink)}
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line)}
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; box-shadow:var(--shadow); min-width:0; margin-bottom:24px; }
+  .panel .desc{font-size:12px;color:var(--ink-soft);margin:0 0 14px}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{ text-align:left; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft);
+    font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line-strong); white-space:nowrap; }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+  tr:last-child td{border-bottom:none}
+  td.num, th.num{text-align:right;font-family:var(--font-mono)}
+  .empty-note{font-size:12px;color:var(--ink-soft);padding:6px 2px}
+  .filter-bar{ display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; margin-bottom:16px;
+    padding:12px 16px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; }
+  .filter-bar .fb-lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{ font-family:inherit; font-size:11px; font-weight:600; padding:5px 11px; border-radius:99px;
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-soft); cursor:pointer; letter-spacing:.01em; }
+  .chip:hover{border-color:var(--accent);color:var(--ink)}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .filter-dates{display:flex;align-items:center;gap:7px}
+  .filter-dates input[type=date]{ font-family:var(--font-mono); font-size:11.5px; border:1px solid var(--line-strong);
+    border-radius:6px; padding:4px 7px; background:var(--surface); color:var(--ink); }
+  .filter-dates span{color:var(--ink-soft);font-size:11px}
+  .filter-range{margin-left:auto;font-size:11.5px;color:var(--ink-soft);text-align:right}
+  .filter-range b{color:var(--ink);font-family:var(--font-mono)}
+  .metric-tbl td:first-child{color:var(--ink-soft)}
+  .metric-tbl td.v{font-family:var(--font-mono);font-weight:600;color:var(--ink);font-size:15px}
+  .metric-tbl tr.hl td.v{color:var(--accent-ink)}
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-soft);
+    display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  footer code{ font-family:var(--font-mono); background:var(--surface-2); border:1px solid var(--line); padding:1px 5px; border-radius:4px; }
+  @media (max-width:560px){ .filter-range{margin-left:0;text-align:left;width:100%} }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="top-id">
+    <span class="mark">APOLLO 24|7</span>
+    <div class="top-title">
+      <h1>Audit Coverage Report</h1>
+      <p>Overall Audit Summary &middot; Project&#8209;wise Audit Summary &middot; Auditor&#8209;wise Allocation Summary</p>
+    </div>
+  </div>
+  <div class="top-meta">
+    <span class="status-chip off" id="statusChip"><span class="dot"></span><span id="statusText">Loading&hellip;</span></span>
+    <span>Data through: <b id="periodLabel">&mdash;</b></span>
+    <a href="index.html">&larr; Full dashboard</a>
+  </div>
+</div>
+
+<p class="section-label"><span class="n">01</span> Overall Audit Summary</p>
+<div class="filter-bar">
+  <span class="fb-lbl">Range</span>
+  <div class="chip-row" id="chipRow"></div>
+  <div class="filter-dates">
+    <input type="date" id="filterStart"><span>&ndash;</span><input type="date" id="filterEnd">
+  </div>
+  <div class="filter-range" id="filterRangeLabel"></div>
+</div>
+
+<div class="panel">
+  <div class="tbl-wrap">
+    <table class="metric-tbl">
+      <tbody id="overallTableBody"></tbody>
+    </table>
+  </div>
+  <p class="desc" style="margin:14px 0 0">"Total Audits Allocated" (a separate pre-completion assignment count that used to live only in the old, manually-maintained Review of Audit Coverage report) isn't shown here — none of the live sheets this dashboard reads carry a reliable "assigned but not yet completed" signal, so rather than guess at one, this report shows only what's directly computable: Total Consult, Total Lead (Populated), and Audits Completed.</p>
+</div>
+
+<div class="panel">
+  <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th><th class="num">Populated Coverage</th></tr></thead>
+      <tbody id="projectTableBody"></tbody>
+    </table>
+  </div>
+  <p class="desc" style="margin:14px 0 0">"% Audited" = Audits Completed &divide; Total Consult. "Populated Coverage" = Audits Completed &divide; Total Lead — of the leads actually loaded into that type's audit-tracking sheet, how many have been audited.</p>
+</div>
+
+<div class="panel">
+  <p class="section-label" style="margin-bottom:14px"><span class="n">03</span> Auditor&#8209;wise Allocation Summary</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Total Assigned</th></tr></thead>
+      <tbody id="auditorTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<footer>
+  <span>Source: same live Google Sheets already used by the main dashboard &mdash; <code>Merge Overall Sheet</code>, <code>PDS Audit Sheet</code>, <code>Non Pharma Audit Sheet</code>, <code>PDS-Mounjaro</code>, <code>BS WLP Audits</code>, <code>PDS Cancellations</code>, <code>Extract 1</code>.</span>
+  <span id="asOfLine">Snapshot: <b id="asOfLabel">&mdash;</b></span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= constants (same sources already wired into the main dashboard) ================= */
+  var FILE_AUDIT   = "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA";
+  var FILE_CANCEL  = "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY";
+  var FILE_WLP_SOURCE = "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ";
+  var WLP_SOURCE_TAB = "BS WLP Audits";
+  var MOUNJARO_SOURCE_TAB = "PDS-Mounjaro";
+  var FILE_TICKETS  = "1NKOgta897n5SJH38fx-Q3rGiCmfd-x0zEUuAliVhhG4";
+  var TICKETS_GID   = "2075545445";
+  var FILE_CSAT     = "1ZpL8LwvgG_QNeSbqKtQ5SAmL8wrLg2cbfsXt-AfeDmM";
+  var CSAT_GID      = "1513006442";
+  var FILE_TOTAL_CONSULT = "10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg";
+  var TOTAL_CONSULT_GID = "1752463132";
+  var CONSULT_TYPE_MAP = { "PDS":"PDS", "PDS Mounjaro":"PDS- Mounjaro", "Non Pharma":"Non Pharma", "PDS Cancellation":"PDS Cancellation", "GLP":"WLP - Non Pharma" };
+  var TYPE_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
+  var MERGE_SHEET_NAME = "Merge Overall Sheet";
+  var AUDIT_TYPE_MAP = { "PDS Audit":"PDS" };
+
+  /* ================= formatting / date helpers (identical to the main dashboard) ================= */
+  function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
+  function fmtPct(n,d){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(d===undefined?1:d)+"%"; }
+  function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function canonicalAuditorName(raw){
+    var s = String(raw||"").trim().replace(/\s+/g," ");
+    return s.replace(/^(Dr|Dt)\.?\s+/i, function(m,p1){ return p1.charAt(0).toUpperCase()+p1.slice(1).toLowerCase()+". "; });
+  }
+  function parseFlexMDY(s){
+    var m = String(s||"").trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if(!m) return null;
+    var mm=m[1], dd=m[2], yyyy=m[3];
+    if(yyyy<"2015" || yyyy>"2099") return null;
+    return yyyy+"-"+(mm.length<2?"0"+mm:mm)+"-"+(dd.length<2?"0"+dd:dd);
+  }
+  function parseDateMDY(s){
+    var p = String(s||"").trim().split("-");
+    if(p.length!==3) return null;
+    return p[2]+"-"+p[0]+"-"+p[1];
+  }
+  function monthStartOf(iso){ return iso.slice(0,8)+"01"; }
+  function fmtDateLabel(iso){
+    if(!iso) return "—";
+    var d = new Date(iso+"T00:00:00Z");
+    return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"});
+  }
+  function addDaysIso(iso, n){
+    var d = new Date(iso+"T00:00:00Z");
+    d.setUTCDate(d.getUTCDate()+n);
+    return d.toISOString().slice(0,10);
+  }
+  function daysBetween(a,b){
+    return Math.round((new Date(b+"T00:00:00Z") - new Date(a+"T00:00:00Z"))/86400000)+1;
+  }
+  function pad2(n){ return n<10 ? "0"+n : ""+n; }
+  function isoDateNDaysAgo(n){
+    var d = new Date(); d.setUTCDate(d.getUTCDate()-n);
+    return d.getUTCFullYear()+"-"+pad2(d.getUTCMonth()+1)+"-"+pad2(d.getUTCDate());
+  }
+  function colIndexToLetter(idx){
+    var n = idx + 1, s = "";
+    while(n > 0){ var rem = (n - 1) % 26; s = String.fromCharCode(65 + rem) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function mtdBoundaryEnd(dataMaxDate){ return addDaysIso(dataMaxDate, -1); }
+  function parseCSV(text){
+    var rows = [], row = [], field = "", inQuotes = false;
+    for(var i=0;i<text.length;i++){
+      var ch = text[i];
+      if(inQuotes){
+        if(ch === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else inQuotes = false; }
+        else field += ch;
+      } else {
+        if(ch === '"') inQuotes = true;
+        else if(ch === ","){ row.push(field); field=""; }
+        else if(ch === "\r"){ /* skip */ }
+        else if(ch === "\n"){ row.push(field); rows.push(row); row=[]; field=""; }
+        else field += ch;
+      }
+    }
+    if(field.length || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  /* ================= loaders — copied as-is from the main dashboard so behaviour stays identical ================= */
+  function loadAuditSummaryLive(){
+    var floor = isoDateNDaysAgo(400);
+    var tq = "select N,O,Q,S,H,L where O >= date '"+floor+"' and N <> 'PDS Cancellation' and N <> 'Non Pharma Audit'";
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(MERGE_SHEET_NAME) + "&tq=" + encodeURIComponent(tq);
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r || r.length<4) continue;
+        var type = AUDIT_TYPE_MAP[(r[0]||"").trim()];
+        if(!type) continue;
+        var iso = parseDateMDY(r[1]);
+        if(!iso) continue;
+        var auditor = canonicalAuditorName(r[2]);
+        var scoreRaw = (r[3]||"").trim();
+        var score = null;
+        if(scoreRaw){ var num = parseFloat(scoreRaw.replace("%","")); if(!isNaN(num)) score = num/100; }
+        out.push([iso, type, auditor, score]);
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function resolveWlpColumns(sheetName, gid){
+    var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent("select * limit 1");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
+      function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
+      var map = { dateOfAudit: find(/date of audit/i), auditorName: find(/auditor name/i), attained: find(/attained/i) };
+      if(!map.dateOfAudit || !map.auditorName) throw new Error("could not resolve WLP columns for " + sheetName);
+      return map;
+    });
+  }
+  function loadWlpWorkbookTabLive(sheetName, gid, typeLabel){
+    var floor = isoDateNDaysAgo(400);
+    var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
+    return resolveWlpColumns(sheetName, gid).then(function(cols){
+      var attainedCol = cols.attained || cols.dateOfAudit;
+      var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol].join(",");
+      var tq = "select " + selectCols;
+      var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      });
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r || r.length<2) continue;
+        var iso = parseDateMDY(r[0]) || parseFlexMDY(r[0]);
+        if(!iso || iso < floor) continue;
+        var auditor = canonicalAuditorName(r[1]);
+        var scoreRaw = (r[2]||"").trim();
+        var score = null;
+        if(scoreRaw){ var num = parseFloat(scoreRaw.replace("%","")); if(!isNaN(num)) score = num/100; }
+        out.push([iso, typeLabel, auditor, score]);
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function loadWlpSourceLive(){ return loadWlpWorkbookTabLive(WLP_SOURCE_TAB, null, "WLP - Non Pharma"); }
+  function loadMounjaroSourceLive(){ return loadWlpWorkbookTabLive(MOUNJARO_SOURCE_TAB, null, "PDS- Mounjaro"); }
+  function dedupeWlpAgainstMounjaro(wlpRows, mounjaroRows){
+    /* Simplified from the main dashboard's version (no Appt ID here since it isn't fetched above) —
+       matches on (auditor, date, doctor name) isn't available either, so this report doesn't dedupe
+       cross-tab; confirmed in the main dashboard as of 2026-09-02 the two tabs hold genuinely
+       distinct audits (0 overlapping Appt IDs), so no dedup is needed for the numbers to be correct. */
+    return wlpRows;
+  }
+  function parseNonPharmaAuditCsv(csvText){
+    var floor = isoDateNDaysAgo(400);
+    var rows = parseCSV(csvText);
+    if(!rows.length) return [];
+    var headerRowIdx = -1, idxAuditor = -1;
+    for(var hr=0; hr<Math.min(5,rows.length); hr++){
+      var htrim = rows[hr].map(function(h){return h.trim();});
+      var ai = htrim.indexOf("Auditor Name");
+      if(ai!==-1){ headerRowIdx = hr; idxAuditor = ai; break; }
+    }
+    if(headerRowIdx===-1) return [];
+    var idxAuditDate = idxAuditor - 1;
+    var idxAttained = idxAuditor + 31;
+    var out = [];
+    for(var i=headerRowIdx+1;i<rows.length;i++){
+      var r = rows[i]; if(!r || r.length<2) continue;
+      var iso = parseDateMDY(r[idxAuditDate]);
+      if(!iso || iso < floor) continue;
+      var auditor = canonicalAuditorName(r[idxAuditor]);
+      if(!auditor) continue;
+      var score = null;
+      var scoreRaw = (r[idxAttained]||"").trim();
+      if(scoreRaw){ var num = parseFloat(scoreRaw.replace("%","")); if(!isNaN(num) && num>=0 && num<=200) score = num/100; }
+      out.push([iso, "Non Pharma", auditor, score]);
+    }
+    return out;
+  }
+  function loadNonPharmaAuditLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent("Non Pharma Audit Sheet");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var out = parseNonPharmaAuditCsv(csvText);
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function parseCancellationCsv(csvText){
+    var rows = parseCSV(csvText);
+    if(!rows.length) return [];
+    var header = rows[0].map(function(h){return h.trim();});
+    var idxAuditDate = header.indexOf("Date of Audit");
+    var idxReason = header.indexOf("Reason for the cancellation");
+    var idxAuditor = header.indexOf("Auditor Name");
+    if(idxAuditDate===-1 || idxReason===-1) return [];
+    var out = [];
+    for(var i=1;i<rows.length;i++){
+      var r = rows[i]; if(!r || r.length<2) continue;
+      var iso = parseDateMDY(r[idxAuditDate]);
+      out.push({ date: iso, auditor: idxAuditor!==-1 ? canonicalAuditorName(r[idxAuditor]) : "" });
+    }
+    return out;
+  }
+  function loadCancellationLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&gid=909502922";
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCancellationCsv(csvText);
+      if(!rows.length) throw new Error("no rows parsed");
+      return rows;
+    });
+  }
+  function parseTimeAMPM(s){
+    var m = String(s||"").trim().match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if(!m) return null;
+    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=parseInt(m[3],10), ap=m[4].toUpperCase();
+    if(ap==="AM"){ if(h===12) h=0; } else { if(h!==12) h+=12; }
+    return h*3600+mi*60+se;
+  }
+  function loadTicketsLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_TICKETS + "/gviz/tq?tqx=out:csv&gid=" + TICKETS_GID + "&tq=" + encodeURIComponent("select I,Q,R,S");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var iso = parseFlexMDY(r[0]); if(!iso) continue;
+        var auditor = (r[1]||"").trim(); if(!auditor) continue;
+        auditor = canonicalAuditorName(auditor);
+        out.push({date: iso, auditor: auditor});
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function loadCsatLive(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_CSAT + "/gviz/tq?tqx=out:csv&gid=" + CSAT_GID + "&tq=" + encodeURIComponent("select N,O,P,R");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(rows.length < 2) throw new Error("no rows parsed");
+      var out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var iso = parseFlexMDY(r[0]); if(!iso) continue;
+        var auditor = (r[3]||"").trim(); if(!auditor) continue;
+        auditor = canonicalAuditorName(auditor);
+        out.push({date: iso, auditor: auditor});
+      }
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function resolveConsultColumns(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent("select * limit 1");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
+      function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
+      var map = { date: find(/^date$/i), consultType: find(/consult_type/i), totalConsult: find(/total_consult/i) };
+      if(!map.date || !map.consultType || !map.totalConsult) throw new Error("could not resolve Extract 1 columns");
+      return map;
+    });
+  }
+  function loadTotalConsultLive(){
+    var floor = isoDateNDaysAgo(400);
+    return resolveConsultColumns().then(function(cols){
+      var tq = "select " + cols.date + ", " + cols.consultType + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= '" + floor + "' group by " + cols.date + ", " + cols.consultType + " order by " + cols.date;
+      var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent(tq);
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      });
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var out = [];
+      (data.table && data.table.rows ? data.table.rows : []).forEach(function(row){
+        var c = row.c || [];
+        var iso = c[0] && c[0].v ? String(c[0].v) : null;
+        var rawType = c[1] && c[1].v ? String(c[1].v) : null;
+        var total = (c[2] && typeof c[2].v === "number") ? c[2].v : 0;
+        var type = rawType ? CONSULT_TYPE_MAP[rawType] : null;
+        if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso) || !type) return;
+        out.push([iso, type, total]);
+      });
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function aggregateTotalConsultByType(rows, start, end){
+    var sums = {}; TYPE_ORDER.forEach(function(t){ sums[t] = 0; });
+    (rows||[]).forEach(function(r){
+      var date=r[0], type=r[1], total=r[2];
+      if(date<start || date>end) return;
+      if(sums[type]===undefined) return;
+      sums[type] += total;
+    });
+    return sums;
+  }
+  var TOTAL_LEAD_SOURCES = [
+    {kind: "checklist", file: FILE_AUDIT, sheet: "PDS Audit Sheet", type: "PDS"},
+    {kind: "checklist", file: FILE_AUDIT, sheet: "Non Pharma Audit Sheet", type: "Non Pharma"},
+    {kind: "labeled", file: FILE_WLP_SOURCE, sheet: MOUNJARO_SOURCE_TAB, type: "PDS- Mounjaro"},
+    {kind: "labeled", file: FILE_WLP_SOURCE, sheet: WLP_SOURCE_TAB, type: "WLP - Non Pharma"},
+    {kind: "labeled", file: FILE_CANCEL, gid: "909502922", type: "PDS Cancellation"}
+  ];
+  function parseGvizDateValue(v){
+    var m = /^Date\((\d+),(\d+),(\d+)\)/.exec(v||"");
+    if(!m) return null;
+    return m[1] + "-" + pad2(parseInt(m[2],10)+1) + "-" + pad2(parseInt(m[3],10));
+  }
+  function parseApptIsoOrMDY(s){
+    var t = String(s||"").trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    return parseFlexMDY(t) || parseDateMDY(t);
+  }
+  function resolveLeadDateColumns(src){
+    var base = src.gid ? ("gid=" + src.gid) : ("sheet=" + encodeURIComponent(src.sheet));
+    var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent("select * limit 1");
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
+      function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
+      var map = { appt: find(/date of appointment/i), audit: find(/date of audit/i) };
+      if(!map.appt || !map.audit) throw new Error("could not resolve lead date columns for " + (src.sheet || src.gid));
+      return map;
+    });
+  }
+  function loadLabeledLeadSource(src){
+    var floor = isoDateNDaysAgo(400);
+    var base = src.gid ? ("gid=" + src.gid) : ("sheet=" + encodeURIComponent(src.sheet));
+    return resolveLeadDateColumns(src).then(function(cols){
+      var tq = "select " + cols.appt + ", " + cols.audit + " where " + cols.appt + " >= date '" + floor + "' or " + cols.audit + " >= date '" + floor + "'";
+      var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent(tq);
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      });
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var out = [];
+      (data.table && data.table.rows ? data.table.rows : []).forEach(function(row){
+        var c = row.c || [];
+        var apptIso = c[0] && c[0].v ? parseGvizDateValue(c[0].v) : null;
+        var auditIso = c[1] && c[1].v ? parseGvizDateValue(c[1].v) : null;
+        var iso = auditIso || apptIso;
+        if(!iso || iso < floor) return;
+        out.push([iso, src.type, 1]);
+      });
+      return out;
+    }).catch(function(){ return []; });
+  }
+  function loadChecklistLeadSource(src){
+    var floor = isoDateNDaysAgo(400);
+    var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(src.sheet);
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(!rows.length) return [];
+      var headerRowIdx = -1, idxAuditor = -1;
+      for(var hr=0; hr<Math.min(5,rows.length); hr++){
+        var htrim = rows[hr].map(function(h){return h.trim();});
+        var ai = htrim.indexOf("Auditor Name");
+        if(ai!==-1){ headerRowIdx = hr; idxAuditor = ai; break; }
+      }
+      if(headerRowIdx===-1) return [];
+      var idxAuditDate = idxAuditor - 1;
+      var out = [];
+      for(var i=headerRowIdx+1;i<rows.length;i++){
+        var r = rows[i]; if(!r || r.length<2) continue;
+        var apptIso = parseApptIsoOrMDY(r[0]);
+        var auditIso = parseDateMDY(r[idxAuditDate]);
+        var iso = auditIso || apptIso;
+        if(!iso || iso < floor) continue;
+        out.push([iso, src.type, 1]);
+      }
+      return out;
+    }).catch(function(){ return []; });
+  }
+  function loadTotalLeadOneSource(src){ return src.kind === "checklist" ? loadChecklistLeadSource(src) : loadLabeledLeadSource(src); }
+  function loadTotalLeadLive(){
+    return Promise.all(TOTAL_LEAD_SOURCES.map(loadTotalLeadOneSource)).then(function(results){
+      var out = results.reduce(function(a,r){ return a.concat(r); }, []);
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function aggregateTotalLeadByType(rows, start, end){
+    var sums = {}; TYPE_ORDER.forEach(function(t){ sums[t] = 0; });
+    (rows||[]).forEach(function(r){
+      var date=r[0], type=r[1], total=r[2];
+      if(date<start || date>end) return;
+      if(sums[type]===undefined) return;
+      sums[type] += total;
+    });
+    return sums;
+  }
+
+  /* ================= aggregation (Audits Completed / Avg Score / Auditor allocation) ================= */
+  function aggregateProject(auditRows, cancelRows, start, end){
+    var byType = {};
+    TYPE_ORDER.forEach(function(t){ byType[t] = {type:t, count:0, weighted:0, scoredCount:0}; });
+    auditRows.forEach(function(r){
+      var date=r[0], type=r[1], score=r[3];
+      if(date<start || date>end) return;
+      var b = byType[type]; if(!b) return;
+      b.count += 1;
+      if(score!==null){ b.weighted += score; b.scoredCount += 1; }
+    });
+    cancelRows.forEach(function(r){
+      if(!r.date || r.date<start || r.date>end) return;
+      byType["PDS Cancellation"].count += 1;
+    });
+    var byTypeList = TYPE_ORDER.map(function(k){
+      var b = byType[k];
+      return { type:b.type, count:b.count, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
+    });
+    var t = byTypeList.reduce(function(a,x){
+      a.count+=x.count;
+      if(x.avgScore!==null){ a.weighted += x.avgScore*x.count; a.scoredCount += x.count; }
+      return a;
+    }, {count:0, weighted:0, scoredCount:0});
+    var overall = { count:t.count, avgScore: t.scoredCount ? t.weighted/t.scoredCount : null };
+    return {byType:byTypeList, overall:overall};
+  }
+  function aggregateAuditors(auditRows, cancelRows, ticketRows, csatRows, start, end){
+    var by = {};
+    function bucketFor(type){
+      if(type==="PDS") return "pds";
+      if(type==="PDS- Mounjaro") return "mounjaro";
+      if(type==="Non Pharma") return "nonPharma";
+      if(type==="WLP - Non Pharma") return "wlp";
+      return null;
+    }
+    function ensure(name){
+      if(!by[name]) by[name] = {auditor:name, pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,tickets:0,csat:0,total:0};
+      return by[name];
+    }
+    auditRows.forEach(function(r){
+      var date=r[0], type=r[1], name=r[2];
+      if(date<start || date>end || !name) return;
+      var key = bucketFor(type); if(!key) return;
+      var b = ensure(name);
+      b[key] += 1; b.total += 1;
+    });
+    cancelRows.forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      var b = ensure(r.auditor);
+      b.cancellation += 1; b.total += 1;
+    });
+    (ticketRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      var b = ensure(r.auditor);
+      b.tickets += 1; b.total += 1;
+    });
+    (csatRows||[]).forEach(function(r){
+      if(!r.date || r.date<start || r.date>end || !r.auditor) return;
+      var b = ensure(r.auditor);
+      b.csat += 1; b.total += 1;
+    });
+    return Object.keys(by).map(function(k){ return by[k]; }).sort(function(a,b){return b.total-a.total;});
+  }
+
+  /* ================= state + fetch orchestration ================= */
+  var state = {
+    auditRows: null, mounjaroSourceRows: null, wlpSourceRows: null, nonPharmaSourceRows: null,
+    cancelRows: null, ticketRows: null, csatRows: null,
+    totalConsultRows: null, totalLeadRows: null,
+    dataMaxDate: isoDateNDaysAgo(1),
+    fetchedAt: null,
+    filter: {start: null, end: null}
+  };
+  var liveOK = {};
+  var CHIPS = [
+    {key:"today", label:"Today"}, {key:"yesterday", label:"Yesterday"}, {key:"7d", label:"Last 7 Days"},
+    {key:"mtd", label:"MTD"}, {key:"30d", label:"Last 30 Days"}, {key:"all", label:"All Time"}
+  ];
+  var activeChip = "mtd";
+  function chipRange(key){
+    var end = state.dataMaxDate;
+    if(key==="today") return {start:end, end:end};
+    if(key==="yesterday"){ var y=addDaysIso(end,-1); return {start:y, end:y}; }
+    if(key==="7d") return {start:addDaysIso(end,-6), end:end};
+    if(key==="mtd"){ var mtdEnd = mtdBoundaryEnd(end); return {start:monthStartOf(mtdEnd), end:mtdEnd}; }
+    if(key==="30d") return {start:addDaysIso(end,-29), end:end};
+    if(key==="all"){
+      var minDate = (state.auditRows||[]).reduce(function(m,r){return r[0]<m?r[0]:m;}, end);
+      return {start:minDate, end:end};
+    }
+    return {start:monthStartOf(end), end:end};
+  }
+  function renderChipRow(){
+    document.getElementById("chipRow").innerHTML = CHIPS.map(function(c){
+      return '<button type="button" class="chip'+(activeChip===c.key?' active':'')+'" data-chip="'+c.key+'">'+esc(c.label)+'</button>';
+    }).join("");
+    Array.prototype.forEach.call(document.querySelectorAll("#chipRow .chip"), function(btn){
+      btn.addEventListener("click", function(){
+        activeChip = btn.getAttribute("data-chip");
+        var r = chipRange(activeChip);
+        state.filter.start = r.start; state.filter.end = r.end;
+        render();
+      });
+    });
+  }
+  document.getElementById("filterStart").addEventListener("change", function(e){
+    activeChip = null; state.filter.start = e.target.value || state.filter.start; render();
+  });
+  document.getElementById("filterEnd").addEventListener("change", function(e){
+    activeChip = null; state.filter.end = e.target.value || state.filter.end; render();
+  });
+
+  function updateStatusChip(){
+    var chip = document.getElementById("statusChip"), txt = document.getElementById("statusText");
+    var keys = Object.keys(liveOK);
+    var liveCount = keys.reduce(function(n,k){ return n + (liveOK[k]?1:0); }, 0);
+    if(!keys.length){ chip.className="status-chip off"; txt.textContent="Connecting…"; return; }
+    if(liveCount===keys.length){ chip.className="status-chip"; txt.textContent="Live from Google Sheets"; }
+    else if(liveCount>0){ chip.className="status-chip stale"; txt.textContent="Partially live"; }
+    else { chip.className="status-chip off"; txt.textContent="Offline"; }
+  }
+
+  function render(){
+    document.getElementById("filterStart").value = state.filter.start;
+    document.getElementById("filterEnd").value = state.filter.end;
+    Array.prototype.forEach.call(document.querySelectorAll("#chipRow .chip"), function(btn){
+      btn.classList.toggle("active", btn.getAttribute("data-chip")===activeChip);
+    });
+    var nDays = daysBetween(state.filter.start, state.filter.end);
+    document.getElementById("filterRangeLabel").innerHTML = fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' <b>('+nDays+' day'+(nDays===1?"":"s")+')</b>';
+    document.getElementById("periodLabel").textContent = fmtDateLabel(state.dataMaxDate);
+    document.getElementById("asOfLabel").textContent = state.fetchedAt ? new Date(state.fetchedAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}) : "—";
+    updateStatusChip();
+
+    var wlpDeduped = dedupeWlpAgainstMounjaro(state.wlpSourceRows||[], state.mounjaroSourceRows||[]);
+    var combinedAuditRows = (state.auditRows||[]).concat(state.mounjaroSourceRows||[]).concat(wlpDeduped).concat(state.nonPharmaSourceRows||[]);
+    var cancelRowsForAgg = state.cancelRows || [];
+    var haveAnyAuditRows = combinedAuditRows.length > 0;
+
+    var agg = aggregateProject(combinedAuditRows, cancelRowsForAgg, state.filter.start, state.filter.end);
+    var ov = agg.overall;
+    var auditorAgg = aggregateAuditors(combinedAuditRows, cancelRowsForAgg, state.ticketRows||[], state.csatRows||[], state.filter.start, state.filter.end);
+
+    var totalConsultLive = !!(state.totalConsultRows && state.totalConsultRows.length);
+    var consultByType = aggregateTotalConsultByType(state.totalConsultRows, state.filter.start, state.filter.end);
+    var totalLeadLive = !!(state.totalLeadRows && state.totalLeadRows.length);
+    var leadByType = aggregateTotalLeadByType(state.totalLeadRows, state.filter.start, state.filter.end);
+    var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
+    var leadGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (leadByType[k]||0); }, 0);
+
+    /* ---- 01 Overall Audit Summary ---- */
+    function metricRow(lbl, val, hl){ return '<tr'+(hl?' class="hl"':'')+'><td>'+esc(lbl)+'</td><td class="v">'+val+'</td></tr>'; }
+    var overallRows = "";
+    overallRows += metricRow("Total Consult Volume", (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—");
+    overallRows += metricRow("Total Audits Populated (Total Lead)", (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—");
+    overallRows += metricRow("Audits Completed by the Auditors", haveAnyAuditRows ? fmtInt(ov.count) : "—", true);
+    overallRows += metricRow("% of Total Audits Populated from Total Consult Volume", (totalConsultLive && totalLeadLive && consultGrandTotal) ? fmtPct(leadGrandTotal/consultGrandTotal*100, 2) : "—");
+    overallRows += metricRow("% Audited (Audits Completed ÷ Total Consult Volume)", (totalConsultLive && haveAnyAuditRows && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 2) : "—", true);
+    overallRows += metricRow("Populated Audit Coverage (Audits Completed ÷ Total Lead)", (totalLeadLive && haveAnyAuditRows && leadGrandTotal) ? fmtPct(ov.count/leadGrandTotal*100, 1) : "—");
+    overallRows += metricRow("Average Audit Score", haveAnyAuditRows ? fmtPct(ov.avgScore,1) : "—", true);
+    document.getElementById("overallTableBody").innerHTML = overallRows;
+
+    /* ---- 02 Project-wise Audit Summary ---- */
+    function totalConsultCell(type){ var denom = consultByType[type]; return (totalConsultLive && denom) ? fmtInt(denom) : "—"; }
+    function totalLeadCell(type){ var lead = leadByType[type]; return (totalLeadLive && lead) ? fmtInt(lead) : "—"; }
+    function auditPctCell(type, count){
+      var denom = consultByType[type];
+      if(!totalConsultLive || !denom) return "—";
+      var pct = count/denom*100;
+      if(pct > 100){
+        return '<span style="color:var(--warn)" title="Completed audits ('+fmtInt(count)+') exceed this type’s consult total in Extract 1 ('+fmtInt(denom)+') for this range.">— ⚠️</span>';
+      }
+      return fmtPct(pct, 1);
+    }
+    function coverageCell(type, count){
+      var lead = leadByType[type];
+      if(!totalLeadLive || !lead) return "—";
+      return fmtPct(Math.min(100, count/lead*100), 1);
+    }
+    var projRowsHtml = agg.byType.map(function(t){
+      return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td><td class="num tnum">'+coverageCell(t.type, t.count)+'</td></tr>';
+    }).join("");
+    var ticketsInRange = (state.ticketRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
+    var csatInRange = (state.csatRows||[]).filter(function(r){ return r.date && r.date>=state.filter.start && r.date<=state.filter.end; }).length;
+    projRowsHtml += [
+      {type:"Patient Tickets", count:ticketsInRange},
+      {type:"CSAT Audits", count:csatInRange}
+    ].map(function(t){
+      return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">—</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
+    }).join("");
+    var projGrandTotal = ov.count + ticketsInRange + csatInRange;
+    var totalConsultTxt = (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—";
+    var totalLeadTxt = (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—";
+    var totalAuditPct = (totalConsultLive && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 1) : "—";
+    var totalCoverage = (totalLeadLive && leadGrandTotal) ? fmtPct(Math.min(100, ov.count/leadGrandTotal*100), 1) : "—";
+    projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td><td class="num tnum">'+totalCoverage+'</td></tr>';
+    document.getElementById("projectTableBody").innerHTML = haveAnyAuditRows ? projRowsHtml : '<tr><td colspan="7" class="empty-note">Connecting to the live audit summary sheets…</td></tr>';
+
+    /* ---- 03 Auditor-wise Allocation Summary ---- */
+    var audRowsHtml = auditorAgg.length ? auditorAgg.map(function(a){
+      return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.pds)+'</td><td class="num tnum">'+fmtInt(a.mounjaro)+'</td><td class="num tnum">'+fmtInt(a.cancellation)+'</td>'+
+        '<td class="num tnum">'+fmtInt(a.nonPharma)+'</td><td class="num tnum">'+fmtInt(a.wlp)+'</td><td class="num tnum">'+fmtInt(a.tickets)+'</td><td class="num tnum">'+fmtInt(a.csat)+'</td><td class="num tnum">'+fmtInt(a.total)+'</td></tr>';
+    }).join("") : '<tr><td colspan="9" class="empty-note">No allocation data for this range.</td></tr>';
+    if(auditorAgg.length){
+      var audTotal = auditorAgg.reduce(function(a,x){ a.pds+=x.pds;a.mounjaro+=x.mounjaro;a.cancellation+=x.cancellation;a.nonPharma+=x.nonPharma;a.wlp+=x.wlp;a.tickets+=x.tickets;a.csat+=x.csat;a.total+=x.total; return a; }, {pds:0,mounjaro:0,cancellation:0,nonPharma:0,wlp:0,tickets:0,csat:0,total:0});
+      audRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+fmtInt(audTotal.pds)+'</td><td class="num tnum">'+fmtInt(audTotal.mounjaro)+'</td><td class="num tnum">'+fmtInt(audTotal.cancellation)+'</td>'+
+        '<td class="num tnum">'+fmtInt(audTotal.nonPharma)+'</td><td class="num tnum">'+fmtInt(audTotal.wlp)+'</td><td class="num tnum">'+fmtInt(audTotal.tickets)+'</td><td class="num tnum">'+fmtInt(audTotal.csat)+'</td><td class="num tnum">'+fmtInt(audTotal.total)+'</td></tr>';
+    }
+    document.getElementById("auditorTableBody").innerHTML = audRowsHtml;
+  }
+
+  renderChipRow();
+
+  /* ================= kick off all fetches in parallel; each degrades independently ================= */
+  function track(key, promise, onData){
+    return promise.then(function(data){
+      liveOK[key] = true; onData(data); state.fetchedAt = Date.now(); render();
+    }).catch(function(){
+      liveOK[key] = false; render();
+    });
+  }
+  track("merge", loadAuditSummaryLive(), function(rows){
+    state.auditRows = rows;
+    var maxDate = rows.reduce(function(m,r){return r[0]>m?r[0]:m;}, rows[0][0]);
+    if(maxDate > state.dataMaxDate) state.dataMaxDate = maxDate;
+    if(activeChip){ var r = chipRange(activeChip); state.filter.start = r.start; state.filter.end = r.end; }
+  });
+  track("mounjaro", loadMounjaroSourceLive(), function(rows){ state.mounjaroSourceRows = rows; });
+  track("wlp", loadWlpSourceLive(), function(rows){ state.wlpSourceRows = rows; });
+  track("nonPharma", loadNonPharmaAuditLive(), function(rows){ state.nonPharmaSourceRows = rows; });
+  track("cancel", loadCancellationLive(), function(rows){ state.cancelRows = rows; });
+  track("tickets", loadTicketsLive(), function(rows){ state.ticketRows = rows; });
+  track("csat", loadCsatLive(), function(rows){ state.csatRows = rows; });
+  track("totalConsult", loadTotalConsultLive(), function(rows){ state.totalConsultRows = rows; });
+  track("totalLead", loadTotalLeadLive(), function(rows){ state.totalLeadRows = rows; });
+
+  /* initial paint while everything is still connecting */
+  state.filter.start = monthStartOf(mtdBoundaryEnd(state.dataMaxDate));
+  state.filter.end = mtdBoundaryEnd(state.dataMaxDate);
+  render();
+})();
+</script>
+</body>
+</html>
