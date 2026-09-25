@@ -1522,7 +1522,20 @@
       function auditPctCell(type, count){
         var denom = consultByType[type];
         if(!totalConsultLive || !denom) return "—";
-        return fmtPct(count/denom*100, 1);
+        var pct = count/denom*100;
+        var txt = fmtPct(pct, 1);
+        /* PDS- Mounjaro and WLP - Non Pharma ("GLP" on screen) have come back over 100% against
+           Extract 1's own consult totals for those two types (e.g. 1,301 completed vs. 577 in Extract
+           1 for PDS- Mounjaro on 2026-09-25) — completed audits outnumbering the sheet's own consult
+           count for that type. That means Extract 1 likely isn't a complete count of consults for
+           these two WLP-sourced types specifically (PDS/Non Pharma/Cancellation all come back sane,
+           well under 100%). Flagging rather than hiding it — the number itself is arithmetically
+           correct given what's in Extract 1 today, just probably not the true denominator for these
+           two rows specifically; worth checking with whoever owns Extract 1. */
+        if(pct > 100){
+          return '<span style="color:var(--warn);font-weight:600" title="Completed audits ('+fmtInt(count)+') exceed this type’s consult total in Extract 1 ('+fmtInt(denom)+') for this range — Extract 1 is probably not a complete count of consults for this type; worth checking with whoever owns that sheet.">'+txt+' ⚠️</span>';
+        }
+        return txt;
       }
       var projRowsHtml = agg.byType.map(function(t){
         return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
