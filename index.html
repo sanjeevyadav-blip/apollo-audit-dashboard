@@ -298,10 +298,14 @@
            Summary" block in render(). Training is shown here but, like the Allocation Summary table,
            deliberately excluded from the Total row's count since it isn't audit-assignment work.
            "Total Consult" is the full consult/appointment volume for that type from the live
-           "Extract 1" sheet. "Total Lead" is how many rows are actually sitting in that type's own
+           "Extract 1" sheet. "Total Lead" is how many rows are sitting in that type's own
            audit-tracking sheet (PDS Audit Sheet / Non Pharma Audit Sheet / PDS-Mounjaro / BS WLP
-           Audits / PDS Cancellation sheet) for the range, audited or not — so it's always ≥ Audits
-           Completed, the gap being leads still waiting to be audited. Both show "—" for Patient
+           Audits / PDS Cancellation sheet) for the range, keyed the same way Audits Completed is —
+           by Date of Audit — and falling back to Date of Appointment only for rows that haven't been
+           audited yet (blank Date of Audit), so a still-pending lead counts under the day it arrived.
+           This keeps Total Lead ≥ Audits Completed for any range, the gap being leads still waiting
+           to be audited, instead of the two using different date fields and occasionally crossing
+           (as they could when Total Lead was appointment-date-only). Both show "—" for Patient
            Tickets/CSAT/Training (not tracked in either place). "% Audited" = Audits Completed ÷ Total
            Consult (Total Audits Completed ÷ Audit assigned) — also "—" for those same three rows, or
            for any row if Extract 1 hasn't loaded yet. -->
@@ -586,7 +590,7 @@
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
   state.orderRows = null; /* {date,doctor,orders} from the per-doctor Orders sheet — feeds the Doctor-wise Audit Summary's "Orders" column, matched to that table's doctor names via normalizeDoctorKey */
   state.totalConsultRows = null; /* [dateISO, internalTypeKey, totalConsult] from the "Extract 1" sheet, pre-summed per date+type server-side via a gviz group-by query — feeds the Project-wise Audit Summary's "% Audited" column (Total Audits Completed ÷ this sum, per type, over the selected range) */
-  state.totalLeadRows = null; /* [dateISO, internalTypeKey, count] — per-day row counts (audited or not) straight from each type's own audit-tracking sheet (PDS Audit Sheet / Non Pharma Audit Sheet / PDS-Mounjaro / BS WLP Audits / PDS Cancellation sheet), server-side grouped the same way as totalConsultRows — feeds the Project-wise Audit Summary's "Total Lead" column */
+  state.totalLeadRows = null; /* [dateISO, internalTypeKey, 1] per row — one entry per lead from each type's own audit-tracking sheet (PDS Audit Sheet / Non Pharma Audit Sheet / PDS-Mounjaro / BS WLP Audits / PDS Cancellation sheet), dated by Date of Audit (falling back to Date of Appointment when not yet audited) — feeds the Project-wise Audit Summary's "Total Lead" column */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
@@ -2448,50 +2452,120 @@
     return sums;
   }
 
-  /* "Total Lead" — how many leads were actually loaded into each type's own audit-tracking sheet for
-     a day, whether or not the audit itself has been completed yet ("Date of Appointment" is always
-     populated; "Date of Audit" is blank until someone audits it). Checked directly against each raw
-     sheet on 2026-09-25: "PDS Audit Sheet" had 7,968 total rows but only 6,271 with a completed audit
-     (1,697 still sitting unaudited); "Non Pharma Audit Sheet", "PDS-Mounjaro", "BS WLP Audits" and the
-     PDS Cancellation sheet all showed the same pattern. Merge Overall Sheet does NOT show this — every
-     row there already has both an Audit type and a Date of Audit, meaning unaudited leads never make
-     it into that merged sheet at all. So this pulls "Date of Appointment" straight from each type's
-     own source sheet — the same ones already feeding Audits Completed / Extra Time — rather than from
-     Merge Overall Sheet or Extract 1. Column A is a real Sheets date type in all five, so the count is
-     a small server-side "select A, count(A) ... group by A" per sheet, same shape as Total Consult. */
+  /* "Total Lead" — per explicit request on 2026-09-25, now keyed on the SAME date field as "Audits
+     Completed": Date of Audit. A row that's already been audited lands under its Date of Audit — the
+     identical day "Audits Completed" already counts it under — and only falls back to Date of
+     Appointment when Date of Audit is blank (not yet audited), so a still-pending lead still counts,
+     under the day it arrived. This replaces the previous appointment-date-only version, which could
+     make "Audits Completed" read HIGHER than "Total Lead" for the same range whenever some of the
+     audits finished in that window belonged to older, pre-range leads — confirmed live for
+     PDS-Mounjaro on 2026-09-25: of the 1,301 audits completed Sept 1–24, 116 were for appointments
+     dated before Sept 1 (or with no appointment date on record at all), while every one of the 1,185
+     Sept 1–24 appointments had already been audited (1,301 − 116 = 1,185 exactly). Under the new
+     Date-of-Audit basis those 116 land on their own (pre-range) days instead of inflating the in-range
+     Audits Completed count past Total Lead, so Total Lead ≥ Audits Completed holds for any range.
+
+     Same five source sheets as before. Three of them — PDS-Mounjaro, BS WLP Audits, PDS Cancellation
+     sheet — have both "Date of Appointment" and "Date of Audit" cleanly labeled as real Sheets dates,
+     so their columns are resolved by header label (kind:"labeled"), same defensive pattern as
+     resolveWlpColumns/resolveConsultColumns elsewhere in this file. The other two — PDS Audit Sheet,
+     Non Pharma Audit Sheet — share the 3-row grouped checklist header where gviz's own header
+     detection lands on the wrong row and "Date of Audit" isn't labeled at all (same quirk
+     parseNonPharmaAuditCsv already works around), so those are read via full CSV with the header
+     located by scanning for "Auditor Name" and Date of Audit taken as the column immediately before
+     it (kind:"checklist"); Date of Appointment is column A in both — confirmed ISO-text ("YYYY-MM-DD")
+     rather than the "MM-DD-YYYY" format Date of Audit uses in the same two sheets. */
   var TOTAL_LEAD_SOURCES = [
-    {file: FILE_AUDIT, sheet: "PDS Audit Sheet", type: "PDS"},
-    {file: FILE_AUDIT, sheet: "Non Pharma Audit Sheet", type: "Non Pharma"},
-    {file: FILE_WLP_SOURCE, sheet: MOUNJARO_SOURCE_TAB, type: "PDS- Mounjaro"},
-    {file: FILE_WLP_SOURCE, sheet: WLP_SOURCE_TAB, type: "WLP - Non Pharma"},
-    {file: FILE_CANCEL, gid: "909502922", type: "PDS Cancellation"}
+    {kind: "checklist", file: FILE_AUDIT, sheet: "PDS Audit Sheet", type: "PDS"},
+    {kind: "checklist", file: FILE_AUDIT, sheet: "Non Pharma Audit Sheet", type: "Non Pharma"},
+    {kind: "labeled", file: FILE_WLP_SOURCE, sheet: MOUNJARO_SOURCE_TAB, type: "PDS- Mounjaro"},
+    {kind: "labeled", file: FILE_WLP_SOURCE, sheet: WLP_SOURCE_TAB, type: "WLP - Non Pharma"},
+    {kind: "labeled", file: FILE_CANCEL, gid: "909502922", type: "PDS Cancellation"}
   ];
   function parseGvizDateValue(v){
     var m = /^Date\((\d+),(\d+),(\d+)\)/.exec(v||"");
     if(!m) return null;
     return m[1] + "-" + pad2(parseInt(m[2],10)+1) + "-" + pad2(parseInt(m[3],10));
   }
-  function loadTotalLeadOneSource(src){
-    var floor = isoDateNDaysAgo(400);
-    var tq = "select A, count(A) where A >= date '" + floor + "' group by A order by A";
+  function parseApptIsoOrMDY(s){
+    /* Column A in the two checklist sheets already reads as ISO "YYYY-MM-DD" text; fall back to the
+       M/D/YYYY or MM-DD-YYYY parsers in case a future row ever lands in a different text shape. */
+    var t = String(s||"").trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    return parseFlexMDY(t) || parseDateMDY(t);
+  }
+  function resolveLeadDateColumns(src){
     var base = src.gid ? ("gid=" + src.gid) : ("sheet=" + encodeURIComponent(src.sheet));
-    var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?" + base + "&tqx=out:json&tq=" + encodeURIComponent(tq);
+    var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent("select * limit 1");
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(t){
       var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
       var data = JSON.parse(jsonStr);
+      var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
+      function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
+      var map = { appt: find(/date of appointment/i), audit: find(/date of audit/i) };
+      if(!map.appt || !map.audit) throw new Error("could not resolve lead date columns for " + (src.sheet || src.gid));
+      return map;
+    });
+  }
+  function loadLabeledLeadSource(src){
+    var floor = isoDateNDaysAgo(400);
+    var base = src.gid ? ("gid=" + src.gid) : ("sheet=" + encodeURIComponent(src.sheet));
+    return resolveLeadDateColumns(src).then(function(cols){
+      var tq = "select " + cols.appt + ", " + cols.audit + " where " + cols.appt + " >= date '" + floor + "' or " + cols.audit + " >= date '" + floor + "'";
+      var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent(tq);
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      });
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
       var out = [];
       (data.table && data.table.rows ? data.table.rows : []).forEach(function(row){
         var c = row.c || [];
-        var iso = c[0] && c[0].v ? parseGvizDateValue(c[0].v) : null;
-        var count = (c[1] && typeof c[1].v === "number") ? c[1].v : 0;
-        if(!iso) return;
-        out.push([iso, src.type, count]);
+        var apptIso = c[0] && c[0].v ? parseGvizDateValue(c[0].v) : null;
+        var auditIso = c[1] && c[1].v ? parseGvizDateValue(c[1].v) : null;
+        var iso = auditIso || apptIso;
+        if(!iso || iso < floor) return;
+        out.push([iso, src.type, 1]);
       });
       return out;
     }).catch(function(){ return []; }); /* one source failing shouldn't blank out the other four */
+  }
+  function loadChecklistLeadSource(src){
+    var floor = isoDateNDaysAgo(400);
+    var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(src.sheet);
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(csvText){
+      var rows = parseCSV(csvText);
+      if(!rows.length) return [];
+      var headerRowIdx = -1, idxAuditor = -1;
+      for(var hr=0; hr<Math.min(5,rows.length); hr++){
+        var htrim = rows[hr].map(function(h){return h.trim();});
+        var ai = htrim.indexOf("Auditor Name");
+        if(ai!==-1){ headerRowIdx = hr; idxAuditor = ai; break; }
+      }
+      if(headerRowIdx===-1) return [];
+      var idxAuditDate = idxAuditor - 1;
+      var out = [];
+      for(var i=headerRowIdx+1;i<rows.length;i++){
+        var r = rows[i]; if(!r || r.length<2) continue;
+        var apptIso = parseApptIsoOrMDY(r[0]);
+        var auditIso = parseDateMDY(r[idxAuditDate]);
+        var iso = auditIso || apptIso;
+        if(!iso || iso < floor) continue;
+        out.push([iso, src.type, 1]);
+      }
+      return out;
+    }).catch(function(){ return []; }); /* one source failing shouldn't blank out the other four */
+  }
+  function loadTotalLeadOneSource(src){
+    return src.kind === "checklist" ? loadChecklistLeadSource(src) : loadLabeledLeadSource(src);
   }
   function loadTotalLeadLive(){
     return Promise.all(TOTAL_LEAD_SOURCES.map(loadTotalLeadOneSource)).then(function(results){
