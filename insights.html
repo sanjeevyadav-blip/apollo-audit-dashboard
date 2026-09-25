@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quality Insights</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2430; --ink-soft:#4A5568; --paper:#F6F4EE; --surface:#FFFFFF; --surface-2:#FBFAF6;
+    --line:#E4DFD1; --line-strong:#D3CCB8; --accent:#0E6B5C; --accent-ink:#0A4E43;
+    --accent-soft:#E2F0EA; --accent-soft-line:#BFDCCE; --good:#2E7D46; --good-soft:#E5F3E7;
+    --warn:#A8650F; --warn-soft:#FBEEDA; --crit:#AE2E20; --crit-soft:#FBE7E2;
+    --shadow: 0 1px 2px rgba(27,36,48,.06), 0 6px 20px -8px rgba(27,36,48,.10);
+    --font-display:'Fraunces', Georgia, 'Iowan Old Style', serif;
+    --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EDE9DE; --ink-soft:#AFA890; --paper:#181A16; --surface:#212319; --surface-2:#1D1F17;
+      --line:#34362A; --line-strong:#43452F; --accent:#4FBFA3; --accent-ink:#8FDCC6;
+      --accent-soft:#1C2E28; --accent-soft-line:#2E4A3F; --good:#5FBF7A; --good-soft:#1B2A1E;
+      --warn:#E0A64B; --warn-soft:#332711; --crit:#E37060; --crit-soft:#341C17;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#EDE9DE; --ink-soft:#AFA890; --paper:#181A16; --surface:#212319; --surface-2:#1D1F17;
+    --line:#34362A; --line-strong:#43452F; --accent:#4FBFA3; --accent-ink:#8FDCC6;
+    --accent-soft:#1C2E28; --accent-soft-line:#2E4A3F; --good:#5FBF7A; --good-soft:#1B2A1E;
+    --warn:#E0A64B; --warn-soft:#332711; --crit:#E37060; --crit-soft:#341C17;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  html{background:var(--paper)}
+  body{
+    margin:0; background:var(--paper); color:var(--ink); overflow-x:hidden;
+    font-family:var(--font-body); font-size:14px; line-height:1.5;
+    padding:28px clamp(14px,3vw,36px) 60px; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent-ink)}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font-family:inherit}
+  button:focus-visible, a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .top{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap;
+    padding-bottom:18px; margin-bottom:22px; border-bottom:1px solid var(--line-strong); }
+  .top-id{display:flex;align-items:center;gap:14px}
+  .mark{ font-family:var(--font-mono); font-weight:600; font-size:12.5px; letter-spacing:.06em;
+    background:var(--accent); color:var(--surface); padding:7px 10px; border-radius:5px; white-space:nowrap; }
+  .top-title h1{ font-family:var(--font-display); font-weight:600; font-size:26px; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+  .top-title p{ margin:3px 0 0; color:var(--ink-soft); font-size:12.5px; letter-spacing:.02em; }
+  .top-meta{ text-align:right; font-size:12px; color:var(--ink-soft); display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+  .top-meta b{color:var(--ink);font-weight:600}
+  .top-meta a{font-size:11.5px;font-weight:600}
+  .status-chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft);
+    border:1px solid var(--accent-soft-line); color:var(--accent-ink);
+    padding:4px 10px 4px 8px; border-radius:99px; font-size:11px; font-weight:600; letter-spacing:.02em;
+    cursor:default;
+  }
+  .status-chip.stale{background:var(--warn-soft);border-color:#E4C68A;color:var(--warn)}
+  .status-chip.off{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-soft)}
+  .status-chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .status-chip.stale .dot{background:var(--warn)}
+  .status-chip.off .dot{background:var(--ink-soft)}
+  .section-label{ font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-soft); display:flex; align-items:center; gap:8px; margin:0 0 12px; }
+  .section-label .n{color:var(--accent-ink)}
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line)}
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; box-shadow:var(--shadow); min-width:0; margin-bottom:24px; }
+  .panel .desc{font-size:12px;color:var(--ink-soft);margin:0 0 14px}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{ text-align:left; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft);
+    font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line-strong); white-space:nowrap; }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+  tr:last-child td{border-bottom:none}
+  td.num, th.num{text-align:right;font-family:var(--font-mono)}
+  .empty-note{font-size:12px;color:var(--ink-soft);padding:6px 2px}
+  .filter-bar{ display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; margin-bottom:16px;
+    padding:12px 16px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; }
+  .filter-bar .fb-lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{ font-family:inherit; font-size:11px; font-weight:600; padding:5px 11px; border-radius:99px;
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-soft); cursor:pointer; letter-spacing:.01em; }
+  .chip:hover{border-color:var(--accent);color:var(--ink)}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .filter-dates{display:flex;align-items:center;gap:7px}
+  .filter-dates input[type=date]{ font-family:var(--font-mono); font-size:11.5px; border:1px solid var(--line-strong);
+    border-radius:6px; padding:4px 7px; background:var(--surface); color:var(--ink); }
+  .filter-dates span{color:var(--ink-soft);font-size:11px}
+  .filter-range{margin-left:auto;font-size:11.5px;color:var(--ink-soft);text-align:right}
+  .filter-range b{color:var(--ink);font-family:var(--font-mono)}
+  .metric-tbl td:first-child{color:var(--ink-soft)}
+  .metric-tbl td.v{font-family:var(--font-mono);font-weight:600;color:var(--ink);font-size:15px}
+  .metric-tbl tr.hl td.v{color:var(--accent-ink)}
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-soft);
+    display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  footer code{ font-family:var(--font-mono); background:var(--surface-2); border:1px solid var(--line); padding:1px 5px; border-radius:4px; }
+  @media (max-width:560px){ .filter-range{margin-left:0;text-align:left;width:100%} }
+
+  /* ===== 01 funnel: Consult -> Lead -> Completed ===== */
+  .funnel{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:10px;margin-bottom:12px}
+  .fstep{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px 15px;box-shadow:var(--shadow);border-top:3px solid var(--line-strong);min-width:0}
+  .fstep.hl{border-top-color:var(--accent)}
+  .fstep .lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .fstep .val{font-family:var(--font-mono);font-size:30px;font-weight:600;letter-spacing:-.01em;margin-top:6px}
+  .fstep.hl .val{color:var(--accent-ink)}
+  .fstep .sub{font-size:11px;color:var(--ink-soft);margin-top:3px}
+  .fconv{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:96px;color:var(--ink-soft);text-align:center}
+  .fconv .pct{font-family:var(--font-mono);font-weight:600;font-size:16px;color:var(--ink)}
+  .fconv .k{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:1px}
+  .fconv svg{width:44px;height:12px;margin-top:6px;color:var(--line-strong)}
+  /* ratio cards with 0–100 meters */
+  .ratio-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  .ratio{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 15px 13px;box-shadow:var(--shadow);min-width:0}
+  .ratio .lbl{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);min-height:30px}
+  .ratio .val{font-family:var(--font-mono);font-size:23px;font-weight:600;margin:4px 0 10px}
+  .ratio .formula{font-size:10.5px;color:var(--ink-soft);margin-top:8px}
+  .meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+  .meter i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  .meter i.warn{background:var(--warn)}
+  .note{font-size:11px;color:var(--ink-soft);margin:4px 0 26px;padding:8px 12px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--surface-2)}
+  /* in-table meters */
+  .meter-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+  .meter-cell .track{width:64px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .meter-cell .track i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  .meter-cell .track i.warn{background:var(--warn)}
+  .meter-cell .t{min-width:50px;text-align:right}
+  /* 02 lead vs completed bullet bars */
+  .cov-legend{display:flex;gap:18px;font-size:11px;color:var(--ink-soft);margin:0 0 8px;flex-wrap:wrap}
+  .cov-legend span{display:inline-flex;align-items:center;gap:6px}
+  .cov-legend i{width:14px;height:9px;border-radius:2px;display:inline-block}
+  .cov-legend .sw-lead{background:var(--accent-soft);border:1px solid var(--accent-soft-line)}
+  .cov-legend .sw-done{background:var(--accent)}
+  .cov-row{display:grid;grid-template-columns:150px 1fr 170px;align-items:center;gap:12px;padding:6px 0;font-size:12px}
+  .cov-row + .cov-row{border-top:1px solid var(--line)}
+  .cov-row .nm{font-weight:500}
+  .cov-row .track{position:relative;height:16px;cursor:default}
+  .cov-row .lead{position:absolute;left:0;top:0;bottom:0;background:var(--accent-soft);border:1px solid var(--accent-soft-line);border-left:none;border-radius:0 4px 4px 0}
+  .cov-row .done{position:absolute;left:0;top:4px;bottom:4px;background:var(--accent);border-radius:0 4px 4px 0}
+  .cov-row .figs{text-align:right;font-family:var(--font-mono);color:var(--ink-soft);font-size:11.5px}
+  .cov-row .figs b{color:var(--ink)}
+  /* 03 total-assigned bar */
+  .tot-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+  .tot-cell .track{width:80px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+  .tot-cell .track i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  @media (max-width:900px){
+    .funnel{grid-template-columns:1fr}
+    .fconv{flex-direction:row;gap:10px;min-width:0;padding:2px 0}
+    .fconv svg{transform:rotate(90deg);margin-top:0}
+    .ratio-row{grid-template-columns:repeat(2,1fr)}
+    .cov-row{grid-template-columns:110px 1fr}
+    .cov-row .figs{grid-column:1/-1;text-align:left}
+  }
+
+  /* ===== Page toggle (Full dashboard <-> Audit Coverage Report) ===== */
+  .page-toggle-wrap{position:sticky;top:10px;z-index:50;display:flex;justify-content:center;margin:0 0 20px;pointer-events:none}
+  .page-toggle{pointer-events:auto;display:inline-flex;gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:99px;box-shadow:var(--shadow)}
+  .page-toggle a{display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:99px;font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:none;letter-spacing:.01em;transition:background .15s,color .15s;white-space:nowrap}
+  .page-toggle a:hover{color:var(--ink);background:var(--surface-2)}
+  .page-toggle a[aria-current="page"]{background:var(--accent);color:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .page-toggle svg{width:15px;height:15px;flex:none}
+  .page-toggle .pg{font-family:var(--font-mono);font-size:10px;opacity:.75;letter-spacing:.06em}
+  @media (max-width:560px){ .page-toggle a{padding:8px 12px;font-size:11.5px} .page-toggle .pg{display:none} }
+
+  /* ===== Page 3 — Quality Insights ===== */
+  :root{ --div-pos:#2F6DB0; --div-neg:#C0612B; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --div-pos:#6FA8E6; --div-neg:#E58A57; } }
+  :root[data-theme="dark"]{ --div-pos:#6FA8E6; --div-neg:#E58A57; }
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;margin-bottom:24px}
+  .grid2 > .panel{margin-bottom:0}
+  .panel h2{ font-family:var(--font-display); font-size:16px; font-weight:600; margin:0 0 3px; }
+  .panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .panel-head .desc{margin:0;max-width:760px}
+  .ctl{display:flex;align-items:center;gap:8px}
+  .ctl span{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .ctl select{font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .tile{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+  .tile .lbl{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .tile .val{font-family:var(--font-mono);font-size:21px;font-weight:600;margin-top:4px}
+  .tile .sub{font-size:10.5px;color:var(--ink-soft);margin-top:2px}
+  .tile .val.warn{color:var(--warn)}
+  .meter-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+  .meter-cell .track{width:64px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .meter-cell .track i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
+  .meter-cell .track i.warn{background:var(--warn)}
+  .meter-cell .t{min-width:50px;text-align:right}
+  .muted{color:var(--ink-soft)}
+  .wrap{white-space:normal}
+  .tag{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.03em;padding:1px 7px;border-radius:99px;border:1px solid var(--line-strong);color:var(--ink-soft);background:var(--surface-2)}
+  .tag.warn{border-color:#E4C68A;color:var(--warn);background:var(--warn-soft)}
+  .grp-row td{background:var(--surface-2);font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);padding:6px 10px}
+  .scroll{max-height:460px;overflow-y:auto}
+  .scroll thead th{position:sticky;top:0;background:var(--surface);z-index:1}
+  .heat{font-family:var(--font-mono);text-align:right}
+  .dev-pos{color:var(--div-pos);font-weight:600}
+  .dev-neg{color:var(--div-neg);font-weight:600}
+  .legend{display:flex;gap:16px;font-size:11px;color:var(--ink-soft);margin:0 0 8px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:14px;height:9px;border-radius:2px;display:inline-block}
+  .stack{display:flex;height:14px;border-radius:0 4px 4px 0;overflow:hidden;gap:2px;background:var(--surface)}
+  .stack i{display:block;height:100%}
+  .stack-row{display:grid;grid-template-columns:140px 1fr 230px;align-items:center;gap:12px;padding:6px 0;font-size:12px}
+  .stack-row + .stack-row{border-top:1px solid var(--line)}
+  .stack-row .figs{text-align:right;font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft)}
+  .stack-row .figs b{color:var(--ink)}
+  .chart svg{display:block;width:100%;height:auto;overflow:visible}
+  .chart .axis{font-family:var(--font-mono);font-size:10px;fill:var(--ink-soft)}
+  .chart .grid{stroke:var(--line);stroke-width:1}
+  .spark{display:inline-block;vertical-align:middle}
+  .tip{position:fixed;pointer-events:none;z-index:99;background:var(--ink);color:var(--paper);font-size:11.5px;padding:6px 9px;border-radius:6px;box-shadow:var(--shadow);max-width:280px;display:none;line-height:1.4}
+  .sec-note{font-size:11px;color:var(--ink-soft);margin:10px 0 0}
+  @media (max-width:980px){ .grid2{grid-template-columns:1fr} .stack-row{grid-template-columns:100px 1fr} .stack-row .figs{grid-column:1/-1;text-align:left} }
+</style>
+</head>
+<body>
+<div class="page-toggle-wrap"><nav class="page-toggle" aria-label="Switch page"><a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="1.5" y="1.5" width="5.5" height="7" rx="1.2"/><rect x="9" y="1.5" width="5.5" height="4" rx="1.2"/><rect x="9" y="7.5" width="5.5" height="7" rx="1.2"/><rect x="1.5" y="10.5" width="5.5" height="4" rx="1.2"/></svg><span class="pg">PAGE 1</span>Full Dashboard</a><a href="report.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z" stroke-linejoin="round"/><path d="M9.5 1.5v3h3"/><path d="M5.5 12.5v-2.5M8 12.5V8M10.5 12.5V9.5" stroke-linecap="round"/></svg><span class="pg">PAGE 2</span>Audit Coverage Report</a><a href="insights.html" aria-current="page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6 14.5 14.5" stroke-linecap="round"/><path d="M4.8 8.2 6.4 6.6 7.6 7.8 9.4 5.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pg">PAGE 3</span>Quality Insights</a></nav></div>
+
+<div class="top">
+  <div class="top-id">
+    <span class="mark">APOLLO 24|7</span>
+    <div class="top-title">
+      <h1>Quality Insights</h1>
+      <p>Where doctors lose marks &middot; coverage gaps &middot; auditor consistency &middot; cancellations &middot; trends</p>
+    </div>
+  </div>
+  <div class="top-meta">
+    <span class="status-chip off" id="statusChip"><span class="dot"></span><span id="statusText">Loading&hellip;</span></span>
+    <span>Data through: <b id="periodLabel">&mdash;</b></span>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <span class="fb-lbl">Range</span>
+  <div class="chip-row" id="chipRow"></div>
+  <div class="filter-dates">
+    <input type="date" id="filterStart"><span>&ndash;</span><input type="date" id="filterEnd">
+  </div>
+  <div class="filter-range" id="filterRangeLabel"></div>
+</div>
+<div class="filter-bar">
+  <span class="fb-lbl">Project Type</span>
+  <div class="chip-row" id="typeChipRow"></div>
+</div>
+
+<!-- ============ A. QUALITY ============ -->
+<p class="section-label"><span class="n">A</span> Quality &mdash; where doctors lose marks</p>
+
+<div class="panel">
+  <div class="panel-head">
+    <div><h2>1 &middot; Parameter-wise scores</h2>
+      <p class="desc">Every checklist question for the chosen project, ranked by how often doctors lose marks on it. "Lost marks" = scored below that question&rsquo;s full points. Max points are read from the checklist itself.</p></div>
+    <label class="ctl"><span>Checklist</span><select id="paramTypeSel"></select></label>
+  </div>
+  <div class="tiles" id="paramTiles"></div>
+  <div class="tbl-wrap scroll">
+    <table><thead><tr><th>Parameter</th><th class="num">Max pts</th><th class="num">Avg score</th><th class="num">Audits losing marks</th><th class="num">Scored 0</th><th>Most misses (doctor)</th></tr></thead>
+    <tbody id="paramBody"></tbody></table>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="panel-head"><div><h2>2 &middot; Zero-score (fatal) audits</h2>
+      <p class="desc">Audits scored 0% &mdash; the dashboard&rsquo;s critical-error outcome. (The checklists&rsquo; own "Fatal Error Flag" column is almost never filled, so the 0% score is used instead.)</p></div></div>
+    <div class="tiles" id="zeroTiles"></div>
+    <div class="tbl-wrap scroll" style="max-height:340px">
+      <table><thead><tr><th>Doctor</th><th>Project</th><th class="num">Zero-score</th><th class="num">Audits</th><th class="num">Last zero</th></tr></thead>
+      <tbody id="zeroBody"></tbody></table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><div><h2>3 &middot; Low-score watchlist</h2>
+      <p class="desc">Doctors averaging under 90% with enough audits to be a pattern, lowest first. Sparkline = weekly average score across the range.</p></div>
+      <label class="ctl"><span>Min audits</span><select id="watchMinSel"><option>5</option><option selected>10</option><option>20</option></select></label></div>
+    <div class="tbl-wrap scroll" style="max-height:420px">
+      <table><thead><tr><th>Doctor</th><th>Network</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">Zero</th><th>Weekly trend</th></tr></thead>
+      <tbody id="watchBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ B. COVERAGE ============ -->
+<p class="section-label"><span class="n">B</span> Coverage &mdash; are we auditing the right cases?</p>
+
+<div class="panel">
+  <div class="panel-head">
+    <div><h2>4 &middot; High-volume doctors with low coverage</h2>
+      <p class="desc">Doctors with the most orders in the range, against how many of their consults were audited (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma). Orders come from the same Orders sheet the Doctor-wise summary uses; it isn&rsquo;t split by project type.</p></div>
+    <label class="ctl"><span>Min orders</span><select id="covMinSel"><option>100</option><option selected>250</option><option>500</option><option>1000</option></select></label>
+  </div>
+  <div class="tiles" id="covTiles"></div>
+  <div class="tbl-wrap scroll">
+    <table><thead><tr><th>Doctor</th><th>Network</th><th class="num">Orders</th><th class="num">Audits</th><th class="num">Audit %</th><th class="num">Avg score</th><th></th></tr></thead>
+    <tbody id="covBody"></tbody></table>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="panel-head"><div><h2>5 &middot; Backlog ageing</h2>
+      <p class="desc">Leads loaded into each audit sheet but not yet audited, by days since the appointment (as of <b id="ageAsOf">&mdash;</b>). Current snapshot &mdash; not tied to the date range. Darker = more leads.</p></div></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Project</th><th class="num">0&ndash;1 d</th><th class="num">2&ndash;3 d</th><th class="num">4&ndash;7 d</th><th class="num">8&ndash;14 d</th><th class="num">15+ d</th><th class="num">Total</th></tr></thead>
+      <tbody id="ageBody"></tbody></table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><div><h2>6 &middot; Turnaround time</h2>
+      <p class="desc">Days from appointment to audit, for audits completed in the range.</p></div>
+      <label class="ctl"><span>Group by</span><select id="tatBySel"><option value="type">Project</option><option value="auditor">Auditor</option></select></label></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th id="tatHead">Project</th><th class="num">Audits</th><th class="num">Avg days</th><th class="num">Median</th><th class="num">&le;1 day</th><th class="num">&gt;7 days</th></tr></thead>
+      <tbody id="tatBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ C. AUDITORS ============ -->
+<p class="section-label"><span class="n">C</span> Auditors &mdash; consistency and effort</p>
+
+<div class="panel">
+  <div class="panel-head"><div><h2>7 &middot; Auditor calibration</h2>
+    <p class="desc">Average score each auditor gives, per project, and how far that is from the project&rsquo;s overall average (<span class="dev-pos">+ above</span> / <span class="dev-neg">&minus; below</span>, in percentage points). Consistently high or low numbers can mean a lenient or strict scorer rather than better or worse doctors. Cells with fewer than 10 audits are greyed.</p></div></div>
+  <div class="tbl-wrap"><table><thead id="calHead"></thead><tbody id="calBody"></tbody></table></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div><h2>8 &middot; Minutes per audit</h2>
+    <p class="desc">Average time per audit (Audit End &minus; Audit Start), by auditor and project, for audits completed in the range. Times over 60 minutes are ignored as entry errors.</p></div></div>
+  <div class="tbl-wrap"><table><thead id="minHead"></thead><tbody id="minBody"></tbody></table></div>
+</div>
+
+<!-- ============ D. OPERATIONS ============ -->
+<p class="section-label"><span class="n">D</span> Operations &mdash; cancellations and consults</p>
+
+<div class="panel">
+  <div class="panel-head"><div><h2>9 &middot; Cancellation review by doctor</h2>
+    <p class="desc">PDS cancellations audited in the range (PDS Cancellation sheet). Sorted by not-genuine cancellations.</p></div></div>
+  <div class="tiles" id="canTiles"></div>
+  <div class="tbl-wrap scroll" style="max-height:420px">
+    <table><thead><tr><th>Doctor</th><th class="num">Audited</th><th class="num">Not genuine</th><th class="num">Genuine %</th><th class="num">Reason not recorded correctly</th><th class="num">Doctor didn&rsquo;t call</th><th class="num">Patient didn&rsquo;t respond</th></tr></thead>
+    <tbody id="canBody"></tbody></table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div><h2>10 &middot; Consult status mix</h2>
+    <p class="desc">Every consult in Extract 1 for the range, split by its Status column.</p></div></div>
+  <div class="legend"><span><i style="background:var(--accent)"></i>Completed</span><span><i style="background:var(--warn)"></i>Cancelled</span><span><i style="background:var(--line-strong)"></i>Pending</span></div>
+  <div id="statusBars"></div>
+  <p class="sec-note" style="margin:16px 0 8px"><b>Doctors with the most cancelled consults</b> (Extract 1, same range, all consult types)</p>
+  <div class="tbl-wrap scroll" style="max-height:360px">
+    <table><thead><tr><th>Doctor</th><th class="num">Consults</th><th class="num">Cancelled</th><th class="num">Cancel rate</th><th class="num">Pending</th></tr></thead>
+    <tbody id="docStatusBody"></tbody></table>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="panel-head"><div><h2>11a &middot; Score by network</h2><p class="desc">By Doctor Type, for audits in the range.</p></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Doctor Type</th><th class="num">Doctors</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">&lt;90%</th><th class="num">Zero</th></tr></thead><tbody id="netBody"></tbody></table></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><div><h2>11b &middot; Score by specialty</h2><p class="desc">Top specialties by audit count, for audits in the range.</p></div></div>
+    <div class="tbl-wrap scroll" style="max-height:360px"><table><thead><tr><th>Specialty</th><th class="num">Doctors</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">&lt;90%</th><th class="num">Zero</th></tr></thead><tbody id="specBody"></tbody></table></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div><h2>12 &middot; Weekly trends</h2>
+    <p class="desc">Week by week (Monday start) inside the range. Light bar = Total Lead (populated for audit), solid bar = Audits Completed. Average score is scored project types only. Hover a bar or point for exact numbers.</p></div></div>
+  <div class="legend"><span><i style="background:var(--accent-soft);border:1px solid var(--accent-soft-line)"></i>Total Lead</span><span><i style="background:var(--accent)"></i>Audits Completed</span><span><i style="background:var(--div-pos);height:2px"></i>Avg audit score</span></div>
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="chart" id="weekVolChart"></div>
+    <div class="chart" id="weekScoreChart"></div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Week</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Coverage</th><th class="num">Avg score</th><th class="num">Zero-score</th></tr></thead><tbody id="weekBody"></tbody></table></div>
+</div>
+
+<footer>
+  <span>Source: the same live Google Sheets the dashboard already reads &mdash; <code>PDS Audit Sheet</code>, <code>Non Pharma Audit Sheet</code>, <code>PDS-Mounjaro</code>, <code>BS WLP Audits</code>, <code>PDS Cancellations</code>, <code>Extract 1</code>, <code>Orders</code>. No new sheets.</span>
+  <span>Snapshot: <b id="asOfLabel">&mdash;</b></span>
+</footer>
+<div class="tip" id="tip"></div>
+
+<script>
+(function(){
+  "use strict";
+  var FILE_AUDIT="1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA", FILE_WLP="15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ",
+      FILE_CANCEL="1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY", CANCEL_GID="909502922",
+      FILE_ORDERS="1XObT_WGM7pUIjVWC_1it6yHtTRSf8m2ARPSp6KCyINg", ORDERS_GID="330090925",
+      FILE_CONSULT="10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg", CONSULT_GID="1752463132";
+  var SCORED = ["PDS","PDS- Mounjaro","Non Pharma","WLP - Non Pharma"];
+  var ALL_TYPES = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
+  var CONSULT_TYPE_MAP = { "PDS":"PDS", "PDS Mounjaro":"PDS- Mounjaro", "Non Pharma":"Non Pharma", "PDS Cancellation":"PDS Cancellation", "GLP":"WLP - Non Pharma" };
+  /* Checklist sheets. PDS/Non Pharma have a 3-row grouped header, so they are read with headers=3,
+     which makes gviz join the group name, the point value and the question text into one label
+     ("Clinical audits 4 Opening Statement …") — that's where the parameter names and max points come from. */
+  var CHECKLISTS = [
+    {type:"PDS", file:FILE_AUDIT, sheet:"PDS Audit Sheet", headers:3},
+    {type:"Non Pharma", file:FILE_AUDIT, sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"PDS- Mounjaro", file:FILE_WLP, sheet:"PDS-Mounjaro", headers:0},
+    {type:"WLP - Non Pharma", file:FILE_WLP, sheet:"BS WLP Audits", headers:0}
+  ];
+
+  /* ---------- helpers ---------- */
+  function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-IN"); }
+  function fmtPct(n,d){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(d===undefined?1:d)+"%"; }
+  function fmtNum(n,d){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(d===undefined?1:d); }
+  function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function canonicalAuditorName(raw){
+    var s = String(raw||"").trim().replace(/\s+/g," ");
+    return s.replace(/^(Dr|Dt)\.?\s+/i, function(m,p1){ return p1.charAt(0).toUpperCase()+p1.slice(1).toLowerCase()+". "; });
+  }
+  function normalizeDoctorKey(raw){ return String(raw||"").trim().toLowerCase().replace(/^dr\.?\s+/,"").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim(); }
+  var MON = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  function pad2(n){ n=parseInt(n,10); return n<10?"0"+n:""+n; }
+  /* Accepts every date shape seen in these sheets: 2026-08-23, 08-24-2026, 8/24/2026, 4-30-2026, 1-Sep-2026 */
+  function parseAnyDate(s){
+    s = String(s||"").trim(); var m;
+    if((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return m[1]+"-"+pad2(m[2])+"-"+pad2(m[3]);
+    if((m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/))){ if(m[3]<"2015"||m[3]>"2099") return null; return m[3]+"-"+pad2(m[1])+"-"+pad2(m[2]); }
+    if((m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/)) && MON[m[2].toLowerCase()]) return m[3]+"-"+pad2(MON[m[2].toLowerCase()])+"-"+pad2(m[1]);
+    return null;
+  }
+  function parseTimeAMPM(s){
+    var m = String(s||"").trim().match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if(!m) return null;
+    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=parseInt(m[3],10), ap=m[4].toUpperCase();
+    if(ap==="AM"){ if(h===12) h=0; } else { if(h!==12) h+=12; }
+    return h*3600+mi*60+se;
+  }
+  function parsePct(s){ var t=String(s||"").trim(); if(!t) return null; var n=parseFloat(t.replace("%","")); return isNaN(n)?null:n/100; }
+  function parseNum(s){ var t=String(s||"").trim(); if(!/^-?\d+(\.\d+)?$/.test(t)) return null; return parseFloat(t); }
+  function addDaysIso(iso,n){ var d=new Date(iso+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+  function daysBetween(a,b){ return Math.round((new Date(b+"T00:00:00Z")-new Date(a+"T00:00:00Z"))/86400000); }
+  function monthStartOf(iso){ return iso.slice(0,8)+"01"; }
+  function weekStart(iso){ var d=new Date(iso+"T00:00:00Z"); var dow=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-dow); return d.toISOString().slice(0,10); }
+  function fmtDateLabel(iso){ if(!iso) return "—"; return new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"}); }
+  function fmtShort(iso){ return new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"2-digit",month:"short",timeZone:"UTC"}); }
+  function isoToday(){ var d=new Date(); return d.getUTCFullYear()+"-"+pad2(d.getUTCMonth()+1)+"-"+pad2(d.getUTCDate()); }
+  function colLetter(idx){ var n=idx+1,s=""; while(n>0){ var r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26);} return s; }
+  function parseCSV(text){
+    var rows=[],row=[],field="",q=false;
+    for(var i=0;i<text.length;i++){ var ch=text[i];
+      if(q){ if(ch==='"'){ if(text[i+1]==='"'){field+='"';i++;} else q=false; } else field+=ch; }
+      else { if(ch==='"') q=true; else if(ch===","){row.push(field);field="";} else if(ch==="\r"){} else if(ch==="\n"){row.push(field);rows.push(row);row=[];field="";} else field+=ch; }
+    }
+    if(field.length||row.length){row.push(field);rows.push(row);}
+    return rows;
+  }
+  function median(a){ if(!a.length) return null; var s=a.slice().sort(function(x,y){return x-y;}); var m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+  function meterCell(pct, d, warn){
+    if(pct===null||pct===undefined||isNaN(pct)) return "—";
+    var w=Math.max(0,Math.min(100,pct));
+    return '<span class="meter-cell"><span class="track"><i'+(warn?' class="warn"':'')+' style="width:'+w.toFixed(2)+'%"></i></span><span class="t">'+fmtPct(pct,d)+'</span></span>';
+  }
+  function scoreCell(v,d){ return (v===null||v===undefined||isNaN(v)) ? "—" : meterCell(v, d===undefined?1:d, v<90); }
+  function tile(lbl,val,sub,warn){ return '<div class="tile"><div class="lbl">'+esc(lbl)+'</div><div class="val tnum'+(warn?' warn':'')+'">'+val+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>'; }
+  function fetchText(url){ return fetch(url+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }); }
+  function gviz(file, base, tq, headers){
+    var url="https://docs.google.com/spreadsheets/d/"+file+"/gviz/tq?tqx=out:csv"+(headers?"&headers="+headers:"")+"&"+base+"&tq="+encodeURIComponent(tq);
+    return fetchText(url).then(parseCSV);
+  }
+  function gvizJson(file, base, tq){
+    var url="https://docs.google.com/spreadsheets/d/"+file+"/gviz/tq?tqx=out:json&"+base+"&tq="+encodeURIComponent(tq);
+    return fetchText(url).then(function(t){ return JSON.parse(t.replace(/^[^\(]*\(/,"").replace(/\);\s*$/,"")); });
+  }
+
+  /* ---------- parameter label cleanup ("Clinical audits 4 Opening Statement…" -> group/points/name) ---------- */
+  function splitParamLabel(raw){
+    var s = String(raw||"").replace(/\r/g,"");
+    var firstLine = s.split("\n")[0], rest = s.split("\n").slice(1).join(" ");
+    var group = null, pts = null, name = firstLine;
+    var g = name.match(/^\s*([A-Za-z][A-Za-z &\/]*?Parameters)\s+(.*)$/i);
+    if(g){ group = g[1].trim(); name = g[2]; }
+    var m = name.replace(/\s+/g," ").trim().match(/^(?:([A-Za-z][A-Za-z &\/]*?)\s)?(\d+)\s+(.+)$/);
+    if(m){ if(m[1]) group = m[1].trim(); pts = parseInt(m[2],10); name = m[3]; }
+    name = name.replace(/\s+/g," ").replace(/\s*\(\s*\d+\s*points?\s*\)\s*/i," ").trim();
+    return {group:group, pts:pts, name:name, full:(name+(rest?" — "+rest.replace(/\s+/g," ").trim():""))};
+  }
+
+  /* ---------- loaders ---------- */
+  function findIdx(hdr, re){ for(var i=0;i<hdr.length;i++){ if(re.test(hdr[i])) return i; } return -1; }
+  function loadChecklist(src){
+    var base = "sheet="+encodeURIComponent(src.sheet);
+    return gviz(src.file, base, "select * limit 1", src.headers).then(function(h){
+      var hdr = (h[0]||[]).map(function(x){ return String(x).trim(); });
+      var ix = {
+        appt: findIdx(hdr,/^date of appointment/i), doc: findIdx(hdr,/^doctor name$/i), dtype: findIdx(hdr,/^doctor type$/i),
+        spec: findIdx(hdr,/^specialty$/i), aud: findIdx(hdr,/^date of audit$/i), auditor: findIdx(hdr,/^auditor name$/i),
+        st: findIdx(hdr,/^audit start time$/i), en: findIdx(hdr,/^audit end time$/i), tot: findIdx(hdr,/^total score$/i), att: findIdx(hdr,/^attained %$/i)
+      };
+      if(ix.aud<0 || ix.auditor<0 || ix.doc<0 || ix.att<0 || ix.en<0 || ix.tot<0) throw new Error("columns not found in "+src.sheet);
+      var params = []; for(var p=ix.en+1; p<ix.tot; p++) params.push(p);
+      var fixed = ["appt","doc","dtype","spec","aud","auditor","st","en","att"];
+      var sel = fixed.map(function(k){ return ix[k]; }).concat(params);
+      var tq = "select "+sel.map(function(i){ return i<0 ? null : colLetter(i); }).filter(Boolean).join(",");
+      var labels = params.map(function(p){ return hdr[p]; });
+      return gviz(src.file, base, tq, src.headers).then(function(rows){
+        var pos = {}; var k=0; fixed.forEach(function(f){ if(ix[f]>=0) pos[f]=k++; else pos[f]=-1; });
+        var pStart = k;
+        var defs = labels.map(splitParamLabel);
+        var curGroup = null;
+        defs.forEach(function(d){ if(d.group) curGroup = d.group; else d.group = curGroup; d.max = d.pts; });
+        if(defs.some(function(d){ return d.group; })) defs.forEach(function(d){ if(!d.group) d.group = "Clinical Parameters"; });
+        var out = [], obsMax = defs.map(function(){ return 0; });
+        for(var i=1;i<rows.length;i++){
+          var r = rows[i]; if(!r || r.length<3) continue;
+          function g(f){ return pos[f]>=0 ? (r[pos[f]]||"").trim() : ""; }
+          var a = parseAnyDate(g("aud")), ap = parseAnyDate(g("appt"));
+          if(!a && !ap) continue;
+          var au = canonicalAuditorName(g("auditor"));
+          var pv = [];
+          for(var j=0;j<defs.length;j++){ var v = parseNum(r[pStart+j]); pv.push(v); if(a && v!==null && v>obsMax[j]) obsMax[j]=v; }
+          var s0 = parseTimeAMPM(g("st")), e0 = parseTimeAMPM(g("en")), mins = null;
+          if(s0!==null && e0!==null){ var dd=e0-s0; if(dd<0) dd+=86400; if(dd>0 && dd<=3600) mins=dd/60; }
+          out.push({t:src.type, a:(a&&au)?a:null, p:ap, d:g("doc"), dt:g("dtype")||"—", sp:g("spec")||"—", au:au, s:(a&&au)?parsePct(g("att")):null, mins:(a&&au)?mins:null, pv:pv});
+        }
+        defs.forEach(function(d,j){ if(!d.max || d.max<obsMax[j]) d.max = obsMax[j] || d.max; });
+        return {rows:out, defs:defs};
+      });
+    });
+  }
+  function loadCancellation(){
+    return gviz(FILE_CANCEL, "gid="+CANCEL_GID, "select *", 0).then(function(rows){
+      var hdr = rows[0].map(function(x){ return String(x).trim(); });
+      function c(re){ return findIdx(hdr,re); }
+      var ix = {appt:c(/^date of appointment/i), doc:c(/^doctor name$/i), dtype:c(/^doctor type$/i), spec:c(/^specialty$/i), aud:c(/^date of audit$/i),
+        auditor:c(/^auditor name$/i), st:c(/^audit start time$/i), en:c(/^audit end time$/i), gen:c(/^genuine cancellation/i), call:c(/^call initiated by doctor/i),
+        reason:c(/^cancellation reason mentioned correctly/i), resp:c(/^customer responded/i)};
+      if(ix.aud<0) throw new Error("cancellation columns not found");
+      var out=[];
+      for(var i=1;i<rows.length;i++){
+        var r=rows[i]; if(!r||r.length<5) continue;
+        function g(f){ return ix[f]>=0 ? (r[ix[f]]||"").trim() : ""; }
+        var a=parseAnyDate(g("aud")), ap=parseAnyDate(g("appt")); if(!a && !ap) continue;
+        var s0=parseTimeAMPM(g("st")), e0=parseTimeAMPM(g("en")), mins=null;
+        if(s0!==null&&e0!==null){ var dd=e0-s0; if(dd<0) dd+=86400; if(dd>0&&dd<=3600) mins=dd/60; }
+        out.push({t:"PDS Cancellation", a:a, p:ap, d:g("doc"), dt:g("dtype")||"—", sp:g("spec")||"—", au:canonicalAuditorName(g("auditor")), mins:a?mins:null,
+          gen:g("gen"), call:g("call"), reason:g("reason"), resp:g("resp")});
+      }
+      return out;
+    });
+  }
+  function loadOrders(){
+    return gviz(FILE_ORDERS, "gid="+ORDERS_GID, "select A,B,C", 0).then(function(rows){
+      var out=[]; for(var i=1;i<rows.length;i++){ var r=rows[i]; if(!r) continue; var iso=parseAnyDate(r[0]); var d=(r[1]||"").trim(); if(!iso||!d) continue; var o=parseFloat((r[2]||"").trim()); out.push({date:iso, doctor:d, orders:isNaN(o)?0:o}); }
+      return out;
+    });
+  }
+  var consultCols = null;
+  function resolveConsultCols(){
+    if(consultCols) return Promise.resolve(consultCols);
+    return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select * limit 1").then(function(j){
+      var cols=j.table.cols.map(function(c,i){ return {L:colLetter(i), l:(c.label||"").trim()}; });
+      function f(re){ for(var i=0;i<cols.length;i++) if(re.test(cols[i].l)) return cols[i].L; return null; }
+      consultCols = {date:f(/^date$/i), type:f(/consult_type/i), status:f(/^status$/i), doctor:f(/doctor_name/i), total:f(/total_consult/i)};
+      if(!consultCols.date||!consultCols.type||!consultCols.status||!consultCols.total) throw new Error("Extract 1 columns not found");
+      return consultCols;
+    });
+  }
+  function loadStatusMix(){
+    var floor = addDaysIso(isoToday(), -400);
+    return resolveConsultCols().then(function(c){
+      return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select "+c.date+","+c.type+","+c.status+",sum("+c.total+") where "+c.date+" >= '"+floor+"' group by "+c.date+","+c.type+","+c.status);
+    }).then(function(j){
+      var out=[]; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var d=x[0]&&x[0].v, t=x[1]&&CONSULT_TYPE_MAP[x[1].v], st=x[2]&&x[2].v, n=x[3]&&typeof x[3].v==="number"?x[3].v:0; if(d&&t&&st) out.push({date:String(d), t:t, st:String(st), n:n}); });
+      return out;
+    });
+  }
+  var docStatusCache = {}, docStatusTimer = null;
+  function loadDoctorStatus(start, end){
+    var key = start+"|"+end;
+    if(docStatusCache[key]) return Promise.resolve(docStatusCache[key]);
+    return resolveConsultCols().then(function(c){
+      if(!c.doctor) throw new Error("no doctor column");
+      return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select "+c.doctor+","+c.status+",sum("+c.total+") where "+c.date+" >= '"+start+"' and "+c.date+" <= '"+end+"' group by "+c.doctor+","+c.status);
+    }).then(function(j){
+      var by={}; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var d=x[0]&&x[0].v, st=x[1]&&x[1].v, n=x[2]&&typeof x[2].v==="number"?x[2].v:0; if(!d||!st) return; if(!by[d]) by[d]={doctor:d,total:0,Cancelled:0,Completed:0,Pending:0}; by[d].total+=n; by[d][st]=(by[d][st]||0)+n; });
+      var list=Object.keys(by).map(function(k){ return by[k]; });
+      docStatusCache[key]=list; return list;
+    });
+  }
+
+  /* ---------- state ---------- */
+  var state = { rows:[], defs:{}, cancel:[], orders:null, status:null, dataMaxDate:addDaysIso(isoToday(),-1), filter:{start:null,end:null}, type:"all", fetchedAt:null };
+  var liveOK = {}, pending = CHECKLISTS.length + 3;
+  var CHIPS=[{key:"yesterday",label:"Yesterday"},{key:"7d",label:"Last 7 Days"},{key:"mtd",label:"MTD"},{key:"30d",label:"Last 30 Days"},{key:"90d",label:"Last 90 Days"},{key:"all",label:"All Time"}];
+  var activeChip="mtd";
+  function chipRange(k){
+    var end=state.dataMaxDate;
+    if(k==="yesterday"){ var y=addDaysIso(end,-1); return {start:y,end:y}; }
+    if(k==="7d") return {start:addDaysIso(end,-6),end:end};
+    if(k==="mtd"){ var e=addDaysIso(end,-1); return {start:monthStartOf(e),end:e}; }
+    if(k==="30d") return {start:addDaysIso(end,-29),end:end};
+    if(k==="90d") return {start:addDaysIso(end,-89),end:end};
+    if(k==="all"){ var mn=state.rows.reduce(function(m,r){ return (r.a && r.a<m)?r.a:m; }, end); return {start:mn,end:end}; }
+    return {start:monthStartOf(end),end:end};
+  }
+  function applyChip(){ if(activeChip){ var r=chipRange(activeChip); state.filter.start=r.start; state.filter.end=r.end; } }
+  function renderChips(){
+    document.getElementById("chipRow").innerHTML = CHIPS.map(function(c){ return '<button type="button" class="chip'+(activeChip===c.key?' active':'')+'" data-chip="'+c.key+'">'+esc(c.label)+'</button>'; }).join("");
+    var types=[{k:"all",l:"All projects"}].concat(ALL_TYPES.map(function(t){ return {k:t,l:t}; }));
+    document.getElementById("typeChipRow").innerHTML = types.map(function(t){ return '<button type="button" class="chip'+(state.type===t.k?' active':'')+'" data-type="'+esc(t.k)+'">'+esc(t.l)+'</button>'; }).join("");
+  }
+  document.getElementById("chipRow").addEventListener("click", function(e){ var b=e.target.closest("[data-chip]"); if(!b) return; activeChip=b.getAttribute("data-chip"); applyChip(); render(); });
+  document.getElementById("typeChipRow").addEventListener("click", function(e){ var b=e.target.closest("[data-type]"); if(!b) return; state.type=b.getAttribute("data-type"); if(SCORED.indexOf(state.type)>-1) document.getElementById("paramTypeSel").value=state.type; render(); });
+  document.getElementById("filterStart").addEventListener("change", function(e){ activeChip=null; if(e.target.value) state.filter.start=e.target.value; render(); });
+  document.getElementById("filterEnd").addEventListener("change", function(e){ activeChip=null; if(e.target.value) state.filter.end=e.target.value; render(); });
+  ["paramTypeSel","watchMinSel","covMinSel","tatBySel"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ render(); }); });
+  document.getElementById("paramTypeSel").innerHTML = SCORED.map(function(t){ return '<option>'+esc(t)+'</option>'; }).join("");
+
+  /* tooltip for any element with data-tip */
+  var tipEl=document.getElementById("tip");
+  document.addEventListener("mousemove", function(e){ var t=e.target.closest && e.target.closest("[data-tip]"); if(!t){ tipEl.style.display="none"; return; } tipEl.innerHTML=t.getAttribute("data-tip"); tipEl.style.display="block"; var x=e.clientX+14, y=e.clientY+14; if(x+290>window.innerWidth) x=e.clientX-290; tipEl.style.left=x+"px"; tipEl.style.top=y+"px"; });
+
+  function inRange(d){ return d && d>=state.filter.start && d<=state.filter.end; }
+  function typeOk(t){ return state.type==="all" || state.type===t; }
+
+  /* ---------- render ---------- */
+  function render(){
+    renderChips();
+    document.getElementById("filterStart").value=state.filter.start; document.getElementById("filterEnd").value=state.filter.end;
+    var nDays=daysBetween(state.filter.start,state.filter.end)+1;
+    document.getElementById("filterRangeLabel").innerHTML=fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' <b>('+nDays+' day'+(nDays===1?"":"s")+')</b>';
+    document.getElementById("periodLabel").textContent=fmtDateLabel(state.dataMaxDate);
+    document.getElementById("asOfLabel").textContent=state.fetchedAt?new Date(state.fetchedAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):"—";
+    var keys=Object.keys(liveOK), ok=keys.filter(function(k){return liveOK[k];}).length, chip=document.getElementById("statusChip"), st=document.getElementById("statusText");
+    if(pending>0){ chip.className="status-chip off"; st.textContent="Loading "+(keys.length)+"/"+(keys.length+pending)+"…"; }
+    else if(ok===keys.length){ chip.className="status-chip"; st.textContent="Live from Google Sheets"; }
+    else if(ok>0){ chip.className="status-chip stale"; st.textContent="Partially live"; } else { chip.className="status-chip off"; st.textContent="Offline"; }
+
+    var audited = state.rows.filter(function(r){ return r.a && inRange(r.a) && typeOk(r.t); });
+    var scored = audited.filter(function(r){ return r.s!==null; });
+    var cancelIn = state.cancel.filter(function(r){ return r.a && inRange(r.a); });
+
+    renderParams(); renderZero(scored); renderWatch(scored); renderCoverage(audited); renderAgeing(); renderTat(audited, cancelIn);
+    renderCalibration(); renderMinutes(audited, cancelIn); renderCancel(cancelIn); renderStatus(); renderSegments(scored); renderWeekly();
+  }
+
+  /* 1 — parameter-wise */
+  function renderParams(){
+    var type=document.getElementById("paramTypeSel").value, defs=state.defs[type];
+    var body=document.getElementById("paramBody"), tiles=document.getElementById("paramTiles");
+    if(!defs){ body.innerHTML='<tr><td colspan="6" class="empty-note">Loading '+esc(type)+' checklist…</td></tr>'; tiles.innerHTML=""; return; }
+    var rows=state.rows.filter(function(r){ return r.t===type && r.a && inRange(r.a) && r.s!==null; });
+    var stats=defs.map(function(d,j){
+      var n=0,sum=0,lost=0,zero=0,byDoc={};
+      rows.forEach(function(r){ var v=r.pv[j]; if(v===null||v===undefined) return; n++; sum+=v; if(v<d.max){ lost++; byDoc[r.d]=(byDoc[r.d]||0)+1; } if(v===0 && d.max>0) zero++; });
+      var top=Object.keys(byDoc).sort(function(a,b){return byDoc[b]-byDoc[a];}).slice(0,2).map(function(k){ return esc(k)+' <span class="muted">('+byDoc[k]+')</span>'; }).join(", ");
+      return {d:d,n:n,avg:(n&&d.max)?sum/(n*d.max)*100:null,lost:lost,lostPct:n?lost/n*100:null,zero:zero,top:top};
+    });
+    var worst=stats.filter(function(s){return s.n;}).slice().sort(function(a,b){return b.lostPct-a.lostPct;});
+    var lostAny=rows.filter(function(r){ return defs.some(function(d,j){ return r.pv[j]!==null && r.pv[j]<d.max; }); }).length;
+    tiles.innerHTML = tile("Audits in range", fmtInt(rows.length), type) +
+      tile("Lost marks somewhere", rows.length?fmtPct(lostAny/rows.length*100,1):"—", fmtInt(lostAny)+" audits") +
+      (worst[0]?tile("Most-missed parameter", fmtPct(worst[0].lostPct,1), worst[0].d.name, true):"") +
+      (worst[1]?tile("Second most-missed", fmtPct(worst[1].lostPct,1), worst[1].d.name):"");
+    if(!rows.length){ body.innerHTML='<tr><td colspan="6" class="empty-note">No '+esc(type)+' audits in this range.</td></tr>'; return; }
+    var html="", lastGroup=null;
+    var ordered = stats.slice().sort(function(a,b){ var ga=a.d.group||"", gb=b.d.group||""; if(ga!==gb) return defs.indexOf(a.d)-defs.indexOf(b.d); return (b.lostPct||0)-(a.lostPct||0); });
+    /* keep checklist groups in checklist order; within a group, worst first */
+    var groups=[]; defs.forEach(function(d){ var g=d.group||"Checklist"; if(groups.indexOf(g)<0) groups.push(g); });
+    groups.forEach(function(g){
+      var inG=stats.filter(function(s){ return (s.d.group||"Checklist")===g; }).sort(function(a,b){ return (b.lostPct||0)-(a.lostPct||0); });
+      if(groups.length>1) html+='<tr class="grp-row"><td colspan="6">'+esc(g)+'</td></tr>';
+      inG.forEach(function(s){
+        html+='<tr><td class="wrap" style="max-width:420px" data-tip="'+esc(s.d.full)+'">'+esc(s.d.name)+'</td><td class="num tnum">'+fmtInt(s.d.max)+'</td><td class="num tnum">'+scoreCell(s.avg,1)+'</td>'+
+          '<td class="num tnum">'+(s.n?meterCell(s.lostPct,1,s.lostPct>=20)+' <span class="muted">'+fmtInt(s.lost)+'</span>':"—")+'</td><td class="num tnum">'+fmtInt(s.zero)+'</td><td class="wrap muted" style="font-size:11.5px">'+(s.top||"—")+'</td></tr>';
+      });
+    });
+    body.innerHTML=html;
+  }
+
+  /* 2 — zero-score */
+  function renderZero(scored){
+    var zero=scored.filter(function(r){ return r.s===0; });
+    var byType={}; SCORED.forEach(function(t){ byType[t]={n:0,z:0}; });
+    scored.forEach(function(r){ byType[r.t].n++; if(r.s===0) byType[r.t].z++; });
+    document.getElementById("zeroTiles").innerHTML = tile("Zero-score audits", fmtInt(zero.length), scored.length?fmtPct(zero.length/scored.length*100,2)+" of scored audits":"", zero.length>0) +
+      SCORED.filter(typeOk).map(function(t){ var b=byType[t]; return tile(t, fmtInt(b.z), b.n?fmtPct(b.z/b.n*100,2)+" of "+fmtInt(b.n):"no audits"); }).join("");
+    var by={};
+    scored.forEach(function(r){ var k=r.d+"||"+r.t; if(!by[k]) by[k]={d:r.d,t:r.t,z:0,n:0,last:null}; by[k].n++; if(r.s===0){ by[k].z++; if(!by[k].last||r.a>by[k].last) by[k].last=r.a; } });
+    var list=Object.keys(by).map(function(k){return by[k];}).filter(function(x){return x.z>0;}).sort(function(a,b){ return b.z-a.z || (b.last>a.last?1:-1); });
+    document.getElementById("zeroBody").innerHTML = list.length ? list.map(function(x){
+      return '<tr><td>'+esc(x.d)+'</td><td class="muted">'+esc(x.t)+'</td><td class="num tnum">'+(x.z>1?'<span class="tag warn">'+x.z+'</span>':x.z)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+fmtShort(x.last)+'</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="empty-note">No zero-score audits in this range.</td></tr>';
+  }
+
+  /* 3 — watchlist */
+  function sparkline(points){
+    var vals=points.map(function(p){return p.v;}).filter(function(v){return v!==null;});
+    if(vals.length<2) return '<span class="muted" style="font-size:11px">—</span>';
+    var w=90,h=24,lo=Math.min.apply(null,vals.concat([80])),hi=Math.max.apply(null,vals.concat([100]));
+    var step=w/(points.length-1), path="", dots="";
+    points.forEach(function(p,i){ if(p.v===null) return; var x=(i*step).toFixed(1), y=(h-2-(p.v-lo)/(hi-lo||1)*(h-4)).toFixed(1); path+=(path?"L":"M")+x+" "+y; dots+='<circle cx="'+x+'" cy="'+y+'" r="2" fill="var(--div-pos)" data-tip="Week of '+fmtShort(p.w)+': '+fmtPct(p.v,1)+' ('+p.n+' audits)"></circle>'; });
+    var y90=(h-2-(90-lo)/(hi-lo||1)*(h-4)).toFixed(1);
+    return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="-3 0 '+(w+6)+' '+h+'"><line x1="0" x2="'+w+'" y1="'+y90+'" y2="'+y90+'" stroke="var(--line-strong)" stroke-dasharray="2 2"></line><path d="'+path+'" fill="none" stroke="var(--div-pos)" stroke-width="1.6"></path>'+dots+'</svg>';
+  }
+  function weeksInRange(){ var out=[], w=weekStart(state.filter.start); while(w<=state.filter.end){ out.push(w); w=addDaysIso(w,7); } return out; }
+  function renderWatch(scored){
+    var min=parseInt(document.getElementById("watchMinSel").value,10), weeks=weeksInRange(), by={};
+    scored.forEach(function(r){ if(!by[r.d]) by[r.d]={d:r.d,net:{},n:0,sum:0,z:0,wk:{}}; var b=by[r.d]; b.n++; b.sum+=r.s*100; if(r.s===0) b.z++; b.net[r.dt]=1; var w=weekStart(r.a); if(!b.wk[w]) b.wk[w]={n:0,sum:0}; b.wk[w].n++; b.wk[w].sum+=r.s*100; });
+    var list=Object.keys(by).map(function(k){ var b=by[k]; b.avg=b.sum/b.n; return b; }).filter(function(b){ return b.n>=min && b.avg<90; }).sort(function(a,b){ return a.avg-b.avg; });
+    document.getElementById("watchBody").innerHTML = list.length ? list.map(function(b){
+      var pts=weeks.map(function(w){ var x=b.wk[w]; return {w:w, v:x?x.sum/x.n:null, n:x?x.n:0}; });
+      return '<tr><td>'+esc(b.d)+'</td><td class="muted" style="font-size:11.5px">'+esc(Object.keys(b.net).join(", "))+'</td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(b.avg,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td><td>'+sparkline(pts)+'</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-note">No doctor with '+min+'+ audits averages under 90% in this range.</td></tr>';
+  }
+
+  /* 4 — coverage */
+  function renderCoverage(audited){
+    var body=document.getElementById("covBody"), tiles=document.getElementById("covTiles");
+    if(!state.orders){ body.innerHTML='<tr><td colspan="7" class="empty-note">Loading Orders sheet…</td></tr>'; tiles.innerHTML=""; return; }
+    var min=parseInt(document.getElementById("covMinSel").value,10), ord={}, names={};
+    state.orders.forEach(function(o){ if(!inRange(o.date)) return; var k=normalizeDoctorKey(o.doctor); if(!k) return; ord[k]=(ord[k]||0)+o.orders; if(!names[k]) names[k]=o.doctor; });
+    var au={};
+    audited.forEach(function(r){ if(SCORED.indexOf(r.t)<0) return; var k=normalizeDoctorKey(r.d); if(!au[k]) au[k]={n:0,sum:0,sn:0,net:{}}; au[k].n++; if(r.s!==null){ au[k].sum+=r.s*100; au[k].sn++; } au[k].net[r.dt]=1; });
+    var list=Object.keys(ord).filter(function(k){ return ord[k]>=min; }).map(function(k){ var a=au[k]||{n:0,sum:0,sn:0,net:{}}; return {d:names[k], o:ord[k], n:a.n, pct:a.n/ord[k]*100, avg:a.sn?a.sum/a.sn:null, net:Object.keys(a.net).join(", ")}; }).sort(function(a,b){ return b.o-a.o; });
+    var none=list.filter(function(x){return x.n===0;}).length, under1=list.filter(function(x){return x.pct<1;}).length;
+    var totO=list.reduce(function(s,x){return s+x.o;},0), totA=list.reduce(function(s,x){return s+x.n;},0);
+    tiles.innerHTML = tile("Doctors with "+min+"+ orders", fmtInt(list.length), fmtInt(totO)+" orders") + tile("Audit % (these doctors)", totO?fmtPct(totA/totO*100,2):"—", fmtInt(totA)+" audits") +
+      tile("Under 1% audited", fmtInt(under1), list.length?fmtPct(under1/list.length*100,0)+" of them":"", under1>0) + tile("Not audited at all", fmtInt(none), "in this range", none>0);
+    body.innerHTML = list.length ? list.slice(0,60).map(function(x){
+      return '<tr><td>'+esc(x.d)+'</td><td class="muted" style="font-size:11.5px">'+esc(x.net||"—")+'</td><td class="num tnum">'+fmtInt(x.o)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+meterCell(Math.min(x.pct,100),2,x.pct<1)+'</td><td class="num tnum">'+scoreCell(x.avg,0)+'</td><td>'+(x.n===0?'<span class="tag warn">Not audited</span>':(x.pct<1?'<span class="tag warn">&lt;1%</span>':''))+'</td></tr>';
+    }).join("") : '<tr><td colspan="7" class="empty-note">No doctor has '+min+'+ orders in this range.</td></tr>';
+  }
+
+  /* 5 — backlog ageing (snapshot) */
+  function renderAgeing(){
+    var asOf=state.dataMaxDate; document.getElementById("ageAsOf").textContent=fmtDateLabel(asOf);
+    var B=[[0,1],[2,3],[4,7],[8,14],[15,99999]], by={}, max=0;
+    ALL_TYPES.forEach(function(t){ by[t]=[0,0,0,0,0]; });
+    state.rows.concat(state.cancel).forEach(function(r){ if(r.a || !r.p || r.p>asOf) return; var age=daysBetween(r.p,asOf); for(var i=0;i<B.length;i++){ if(age>=B[i][0] && age<=B[i][1]){ by[r.t][i]++; break; } } });
+    ALL_TYPES.forEach(function(t){ by[t].forEach(function(v){ if(v>max) max=v; }); });
+    function cell(v,t,i){ var a=max?v/max:0; var bg=v?'background:color-mix(in srgb, var(--accent) '+Math.round(8+a*62)+'%, transparent);'+(a>0.55?'color:#fff;':''):''; return '<td class="heat tnum" style="'+bg+'" data-tip="'+esc(t)+': '+fmtInt(v)+' leads waiting '+(i===4?'15+':B[i][0]+'–'+B[i][1])+' days">'+(v?fmtInt(v):'<span class="muted">0</span>')+'</td>'; }
+    var tot=[0,0,0,0,0], html="";
+    ALL_TYPES.filter(typeOk).forEach(function(t){ var s=by[t].reduce(function(a,b){return a+b;},0); by[t].forEach(function(v,i){ tot[i]+=v; }); html+='<tr><td>'+esc(t)+'</td>'+by[t].map(function(v,i){ return cell(v,t,i); }).join("")+'<td class="num tnum"><b>'+fmtInt(s)+'</b></td></tr>'; });
+    html+='<tr style="font-weight:600"><td>Total</td>'+tot.map(function(v){ return '<td class="num tnum">'+fmtInt(v)+'</td>'; }).join("")+'<td class="num tnum">'+fmtInt(tot.reduce(function(a,b){return a+b;},0))+'</td></tr>';
+    document.getElementById("ageBody").innerHTML = state.rows.length ? html : '<tr><td colspan="7" class="empty-note">Loading audit sheets…</td></tr>';
+  }
+
+  /* 6 — turnaround */
+  function renderTat(audited, cancelIn){
+    var by=document.getElementById("tatBySel").value; document.getElementById("tatHead").textContent = by==="type"?"Project":"Auditor";
+    var rows=audited.concat(state.type==="all"||state.type==="PDS Cancellation"?cancelIn:[]).filter(function(r){ return r.p && r.a && r.a>=r.p; });
+    var g={}; rows.forEach(function(r){ var k=by==="type"?r.t:(r.au||"—"); if(!g[k]) g[k]=[]; g[k].push(daysBetween(r.p,r.a)); });
+    var keys=by==="type"?ALL_TYPES.filter(function(t){return g[t];}):Object.keys(g).sort(function(a,b){ return g[b].length-g[a].length; });
+    function line(k,arr,bold){ var avg=arr.reduce(function(a,b){return a+b;},0)/arr.length, le1=arr.filter(function(x){return x<=1;}).length, gt7=arr.filter(function(x){return x>7;}).length;
+      return '<tr'+(bold?' style="font-weight:600"':'')+'><td>'+esc(k)+'</td><td class="num tnum">'+fmtInt(arr.length)+'</td><td class="num tnum">'+fmtNum(avg,1)+'</td><td class="num tnum">'+fmtNum(median(arr),0)+'</td><td class="num tnum">'+meterCell(le1/arr.length*100,0)+'</td><td class="num tnum">'+(gt7?'<span class="tag warn">'+fmtPct(gt7/arr.length*100,1)+'</span>':'0%')+'</td></tr>'; }
+    var all=[]; keys.forEach(function(k){ all=all.concat(g[k]); });
+    document.getElementById("tatBody").innerHTML = keys.length ? keys.map(function(k){ return line(k,g[k]); }).join("")+line("All",all,true) : '<tr><td colspan="6" class="empty-note">No audits with both dates in this range.</td></tr>';
+  }
+
+  /* 7 — calibration */
+  function renderCalibration(){
+    var types=SCORED.filter(typeOk), rows=state.rows.filter(function(r){ return r.a && inRange(r.a) && r.s!==null && types.indexOf(r.t)>-1; });
+    var projAvg={}, cell={}, auds={};
+    rows.forEach(function(r){ if(!projAvg[r.t]) projAvg[r.t]={n:0,sum:0}; projAvg[r.t].n++; projAvg[r.t].sum+=r.s*100; var k=r.au+"||"+r.t; if(!cell[k]) cell[k]={n:0,sum:0}; cell[k].n++; cell[k].sum+=r.s*100; auds[r.au]=(auds[r.au]||0)+1; });
+    types=types.filter(function(t){ return projAvg[t]; });
+    document.getElementById("calHead").innerHTML='<tr><th>Auditor</th>'+types.map(function(t){ return '<th class="num">'+esc(t)+'<br><span style="text-transform:none;letter-spacing:0;font-weight:500">avg '+fmtPct(projAvg[t].sum/projAvg[t].n,1)+'</span></th>'; }).join("")+'</tr>';
+    var names=Object.keys(auds).sort(function(a,b){ return auds[b]-auds[a]; });
+    document.getElementById("calBody").innerHTML = names.length ? names.map(function(a){
+      return '<tr><td>'+esc(a)+'</td>'+types.map(function(t){ var c=cell[a+"||"+t]; if(!c) return '<td class="num muted">—</td>'; var avg=c.sum/c.n, dev=avg-projAvg[t].sum/projAvg[t].n, small=c.n<10;
+        var devTxt=(dev>=0?"+":"−")+Math.abs(dev).toFixed(1); var cls=small?"muted":(dev>=1.5?"dev-pos":(dev<=-1.5?"dev-neg":"muted"));
+        return '<td class="num tnum'+(small?' muted':'')+'" data-tip="'+esc(a)+' on '+esc(t)+': '+fmtPct(avg,1)+' over '+c.n+' audits ('+devTxt+' pts vs project avg)">'+fmtPct(avg,1)+' <span class="'+cls+'" style="font-size:11px">'+devTxt+'</span><br><span class="muted" style="font-size:10.5px">'+fmtInt(c.n)+' audits</span></td>'; }).join("")+'</tr>';
+    }).join("") : '<tr><td class="empty-note">No scored audits in this range.</td></tr>';
+  }
+
+  /* 8 — minutes per audit */
+  function renderMinutes(audited, cancelIn){
+    var rows=audited.concat(state.type==="all"||state.type==="PDS Cancellation"?cancelIn:[]).filter(function(r){ return r.mins!==null && r.au; });
+    var types=ALL_TYPES.filter(function(t){ return rows.some(function(r){return r.t===t;}); }), cell={}, auds={}, tt={};
+    rows.forEach(function(r){ var k=r.au+"||"+r.t; if(!cell[k]) cell[k]=[]; cell[k].push(r.mins); if(!auds[r.au]) auds[r.au]=[]; auds[r.au].push(r.mins); if(!tt[r.t]) tt[r.t]=[]; tt[r.t].push(r.mins); });
+    function avg(a){ return a.reduce(function(x,y){return x+y;},0)/a.length; }
+    function c(a){ if(!a||!a.length) return '<td class="num muted">—</td>'; var m=avg(a); return '<td class="num tnum" data-tip="Avg '+m.toFixed(1)+' min · median '+median(a).toFixed(1)+' min · '+a.length+' audits · ≈'+(60/m).toFixed(1)+' audits/hour">'+m.toFixed(1)+'<span class="muted" style="font-size:10.5px"> min</span></td>'; }
+    document.getElementById("minHead").innerHTML='<tr><th>Auditor</th>'+types.map(function(t){ return '<th class="num">'+esc(t)+'</th>'; }).join("")+'<th class="num">All</th><th class="num">Audits timed</th></tr>';
+    var names=Object.keys(auds).sort(function(a,b){ return auds[b].length-auds[a].length; });
+    var html=names.map(function(a){ return '<tr><td>'+esc(a)+'</td>'+types.map(function(t){ return c(cell[a+"||"+t]); }).join("")+c(auds[a])+'<td class="num tnum muted">'+fmtInt(auds[a].length)+'</td></tr>'; }).join("");
+    if(names.length) html+='<tr style="font-weight:600"><td>All auditors</td>'+types.map(function(t){ return c(tt[t]); }).join("")+c(rows.map(function(r){return r.mins;}))+'<td class="num tnum">'+fmtInt(rows.length)+'</td></tr>';
+    document.getElementById("minBody").innerHTML = html || '<tr><td class="empty-note">No timed audits in this range.</td></tr>';
+  }
+
+  /* 9 — cancellation review */
+  function renderCancel(cancelIn){
+    var tiles=document.getElementById("canTiles"), body=document.getElementById("canBody");
+    if(!(state.type==="all"||state.type==="PDS Cancellation")){ tiles.innerHTML=""; body.innerHTML='<tr><td colspan="7" class="empty-note">Choose "All projects" or "PDS Cancellation" to see this view.</td></tr>'; return; }
+    var n=cancelIn.length; function cnt(f,v){ return cancelIn.filter(function(r){ return r[f]===v; }).length; }
+    var gen=cnt("gen","Yes"), call=cnt("call","Yes"), reason=cnt("reason","Yes"), resp=cnt("resp","Yes");
+    tiles.innerHTML = tile("Cancellations audited", fmtInt(n), "") + tile("Genuine", n?fmtPct(gen/n*100,1):"—", fmtInt(n-gen)+" not genuine", n && (n-gen)/n>0.1) +
+      tile("Doctor called patient", n?fmtPct(call/n*100,1):"—", fmtInt(cnt("call","No"))+" didn't") + tile("Reason recorded correctly", n?fmtPct(reason/n*100,1):"—", fmtInt(cnt("reason","No"))+" incorrect", n && cnt("reason","No")/n>0.15) +
+      tile("Patient responded", n?fmtPct(resp/n*100,1):"—", fmtInt(cnt("resp","No"))+" didn't");
+    var by={}; cancelIn.forEach(function(r){ var k=r.d||"—"; if(!by[k]) by[k]={d:k,n:0,ng:0,rs:0,nc:0,nr:0}; var b=by[k]; b.n++; if(r.gen==="No") b.ng++; if(r.reason==="No") b.rs++; if(r.call==="No") b.nc++; if(r.resp==="No") b.nr++; });
+    var list=Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){ return b.ng-a.ng || b.rs-a.rs || b.n-a.n; });
+    body.innerHTML = list.length ? list.slice(0,60).map(function(b){
+      return '<tr><td>'+esc(b.d)+'</td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+(b.ng?'<span class="tag warn">'+b.ng+'</span>':'0')+'</td><td class="num tnum">'+meterCell((b.n-b.ng)/b.n*100,0,(b.n-b.ng)/b.n<0.8)+'</td><td class="num tnum">'+fmtInt(b.rs)+'</td><td class="num tnum">'+fmtInt(b.nc)+'</td><td class="num tnum">'+fmtInt(b.nr)+'</td></tr>';
+    }).join("") : '<tr><td colspan="7" class="empty-note">No cancellations audited in this range.</td></tr>';
+  }
+
+  /* 10 — status mix */
+  function renderStatus(){
+    var box=document.getElementById("statusBars");
+    if(!state.status){ box.innerHTML='<p class="empty-note">Loading Extract 1…</p>'; }
+    else {
+      var by={}; ALL_TYPES.forEach(function(t){ by[t]={Completed:0,Cancelled:0,Pending:0}; });
+      state.status.forEach(function(r){ if(!inRange(r.date)) return; if(!by[r.t]) return; by[r.t][r.st]=(by[r.t][r.st]||0)+r.n; });
+      box.innerHTML = ALL_TYPES.filter(typeOk).map(function(t){ var b=by[t], tot=b.Completed+b.Cancelled+b.Pending; if(!tot) return '<div class="stack-row"><div>'+esc(t)+'</div><div class="muted">No consults in range</div><div></div></div>';
+        function seg(k,col){ var v=b[k]; if(!v) return ""; return '<i style="width:'+(v/tot*100).toFixed(2)+'%;background:'+col+'" data-tip="'+esc(t)+' — '+k+': '+fmtInt(v)+' ('+fmtPct(v/tot*100,1)+')"></i>'; }
+        return '<div class="stack-row"><div style="font-weight:500">'+esc(t)+'</div><div class="stack">'+seg("Completed","var(--accent)")+seg("Cancelled","var(--warn)")+seg("Pending","var(--line-strong)")+'</div><div class="figs"><b>'+fmtInt(tot)+'</b> · cancelled '+fmtPct(b.Cancelled/tot*100,1)+' · pending '+fmtPct(b.Pending/tot*100,1)+'</div></div>'; }).join("");
+    }
+    var body=document.getElementById("docStatusBody"), s=state.filter.start, e=state.filter.end;
+    body.innerHTML='<tr><td colspan="5" class="empty-note">Loading doctor-level status from Extract 1…</td></tr>';
+    clearTimeout(docStatusTimer);
+    docStatusTimer=setTimeout(function(){
+      loadDoctorStatus(s,e).then(function(list){
+        if(s!==state.filter.start||e!==state.filter.end) return;
+        var top=list.filter(function(x){return x.Cancelled>0;}).sort(function(a,b){ return b.Cancelled-a.Cancelled; }).slice(0,40);
+        body.innerHTML = top.length ? top.map(function(x){ var rate=x.total?x.Cancelled/x.total*100:0; return '<tr><td>'+esc(x.doctor)+'</td><td class="num tnum">'+fmtInt(x.total)+'</td><td class="num tnum">'+fmtInt(x.Cancelled)+'</td><td class="num tnum">'+meterCell(rate,1,rate>=10)+'</td><td class="num tnum">'+fmtInt(x.Pending)+'</td></tr>'; }).join("") : '<tr><td colspan="5" class="empty-note">No cancelled consults in this range.</td></tr>';
+      }).catch(function(){ body.innerHTML='<tr><td colspan="5" class="empty-note">Couldn’t reach Extract 1 for doctor-level status.</td></tr>'; });
+    }, 350);
+  }
+
+  /* 11 — network & specialty */
+  function segTable(scored, field, id, limit){
+    var by={}; scored.forEach(function(r){ var k=r[field]||"—"; if(!by[k]) by[k]={k:k,n:0,sum:0,lo:0,z:0,docs:{}}; var b=by[k]; b.n++; b.sum+=r.s*100; if(r.s<0.9) b.lo++; if(r.s===0) b.z++; b.docs[r.d]=1; });
+    var list=Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){ return b.n-a.n; }).slice(0,limit||999);
+    document.getElementById(id).innerHTML = list.length ? list.map(function(b){ var avg=b.sum/b.n;
+      return '<tr><td class="wrap">'+esc(b.k)+'</td><td class="num tnum">'+fmtInt(Object.keys(b.docs).length)+'</td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(avg,1)+'</td><td class="num tnum">'+fmtPct(b.lo/b.n*100,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td></tr>'; }).join("") : '<tr><td colspan="6" class="empty-note">No scored audits in this range.</td></tr>';
+  }
+  function renderSegments(scored){ segTable(scored,"dt","netBody"); segTable(scored,"sp","specBody",20); }
+
+  /* bar anchored to the baseline with 4px rounded data end (radius clamps for short bars) */
+  function barPath(x, w, h, base, attrs){
+    if(!(h>0)) return "";
+    var r=Math.min(4, h, w/2), top=base-h;
+    return '<path d="M'+x.toFixed(1)+' '+base+'V'+(top+r).toFixed(1)+'Q'+x.toFixed(1)+' '+top.toFixed(1)+' '+(x+r).toFixed(1)+' '+top.toFixed(1)+'H'+(x+w-r).toFixed(1)+'Q'+(x+w).toFixed(1)+' '+top.toFixed(1)+' '+(x+w).toFixed(1)+' '+(top+r).toFixed(1)+'V'+base+'Z" '+attrs+'></path>';
+  }
+  /* 12 — weekly trends */
+  function renderWeekly(){
+    var weeks=weeksInRange(), W={};
+    weeks.forEach(function(w){ W[w]={lead:0,done:0,sn:0,sum:0,z:0}; });
+    state.rows.concat(state.cancel).forEach(function(r){
+      if(!typeOk(r.t)) return;
+      var eff=r.a||r.p; if(inRange(eff)){ var w=weekStart(eff); if(W[w]) W[w].lead++; }
+      if(r.a && inRange(r.a)){ var w2=weekStart(r.a); if(!W[w2]) return; W[w2].done++; if(r.s!==null && r.s!==undefined){ W[w2].sn++; W[w2].sum+=r.s*100; if(r.s===0) W[w2].z++; } }
+    });
+    var data=weeks.map(function(w){ var x=W[w]; var ws=w<state.filter.start?state.filter.start:w, we=addDaysIso(w,6)>state.filter.end?state.filter.end:addDaysIso(w,6); return {w:w,ws:ws,we:we,lead:x.lead,done:x.done,avg:x.sn?x.sum/x.sn:null,z:x.z,partial:(ws!==w||we!==addDaysIso(w,6))}; });
+    // volume chart
+    var Wd=520,H=190,pl=46,pr=8,pt=10,pb=26, iw=Wd-pl-pr, ih=H-pt-pb, max=Math.max.apply(null,data.map(function(d){return Math.max(d.lead,d.done);}).concat([1]));
+    var nice=Math.pow(10,Math.floor(Math.log10(max))); max=Math.ceil(max/nice)*nice;
+    var bw=Math.min(46, iw/data.length*0.62), svg='<svg viewBox="0 0 '+Wd+' '+H+'" role="img" aria-label="Weekly Total Lead and Audits Completed">';
+    for(var g=0;g<=4;g++){ var y=pt+ih-ih*g/4; svg+='<line class="grid" x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+y+'" y2="'+y+'"></line><text class="axis" x="'+(pl-6)+'" y="'+(y+3)+'" text-anchor="end">'+fmtInt(max*g/4)+'</text>'; }
+    data.forEach(function(d,i){ var cx=pl+iw*(i+0.5)/data.length, x=cx-bw/2, hl=ih*d.lead/max, hd=ih*d.done/max;
+      var tip=esc('Week '+fmtShort(d.ws)+'–'+fmtShort(d.we)+(d.partial?' (partial)':'')+'<br>Total Lead '+fmtInt(d.lead)+' · Completed '+fmtInt(d.done)+(d.lead?' · '+fmtPct(Math.min(100,d.done/d.lead*100),1)+' covered':''));
+      svg+='<g data-tip="'+tip+'"><rect x="'+(x-4)+'" y="'+pt+'" width="'+(bw+8)+'" height="'+ih+'" fill="transparent"></rect>'+
+        barPath(x, bw, hl, pt+ih, 'fill="var(--accent-soft)" stroke="var(--accent-soft-line)"')+barPath(x+bw*0.2, bw*0.6, hd, pt+ih, 'fill="var(--accent)"')+'</g>'+
+        '<text class="axis" x="'+cx+'" y="'+(H-8)+'" text-anchor="middle">'+fmtShort(d.w)+'</text>'; });
+    document.getElementById("weekVolChart").innerHTML=svg+'</svg>';
+    // score chart
+    var vals=data.map(function(d){return d.avg;}).filter(function(v){return v!==null;});
+    var lo=vals.length?Math.floor(Math.min.apply(null,vals.concat([90]))/2)*2-2:80, hi=100, s2='<svg viewBox="0 0 '+Wd+' '+H+'" role="img" aria-label="Weekly average audit score">';
+    for(var g2=0;g2<=4;g2++){ var v=lo+(hi-lo)*g2/4, y2=pt+ih-ih*g2/4; s2+='<line class="grid" x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+y2+'" y2="'+y2+'"></line><text class="axis" x="'+(pl-6)+'" y="'+(y2+3)+'" text-anchor="end">'+v.toFixed(0)+'%</text>'; }
+    var y90=pt+ih-ih*(90-lo)/(hi-lo); s2+='<line x1="'+pl+'" x2="'+(Wd-pr)+'" y1="'+y90+'" y2="'+y90+'" stroke="var(--warn)" stroke-dasharray="4 3" stroke-width="1"></line><text class="axis" x="'+(Wd-pr)+'" y="'+(y90-4)+'" text-anchor="end" style="fill:var(--warn)">90% bar</text>';
+    var path="", pts="";
+    data.forEach(function(d,i){ var cx=pl+iw*(i+0.5)/data.length; s2+='<text class="axis" x="'+cx+'" y="'+(H-8)+'" text-anchor="middle">'+fmtShort(d.w)+'</text>'; if(d.avg===null) return; var y=pt+ih-ih*(d.avg-lo)/(hi-lo); path+=(path?"L":"M")+cx.toFixed(1)+" "+y.toFixed(1);
+      pts+='<g data-tip="'+esc('Week '+fmtShort(d.ws)+'–'+fmtShort(d.we)+'<br>Avg score '+fmtPct(d.avg,1)+' · zero-score '+d.z)+'"><circle cx="'+cx+'" cy="'+y+'" r="12" fill="transparent"></circle><circle cx="'+cx+'" cy="'+y+'" r="4.5" fill="var(--div-pos)" stroke="var(--surface)" stroke-width="2"></circle></g>'; });
+    document.getElementById("weekScoreChart").innerHTML=s2+'<path d="'+path+'" fill="none" stroke="var(--div-pos)" stroke-width="2"></path>'+pts+'</svg>';
+    document.getElementById("weekBody").innerHTML = data.map(function(d){ return '<tr><td>'+fmtShort(d.ws)+' – '+fmtShort(d.we)+(d.partial?' <span class="muted" style="font-size:11px">(partial)</span>':'')+'</td><td class="num tnum">'+fmtInt(d.lead)+'</td><td class="num tnum">'+fmtInt(d.done)+'</td><td class="num tnum">'+(d.lead?meterCell(Math.min(100,d.done/d.lead*100),1):"—")+'</td><td class="num tnum">'+scoreCell(d.avg,1)+'</td><td class="num tnum">'+(d.z?'<span class="tag warn">'+d.z+'</span>':'0')+'</td></tr>'; }).join("");
+  }
+
+  /* ---------- boot ---------- */
+  function done(key, ok){ liveOK[key]=ok; pending--; state.fetchedAt=Date.now(); render(); }
+  function updateMaxDate(){
+    var today=isoToday(), m=state.rows.reduce(function(m,r){ return (r.a && r.a<=today && r.a>m)?r.a:m; }, "");
+    if(m){ state.dataMaxDate=m; applyChip(); }
+  }
+  applyChip(); render();
+  CHECKLISTS.forEach(function(src){
+    loadChecklist(src).then(function(res){ state.rows=state.rows.concat(res.rows); state.defs[src.type]=res.defs; updateMaxDate(); done(src.type,true); })
+      .catch(function(){ done(src.type,false); });
+  });
+  loadCancellation().then(function(rows){ state.cancel=rows; done("cancel",true); }).catch(function(){ done("cancel",false); });
+  loadOrders().then(function(rows){ state.orders=rows; done("orders",true); }).catch(function(){ state.orders=[]; done("orders",false); });
+  loadStatusMix().then(function(rows){ state.status=rows; done("status",true); }).catch(function(){ state.status=[]; done("status",false); });
+})();
+</script>
+</body>
+</html>
