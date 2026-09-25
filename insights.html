@@ -165,9 +165,10 @@
   .page-toggle a[aria-current="page"]{background:var(--accent);color:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.18)}
   .page-toggle svg{width:15px;height:15px;flex:none}
   .page-toggle .pg{font-family:var(--font-mono);font-size:10px;opacity:.75;letter-spacing:.06em}
-  @media (max-width:560px){ .page-toggle a{padding:8px 12px;font-size:11.5px} .page-toggle .pg{display:none} }
+  @media (max-width:560px){ .page-toggle a{padding:8px 12px;font-size:11.5px} .page-toggle .pg{display:none} .page-toggle{flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 32px);border-radius:18px} }
 
   /* ===== Page 3 — Quality Insights ===== */
+  :root{color-scheme:light dark} :root[data-theme="light"]{color-scheme:light} :root[data-theme="dark"]{color-scheme:dark}
   :root{ --div-pos:#2F6DB0; --div-neg:#C0612B; }
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --div-pos:#6FA8E6; --div-neg:#E58A57; } }
   :root[data-theme="dark"]{ --div-pos:#6FA8E6; --div-neg:#E58A57; }
@@ -279,7 +280,7 @@
       <p class="desc">Doctors averaging under 90% with enough audits to be a pattern, lowest first. Sparkline = weekly average score across the range.</p></div>
       <label class="ctl"><span>Min audits</span><select id="watchMinSel"><option>5</option><option selected>10</option><option>20</option></select></label></div>
     <div class="tbl-wrap scroll" style="max-height:420px">
-      <table><thead><tr><th>Doctor</th><th>Network</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">Zero</th><th>Weekly trend</th></tr></thead>
+      <table><thead><tr><th>Doctor</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">Zero</th><th>Weekly trend</th></tr></thead>
       <tbody id="watchBody"></tbody></table>
     </div>
   </div>
@@ -711,8 +712,8 @@
     var list=Object.keys(by).map(function(k){ var b=by[k]; b.avg=b.sum/b.n; return b; }).filter(function(b){ return b.n>=min && b.avg<90; }).sort(function(a,b){ return a.avg-b.avg; });
     document.getElementById("watchBody").innerHTML = list.length ? list.map(function(b){
       var pts=weeks.map(function(w){ var x=b.wk[w]; return {w:w, v:x?x.sum/x.n:null, n:x?x.n:0}; });
-      return '<tr><td>'+esc(b.d)+'</td><td class="muted" style="font-size:11.5px">'+esc(Object.keys(b.net).join(", "))+'</td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(b.avg,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td><td>'+sparkline(pts)+'</td></tr>';
-    }).join("") : '<tr><td colspan="6" class="empty-note">No doctor with '+min+'+ audits averages under 90% in this range.</td></tr>';
+      return '<tr><td>'+esc(b.d)+'<br><span class="muted" style="font-size:10.5px">'+esc(Object.keys(b.net).join(", "))+'</span></td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(b.avg,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td><td>'+sparkline(pts)+'</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="empty-note">No doctor with '+min+'+ audits averages under 90% in this range.</td></tr>';
   }
 
   /* 4 — coverage */
@@ -821,8 +822,10 @@
     docStatusTimer=setTimeout(function(){
       loadDoctorStatus(s,e).then(function(list){
         if(s!==state.filter.start||e!==state.filter.end) return;
-        var top=list.filter(function(x){return x.Cancelled>0;}).sort(function(a,b){ return b.Cancelled-a.Cancelled; }).slice(0,40);
+        var unassigned=list.filter(function(x){ return /^(unassigned|—|-|)$/i.test(String(x.doctor).trim()); })[0];
+        var top=list.filter(function(x){return x.Cancelled>0 && x!==unassigned;}).sort(function(a,b){ return b.Cancelled-a.Cancelled; }).slice(0,40);
         body.innerHTML = top.length ? top.map(function(x){ var rate=x.total?x.Cancelled/x.total*100:0; return '<tr><td>'+esc(x.doctor)+'</td><td class="num tnum">'+fmtInt(x.total)+'</td><td class="num tnum">'+fmtInt(x.Cancelled)+'</td><td class="num tnum">'+meterCell(rate,1,rate>=10)+'</td><td class="num tnum">'+fmtInt(x.Pending)+'</td></tr>'; }).join("") : '<tr><td colspan="5" class="empty-note">No cancelled consults in this range.</td></tr>';
+        if(unassigned && unassigned.total) body.innerHTML += '<tr><td class="muted" colspan="5" style="white-space:normal;font-size:11.5px">Not shown: '+fmtInt(unassigned.total)+' consults with no doctor assigned in Extract 1 ("'+esc(unassigned.doctor)+'"), of which '+fmtInt(unassigned.Cancelled)+' were cancelled.</td></tr>';
       }).catch(function(){ body.innerHTML='<tr><td colspan="5" class="empty-note">Couldn’t reach Extract 1 for doctor-level status.</td></tr>'; });
     }, 350);
   }
