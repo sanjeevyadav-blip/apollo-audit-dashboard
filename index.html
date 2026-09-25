@@ -2383,14 +2383,42 @@
      type — same "select ... where <dateCol> >= floor" pattern as the other sources below, just with
      a group-by added. Returns ~a few hundred rows total (one per day×type) no matter how large the
      underlying sheet gets, which state.totalConsultRows then holds so the % Audited column can be
-     recomputed instantly for any date range the user picks, without a fetch per filter change. */
-  function loadTotalConsultLive(){
-    var floor = isoDateNDaysAgo(400);
-    var tq = "select A, B, sum(E) where A >= '" + floor + "' group by A, B order by A";
-    var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent(tq);
+     recomputed instantly for any date range the user picks, without a fetch per filter change.
+
+     Column letters are resolved by header label, not hardcoded — Extract 1 gained a new "Status"
+     column (Cancelled/Completed/Pending) between Consult_Type and Doctor_Name on 2026-09-25, which
+     silently shifted Total_Consult from column E to F and broke a hardcoded "sum(E)" (gviz errored
+     with AVG_SUM_ONLY_NUMERIC since E had become the text Doctor_Type column). Label-based lookup —
+     same fix already applied to the WLP tabs after their own gid-reassignment bug — means the next
+     column insertion here self-corrects instead of quietly breaking Total Consult and % Audited
+     again. This sums Total_Consult across every row regardless of Status (Cancelled/Completed/
+     Pending combined), the same "whole pool" behavior Total Consult had before Status existed. */
+  function resolveConsultColumns(){
+    var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent("select * limit 1");
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
+      function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
+      var map = { date: find(/^date$/i), consultType: find(/consult_type/i), totalConsult: find(/total_consult/i) };
+      if(!map.date || !map.consultType || !map.totalConsult){
+        throw new Error("could not resolve Extract 1 columns");
+      }
+      return map;
+    });
+  }
+  function loadTotalConsultLive(){
+    var floor = isoDateNDaysAgo(400);
+    return resolveConsultColumns().then(function(cols){
+      var tq = "select " + cols.date + ", " + cols.consultType + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= '" + floor + "' group by " + cols.date + ", " + cols.consultType + " order by " + cols.date;
+      var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent(tq);
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      });
     }).then(function(t){
       var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
       var data = JSON.parse(jsonStr);
