@@ -291,16 +291,19 @@
   <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
+      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
       <tbody id="projectTableBody"></tbody>
       <!-- Patient Tickets, CSAT Audits and Training are appended as extra rows at render time (not
            scored audit types, so they carry no Avg Audit Score) — see the "2. Project-wise Audit
            Summary" block in render(). Training is shown here but, like the Allocation Summary table,
            deliberately excluded from the Total row's count since it isn't audit-assignment work.
            "Total Consult" is the full consult/appointment volume for that type from the live
-           "Extract 1" sheet — only the 5 real audit-type rows have it (Patient Tickets/CSAT/Training
-           show "—", not tracked in Extract 1). "% Audited" = Audits Completed ÷ that Total Consult
-           figure (Total Audits Completed ÷ Audit assigned) — also "—" for those same three rows, or
+           "Extract 1" sheet. "Total Lead" is how many rows are actually sitting in that type's own
+           audit-tracking sheet (PDS Audit Sheet / Non Pharma Audit Sheet / PDS-Mounjaro / BS WLP
+           Audits / PDS Cancellation sheet) for the range, audited or not — so it's always ≥ Audits
+           Completed, the gap being leads still waiting to be audited. Both show "—" for Patient
+           Tickets/CSAT/Training (not tracked in either place). "% Audited" = Audits Completed ÷ Total
+           Consult (Total Audits Completed ÷ Audit assigned) — also "—" for those same three rows, or
            for any row if Extract 1 hasn't loaded yet. -->
     </table>
   </div>
@@ -583,6 +586,7 @@
   state.csatRows = null; /* {date,auditor,minutes} from the CSAT "Negative Review Appointments" tab — feeds Allocation Summary's CSAT Audits column + working-time panels */
   state.orderRows = null; /* {date,doctor,orders} from the per-doctor Orders sheet — feeds the Doctor-wise Audit Summary's "Orders" column, matched to that table's doctor names via normalizeDoctorKey */
   state.totalConsultRows = null; /* [dateISO, internalTypeKey, totalConsult] from the "Extract 1" sheet, pre-summed per date+type server-side via a gviz group-by query — feeds the Project-wise Audit Summary's "% Audited" column (Total Audits Completed ÷ this sum, per type, over the selected range) */
+  state.totalLeadRows = null; /* [dateISO, internalTypeKey, count] — per-day row counts (audited or not) straight from each type's own audit-tracking sheet (PDS Audit Sheet / Non Pharma Audit Sheet / PDS-Mounjaro / BS WLP Audits / PDS Cancellation sheet), server-side grouped the same way as totalConsultRows — feeds the Project-wise Audit Summary's "Total Lead" column */
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
@@ -591,9 +595,9 @@
   state.doctorWiseSortDir = "desc"; /* "asc" or "desc" for the column above; default (Orders, desc) matches the table's original fixed sort */
   state.dataMaxDate = DATA_MAX_DATE;
   state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
-  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false, totalConsult:false };
-  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null, totalConsult:null };
-  var rowDropWarning = { project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null, totalConsult:null }; /* set by checkRowCountDrop below — diagnostic only, never blocks real data from rendering (see that function's comment) */
+  var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false, totalConsult:false, totalLead:false };
+  var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null, totalConsult:null, totalLead:null };
+  var rowDropWarning = { project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null, totalConsult:null, totalLead:null }; /* set by checkRowCountDrop below — diagnostic only, never blocks real data from rendering (see that function's comment) */
 
   /* Flags (but no longer withholds) a sharp row-count drop on any live source, as a heads-up that a
      Google Sheets basic "Filter" (Data > Create a filter — as opposed to a personal "Filter view")
@@ -1208,14 +1212,14 @@
     var chipText = document.getElementById("statusText");
     var asOf = document.getElementById("asOfLabel");
     var fetchNote = document.getElementById("fetchNote");
-    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.nonPharmaSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0)+(liveOK.orders?1:0)+(liveOK.totalConsult?1:0);
-    if(liveCount===11){
+    var liveCount = (liveOK.project?1:0)+(liveOK.cancel?1:0)+(liveOK.cs?1:0)+(liveOK.wlpSource?1:0)+(liveOK.mounjaroSource?1:0)+(liveOK.nonPharmaSource?1:0)+(liveOK.training?1:0)+(liveOK.tickets?1:0)+(liveOK.csat?1:0)+(liveOK.orders?1:0)+(liveOK.totalConsult?1:0)+(liveOK.totalLead?1:0);
+    if(liveCount===12){
       chip.className = "status-chip";
       chipText.textContent = "Live from Google Sheets";
     } else if(liveCount>0){
       chip.className = "status-chip stale";
       chipText.textContent = "Partially live";
-    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.nonPharmaSource || lastError.training || lastError.tickets || lastError.csat || lastError.orders || lastError.totalConsult){
+    } else if(lastError.project || lastError.cancel || lastError.cs || lastError.wlpSource || lastError.mounjaroSource || lastError.nonPharmaSource || lastError.training || lastError.tickets || lastError.csat || lastError.orders || lastError.totalConsult || lastError.totalLead){
       chip.className = "status-chip stale";
       chipText.textContent = "Showing last snapshot";
     } else {
@@ -1235,6 +1239,7 @@
     if(lastError.csat) notes.push("CSAT sheet: "+lastError.csat);
     if(lastError.orders) notes.push("Orders sheet: "+lastError.orders);
     if(lastError.totalConsult) notes.push("Total Consult (Extract 1) sheet: "+lastError.totalConsult);
+    if(lastError.totalLead) notes.push("Total Lead (audit sheets) : "+lastError.totalLead);
     if(rowDropWarning.project) notes.push("Audit summary sheet: "+rowDropWarning.project);
     if(rowDropWarning.cancel) notes.push("Cancellation sheet: "+rowDropWarning.cancel);
     if(rowDropWarning.wlpSource) notes.push("WLP - Non Pharma (BS WLP Audits) sheet: "+rowDropWarning.wlpSource);
@@ -1245,6 +1250,7 @@
     if(rowDropWarning.csat) notes.push("CSAT sheet: "+rowDropWarning.csat);
     if(rowDropWarning.orders) notes.push("Orders sheet: "+rowDropWarning.orders);
     if(rowDropWarning.totalConsult) notes.push("Total Consult (Extract 1) sheet: "+rowDropWarning.totalConsult);
+    if(rowDropWarning.totalLead) notes.push("Total Lead (audit sheets): "+rowDropWarning.totalLead);
     fetchNote.textContent = notes.join(" · ") || "All panels live.";
 
     renderFilteredSections();
@@ -1525,6 +1531,12 @@
         var denom = consultByType[type];
         return (totalConsultLive && denom) ? fmtInt(denom) : "—";
       }
+      var totalLeadLive = !!(state.totalLeadRows && state.totalLeadRows.length);
+      var leadByType = aggregateTotalLeadByType(state.totalLeadRows, state.filter.start, state.filter.end);
+      function totalLeadCell(type){
+        var lead = leadByType[type];
+        return (totalLeadLive && lead) ? fmtInt(lead) : "—";
+      }
       /* Checked directly against the live source tabs (2026-09-25): the Audits Completed counts for
          PDS- Mounjaro and WLP - Non Pharma ("GLP" on screen) match their "Date of Audit" row counts
          in the dedicated PDS-Mounjaro / BS WLP Audits tabs exactly (1,301 and 780 for 1–24 Sep) — no
@@ -1545,7 +1557,7 @@
         return fmtPct(pct, 1);
       }
       var projRowsHtml = agg.byType.map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
       }).join("");
       /* Patient Tickets and CSAT Audits aren't scored audit types, so they show "—" for Avg Audit
          Score; both fold into the Total row's count below (matching Total Assigned in the Allocation
@@ -1558,7 +1570,7 @@
         {type:"CSAT Audits", count:csatInRange},
         {type:"Training", count:trainingInRange}
       ].map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">—</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
       }).join("");
       var projGrandTotal = ov.count + ticketsInRange + csatInRange;
       /* Total row's Total Consult / % Audited compare like-for-like: ov.count (the same audit-type
@@ -1568,9 +1580,11 @@
          volume even though those two rows show "—" individually, since the mismatch is specific to
          those two rows, not to the overall total (which stays under 100% either way). */
       var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
+      var leadGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (leadByType[k]||0); }, 0);
       var totalConsultTxt = (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—";
+      var totalLeadTxt = (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—";
       var totalAuditPct = (totalConsultLive && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 1) : "—";
-      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
+      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
       document.getElementById("projectTableBody").innerHTML = projRowsHtml;
 
       /* 3. Auditor-wise Allocation Summary */
@@ -1595,7 +1609,7 @@
       document.getElementById("mtdRangeLabel").textContent = "Connecting for live audit summary data…";
       document.getElementById("mtdStats").innerHTML = "";
       document.getElementById("overallKpiRow").innerHTML = '<div class="kpi"><div class="lbl">Status</div><div class="val" style="font-size:14px">Connecting…</div></div>';
-      document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="5" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
+      document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="6" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
       document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="12" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
     }
 
@@ -2406,6 +2420,70 @@
     return sums;
   }
 
+  /* "Total Lead" — how many leads were actually loaded into each type's own audit-tracking sheet for
+     a day, whether or not the audit itself has been completed yet ("Date of Appointment" is always
+     populated; "Date of Audit" is blank until someone audits it). Checked directly against each raw
+     sheet on 2026-09-25: "PDS Audit Sheet" had 7,968 total rows but only 6,271 with a completed audit
+     (1,697 still sitting unaudited); "Non Pharma Audit Sheet", "PDS-Mounjaro", "BS WLP Audits" and the
+     PDS Cancellation sheet all showed the same pattern. Merge Overall Sheet does NOT show this — every
+     row there already has both an Audit type and a Date of Audit, meaning unaudited leads never make
+     it into that merged sheet at all. So this pulls "Date of Appointment" straight from each type's
+     own source sheet — the same ones already feeding Audits Completed / Extra Time — rather than from
+     Merge Overall Sheet or Extract 1. Column A is a real Sheets date type in all five, so the count is
+     a small server-side "select A, count(A) ... group by A" per sheet, same shape as Total Consult. */
+  var TOTAL_LEAD_SOURCES = [
+    {file: FILE_AUDIT, sheet: "PDS Audit Sheet", type: "PDS"},
+    {file: FILE_AUDIT, sheet: "Non Pharma Audit Sheet", type: "Non Pharma"},
+    {file: FILE_WLP_SOURCE, sheet: MOUNJARO_SOURCE_TAB, type: "PDS- Mounjaro"},
+    {file: FILE_WLP_SOURCE, sheet: WLP_SOURCE_TAB, type: "WLP - Non Pharma"},
+    {file: FILE_CANCEL, gid: "909502922", type: "PDS Cancellation"}
+  ];
+  function parseGvizDateValue(v){
+    var m = /^Date\((\d+),(\d+),(\d+)\)/.exec(v||"");
+    if(!m) return null;
+    return m[1] + "-" + pad2(parseInt(m[2],10)+1) + "-" + pad2(parseInt(m[3],10));
+  }
+  function loadTotalLeadOneSource(src){
+    var floor = isoDateNDaysAgo(400);
+    var tq = "select A, count(A) where A >= date '" + floor + "' group by A order by A";
+    var base = src.gid ? ("gid=" + src.gid) : ("sheet=" + encodeURIComponent(src.sheet));
+    var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?" + base + "&tqx=out:json&tq=" + encodeURIComponent(tq);
+    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(t){
+      var jsonStr = t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "");
+      var data = JSON.parse(jsonStr);
+      var out = [];
+      (data.table && data.table.rows ? data.table.rows : []).forEach(function(row){
+        var c = row.c || [];
+        var iso = c[0] && c[0].v ? parseGvizDateValue(c[0].v) : null;
+        var count = (c[1] && typeof c[1].v === "number") ? c[1].v : 0;
+        if(!iso) return;
+        out.push([iso, src.type, count]);
+      });
+      return out;
+    }).catch(function(){ return []; }); /* one source failing shouldn't blank out the other four */
+  }
+  function loadTotalLeadLive(){
+    return Promise.all(TOTAL_LEAD_SOURCES.map(loadTotalLeadOneSource)).then(function(results){
+      var out = results.reduce(function(a,r){ return a.concat(r); }, []);
+      if(!out.length) throw new Error("no rows parsed");
+      return out;
+    });
+  }
+  function aggregateTotalLeadByType(rows, start, end){
+    var sums = {};
+    TYPE_ORDER.forEach(function(t){ sums[t] = 0; });
+    (rows||[]).forEach(function(r){
+      var date=r[0], type=r[1], total=r[2];
+      if(date<start || date>end) return;
+      if(sums[type]===undefined) return;
+      sums[type] += total;
+    });
+    return sums;
+  }
+
   function refreshAll(){
     loadAuditSummaryLive().then(function(rows){
       rowDropWarning.project = checkRowCountDrop("project", rows);
@@ -2528,6 +2606,17 @@
     }).catch(function(e){
       liveOK.totalConsult = false;
       lastError.totalConsult = "couldn’t reach the live sheet" + (state.totalConsultRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
+      render();
+    });
+
+    loadTotalLeadLive().then(function(rows){
+      rowDropWarning.totalLead = checkRowCountDrop("totalLead", rows);
+      state.totalLeadRows = rows;
+      liveOK.totalLead = true; lastError.totalLead = null; state.fetchedAt = Date.now();
+      render();
+    }).catch(function(e){
+      liveOK.totalLead = false;
+      lastError.totalLead = "couldn’t reach one or more of the live audit sheets" + (state.totalLeadRows ? " — showing last snapshot" : "") + " (" + (e && e.message ? e.message : "error") + ")";
       render();
     });
   }
