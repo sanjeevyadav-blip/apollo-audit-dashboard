@@ -292,7 +292,7 @@
 <div class="panel">
   <div class="panel-head">
     <div><h2>4 &middot; High-volume doctors with low coverage</h2>
-      <p class="desc">Doctors with the most orders in the range, against how many of their consults were audited (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma). Orders come from the same Orders sheet the Doctor-wise summary uses; it isn&rsquo;t split by project type.</p></div>
+      <p class="desc">Doctors with the most orders in the range, against how many of their consults were audited (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma). Orders come from the same Orders sheet the Doctor-wise summary uses, for appointment dates D&minus;1 of the selected audit dates (<span class="cwin"></span>); it isn&rsquo;t split by project type.</p></div>
     <label class="ctl"><span>Min orders</span><select id="covMinSel"><option>100</option><option selected>250</option><option>500</option><option>1000</option></select></label>
   </div>
   <div class="tiles" id="covTiles"></div>
@@ -352,7 +352,7 @@
 
 <div class="panel">
   <div class="panel-head"><div><h2>10 &middot; Consult status mix</h2>
-    <p class="desc">Every consult in Extract 1 for the range, split by its Status column.</p></div></div>
+    <p class="desc">Every consult in Extract 1, split by its Status column. Consult dates are D&minus;1 of the selected audit dates (<span class="cwin"></span>).</p></div></div>
   <div class="legend"><span><i style="background:var(--accent)"></i>Completed</span><span><i style="background:var(--warn)"></i>Cancelled</span><span><i style="background:var(--line-strong)"></i>Pending</span></div>
   <div id="statusBars"></div>
   <p class="sec-note" style="margin:16px 0 8px"><b>Doctors with the most cancelled consults</b> (Extract 1, same range, all consult types)</p>
@@ -375,7 +375,7 @@
 
 <div class="panel">
   <div class="panel-head"><div><h2>12 &middot; Weekly trends</h2>
-    <p class="desc">Week by week (Monday start) inside the range. Light bar = Total Lead (populated for audit), solid bar = Audits Completed. Average score is scored project types only. Hover a bar or point for exact numbers.</p></div></div>
+    <p class="desc">Week by week (Monday start) inside the range. Light bar = Total Lead (populated for audit, by appointment date + 1 day, so each lead sits in the week it is due for audit), solid bar = Audits Completed. Average score is scored project types only. Hover a bar or point for exact numbers.</p></div></div>
   <div class="legend"><span><i style="background:var(--accent-soft);border:1px solid var(--accent-soft-line)"></i>Total Lead</span><span><i style="background:var(--accent)"></i>Audits Completed</span><span><i style="background:var(--div-pos);height:2px"></i>Avg audit score</span></div>
   <div class="grid2" style="margin-bottom:10px">
     <div class="chart" id="weekVolChart"></div>
@@ -623,6 +623,10 @@
   document.addEventListener("mousemove", function(e){ var t=e.target.closest && e.target.closest("[data-tip]"); if(!t){ tipEl.style.display="none"; return; } tipEl.innerHTML=t.getAttribute("data-tip"); tipEl.style.display="block"; var x=e.clientX+14, y=e.clientY+14; if(x+290>window.innerWidth) x=e.clientX-290; tipEl.style.left=x+"px"; tipEl.style.top=y+"px"; });
 
   function inRange(d){ return d && d>=state.filter.start && d<=state.filter.end; }
+  /* D-1 rule: audits on day D are for consults/appointments of D-1, so consult-side data (Extract 1, Orders,
+     Total Lead) is read for the audit window shifted one day back. */
+  function inConsultRange(d){ return d && d>=addDaysIso(state.filter.start,-1) && d<=addDaysIso(state.filter.end,-1); }
+  function leadAuditDay(r){ return r.p ? addDaysIso(r.p,1) : r.a; }
   function typeOk(t){ return state.type==="all" || state.type===t; }
 
   /* ---------- render ---------- */
@@ -642,6 +646,7 @@
     var scored = audited.filter(function(r){ return r.s!==null; });
     var cancelIn = state.cancel.filter(function(r){ return r.a && inRange(r.a); });
 
+    Array.prototype.forEach.call(document.querySelectorAll(".cwin"), function(el){ el.textContent = "consults "+fmtDateLabel(addDaysIso(state.filter.start,-1))+" – "+fmtDateLabel(addDaysIso(state.filter.end,-1)); });
     renderParams(); renderZero(scored); renderWatch(scored); renderCoverage(audited); renderAgeing(); renderTat(audited, cancelIn);
     renderCalibration(); renderMinutes(audited, cancelIn); renderCancel(cancelIn); renderStatus(); renderSegments(scored); renderWeekly();
   }
@@ -721,7 +726,7 @@
     var body=document.getElementById("covBody"), tiles=document.getElementById("covTiles");
     if(!state.orders){ body.innerHTML='<tr><td colspan="7" class="empty-note">Loading Orders sheet…</td></tr>'; tiles.innerHTML=""; return; }
     var min=parseInt(document.getElementById("covMinSel").value,10), ord={}, names={};
-    state.orders.forEach(function(o){ if(!inRange(o.date)) return; var k=normalizeDoctorKey(o.doctor); if(!k) return; ord[k]=(ord[k]||0)+o.orders; if(!names[k]) names[k]=o.doctor; });
+    state.orders.forEach(function(o){ if(!inConsultRange(o.date)) return; var k=normalizeDoctorKey(o.doctor); if(!k) return; ord[k]=(ord[k]||0)+o.orders; if(!names[k]) names[k]=o.doctor; });
     var au={};
     audited.forEach(function(r){ if(SCORED.indexOf(r.t)<0) return; var k=normalizeDoctorKey(r.d); if(!au[k]) au[k]={n:0,sum:0,sn:0,net:{}}; au[k].n++; if(r.s!==null){ au[k].sum+=r.s*100; au[k].sn++; } au[k].net[r.dt]=1; });
     var list=Object.keys(ord).filter(function(k){ return ord[k]>=min; }).map(function(k){ var a=au[k]||{n:0,sum:0,sn:0,net:{}}; return {d:names[k], o:ord[k], n:a.n, pct:a.n/ord[k]*100, avg:a.sn?a.sum/a.sn:null, net:Object.keys(a.net).join(", ")}; }).sort(function(a,b){ return b.o-a.o; });
@@ -811,16 +816,16 @@
     if(!state.status){ box.innerHTML='<p class="empty-note">Loading Extract 1…</p>'; }
     else {
       var by={}; ALL_TYPES.forEach(function(t){ by[t]={Completed:0,Cancelled:0,Pending:0}; });
-      state.status.forEach(function(r){ if(!inRange(r.date)) return; if(!by[r.t]) return; by[r.t][r.st]=(by[r.t][r.st]||0)+r.n; });
+      state.status.forEach(function(r){ if(!inConsultRange(r.date)) return; if(!by[r.t]) return; by[r.t][r.st]=(by[r.t][r.st]||0)+r.n; });
       box.innerHTML = ALL_TYPES.filter(typeOk).map(function(t){ var b=by[t], tot=b.Completed+b.Cancelled+b.Pending; if(!tot) return '<div class="stack-row"><div>'+esc(t)+'</div><div class="muted">No consults in range</div><div></div></div>';
         function seg(k,col){ var v=b[k]; if(!v) return ""; return '<i style="width:'+(v/tot*100).toFixed(2)+'%;background:'+col+'" data-tip="'+esc(t)+' — '+k+': '+fmtInt(v)+' ('+fmtPct(v/tot*100,1)+')"></i>'; }
         return '<div class="stack-row"><div style="font-weight:500">'+esc(t)+'</div><div class="stack">'+seg("Completed","var(--accent)")+seg("Cancelled","var(--warn)")+seg("Pending","var(--line-strong)")+'</div><div class="figs"><b>'+fmtInt(tot)+'</b> · cancelled '+fmtPct(b.Cancelled/tot*100,1)+' · pending '+fmtPct(b.Pending/tot*100,1)+'</div></div>'; }).join("");
     }
-    var body=document.getElementById("docStatusBody"), s=state.filter.start, e=state.filter.end;
+    var body=document.getElementById("docStatusBody"), s=state.filter.start, e=state.filter.end, cs=addDaysIso(s,-1), ce=addDaysIso(e,-1);
     body.innerHTML='<tr><td colspan="5" class="empty-note">Loading doctor-level status from Extract 1…</td></tr>';
     clearTimeout(docStatusTimer);
     docStatusTimer=setTimeout(function(){
-      loadDoctorStatus(s,e).then(function(list){
+      loadDoctorStatus(cs,ce).then(function(list){
         if(s!==state.filter.start||e!==state.filter.end) return;
         var unassigned=list.filter(function(x){ return /^(unassigned|—|-|)$/i.test(String(x.doctor).trim()); })[0];
         var top=list.filter(function(x){return x.Cancelled>0 && x!==unassigned;}).sort(function(a,b){ return b.Cancelled-a.Cancelled; }).slice(0,40);
@@ -851,7 +856,7 @@
     weeks.forEach(function(w){ W[w]={lead:0,done:0,sn:0,sum:0,z:0}; });
     state.rows.concat(state.cancel).forEach(function(r){
       if(!typeOk(r.t)) return;
-      var eff=r.a||r.p; if(inRange(eff)){ var w=weekStart(eff); if(W[w]) W[w].lead++; }
+      var eff=leadAuditDay(r); if(inRange(eff)){ var w=weekStart(eff); if(W[w]) W[w].lead++; }
       if(r.a && inRange(r.a)){ var w2=weekStart(r.a); if(!W[w2]) return; W[w2].done++; if(r.s!==null && r.s!==undefined){ W[w2].sn++; W[w2].sum+=r.s*100; if(r.s===0) W[w2].z++; } }
     });
     var data=weeks.map(function(w){ var x=W[w]; var ws=w<state.filter.start?state.filter.start:w, we=addDaysIso(w,6)>state.filter.end?state.filter.end:addDaysIso(w,6); return {w:w,ws:ws,we:we,lead:x.lead,done:x.done,avg:x.sn?x.sum/x.sn:null,z:x.z,partial:(ws!==w||we!==addDaysIso(w,6))}; });

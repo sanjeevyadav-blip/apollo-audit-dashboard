@@ -312,17 +312,15 @@
            "Total Consult" is the full consult/appointment volume for that type from the live
            "Extract 1" sheet. "Total Lead" is how many rows are sitting in that type's own
            audit-tracking sheet (PDS Audit Sheet / Non Pharma Audit Sheet / PDS-Mounjaro / BS WLP
-           Audits / PDS Cancellation sheet) for the range, keyed the same way Audits Completed is —
-           by Date of Audit — and falling back to Date of Appointment only for rows that haven't been
-           audited yet (blank Date of Audit), so a still-pending lead counts under the day it arrived.
-           This keeps Total Lead ≥ Audits Completed for any range, the gap being leads still waiting
-           to be audited, instead of the two using different date fields and occasionally crossing
-           (as they could when Total Lead was appointment-date-only). Both show "—" for Patient
+           Audits / PDS Cancellation sheet), dated by Date of Appointment. D-1 rule (explicit request,
+           2026-09-28): audits on day D are for consults of D-1, so Total Consult and Total Lead are
+           both taken for the selected audit window shifted one day back. Both show "—" for Patient
            Tickets/CSAT/Training (not tracked in either place). "% Audited" = Audits Completed ÷ Total
            Consult (Total Audits Completed ÷ Audit assigned) — also "—" for those same three rows, or
            for any row if Extract 1 hasn't loaded yet. -->
     </table>
   </div>
+  <p class="desc" id="consultWindowNote" style="margin:12px 0 0"></p>
 </div>
 
 <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;margin-bottom:30px;min-width:0" id="auditorCancelGrid">
@@ -1466,7 +1464,7 @@
       doctorWiseSel.innerHTML = '<option value="all">All auditors</option>';
     }
     var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter, state.doctorWiseTypeFilter) : [];
-    var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, state.filter.start, state.filter.end) : null;
+    var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, addDaysIso(state.filter.start, -1), addDaysIso(state.filter.end, -1)) /* D-1 rule: orders are appointment-dated, same as consults */ : null;
     doctorWiseRows.forEach(function(d){
       d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null;
       d.auditPct = (d.orders!==null && d.orders>0) ? (d.count/d.orders*100) : null;
@@ -1558,13 +1556,18 @@
 
       /* 2. Project-wise Audit Summary */
       var totalConsultLive = !!(state.totalConsultRows && state.totalConsultRows.length);
-      var consultByType = aggregateTotalConsultByType(state.totalConsultRows, state.filter.start, state.filter.end);
+      /* D-1 rule: audits done on day D are for consults/appointments of D-1, so the consult/lead window is
+         the selected audit window shifted one day back (audits 1–24 Sep ↔ consults 31 Aug–23 Sep). */
+      var consultStart = addDaysIso(state.filter.start, -1), consultEnd = addDaysIso(state.filter.end, -1);
+      var consultByType = aggregateTotalConsultByType(state.totalConsultRows, consultStart, consultEnd);
+      var cwEl = document.getElementById("consultWindowNote");
+      if(cwEl) cwEl.innerHTML = 'Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
       function totalConsultCell(type){
         var denom = consultByType[type];
         return (totalConsultLive && denom) ? fmtInt(denom) : "—";
       }
       var totalLeadLive = !!(state.totalLeadRows && state.totalLeadRows.length);
-      var leadByType = aggregateTotalLeadByType(state.totalLeadRows, state.filter.start, state.filter.end);
+      var leadByType = aggregateTotalLeadByType(state.totalLeadRows, consultStart, consultEnd);
       function totalLeadCell(type){
         var lead = leadByType[type];
         return (totalLeadLive && lead) ? fmtInt(lead) : "—";
@@ -2560,7 +2563,7 @@
         var c = row.c || [];
         var apptIso = c[0] && c[0].v ? parseGvizDateValue(c[0].v) : null;
         var auditIso = c[1] && c[1].v ? parseGvizDateValue(c[1].v) : null;
-        var iso = auditIso || apptIso;
+        var iso = apptIso || (auditIso ? addDaysIso(auditIso, -1) : null); /* D-1 rule: lead dated by its appointment; an audited row with no appointment date on record falls back to (audit date − 1) */
         if(!iso || iso < floor) return;
         out.push([iso, src.type, 1]);
       });
@@ -2589,7 +2592,7 @@
         var r = rows[i]; if(!r || r.length<2) continue;
         var apptIso = parseApptIsoOrMDY(r[0]);
         var auditIso = parseDateMDY(r[idxAuditDate]);
-        var iso = auditIso || apptIso;
+        var iso = apptIso || (auditIso ? addDaysIso(auditIso, -1) : null); /* D-1 rule: lead dated by its appointment; an audited row with no appointment date on record falls back to (audit date − 1) */
         if(!iso || iso < floor) continue;
         out.push([iso, src.type, 1]);
       }

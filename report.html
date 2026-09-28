@@ -211,6 +211,7 @@
     </table>
   </div>
   <p class="desc" style="margin:14px 0 0">"% Audited" = Audits Completed &divide; Total Consult. "Populated Coverage" = Audits Completed &divide; Total Lead — of the leads actually loaded into that type's audit-tracking sheet, how many have been audited.</p>
+  <p class="desc" id="consultWindowNote" style="margin:8px 0 0"></p>
 </div>
 
 <div class="panel">
@@ -610,7 +611,7 @@
         var c = row.c || [];
         var apptIso = c[0] && c[0].v ? parseGvizDateValue(c[0].v) : null;
         var auditIso = c[1] && c[1].v ? parseGvizDateValue(c[1].v) : null;
-        var iso = auditIso || apptIso;
+        var iso = apptIso || (auditIso ? addDaysIso(auditIso, -1) : null); /* D-1 rule: lead dated by its appointment; an audited row with no appointment date on record falls back to (audit date − 1) */
         if(!iso || iso < floor) return;
         out.push([iso, src.type, 1]);
       });
@@ -639,7 +640,7 @@
         var r = rows[i]; if(!r || r.length<2) continue;
         var apptIso = parseApptIsoOrMDY(r[0]);
         var auditIso = parseDateMDY(r[idxAuditDate]);
-        var iso = auditIso || apptIso;
+        var iso = apptIso || (auditIso ? addDaysIso(auditIso, -1) : null); /* D-1 rule: lead dated by its appointment; an audited row with no appointment date on record falls back to (audit date − 1) */
         if(!iso || iso < floor) continue;
         out.push([iso, src.type, 1]);
       }
@@ -810,9 +811,13 @@
     var auditorAgg = aggregateAuditors(combinedAuditRows, cancelRowsForAgg, state.ticketRows||[], state.csatRows||[], state.filter.start, state.filter.end);
 
     var totalConsultLive = !!(state.totalConsultRows && state.totalConsultRows.length);
-    var consultByType = aggregateTotalConsultByType(state.totalConsultRows, state.filter.start, state.filter.end);
+    /* D-1 rule: audits on day D cover consults of D-1 — consult/lead window = audit window shifted back one day */
+    var consultStart = addDaysIso(state.filter.start, -1), consultEnd = addDaysIso(state.filter.end, -1);
+    var consultByType = aggregateTotalConsultByType(state.totalConsultRows, consultStart, consultEnd);
+    var cwEl = document.getElementById("consultWindowNote");
+    if(cwEl) cwEl.innerHTML = 'Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
     var totalLeadLive = !!(state.totalLeadRows && state.totalLeadRows.length);
-    var leadByType = aggregateTotalLeadByType(state.totalLeadRows, state.filter.start, state.filter.end);
+    var leadByType = aggregateTotalLeadByType(state.totalLeadRows, consultStart, consultEnd);
     var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
     var leadGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (leadByType[k]||0); }, 0);
 
