@@ -210,7 +210,7 @@
       <tbody id="projectTableBody"></tbody>
     </table>
   </div>
-  <p class="desc" style="margin:14px 0 0">"% Audited" = Audits Completed &divide; Total Consult. "Populated Coverage" = Audits Completed &divide; Total Lead — of the leads actually loaded into that type's audit-tracking sheet, how many have been audited.</p>
+  <p class="desc" style="margin:14px 0 0">"% Audited" = Audits Completed &divide; Total Consult (Completed consults). "Populated Coverage" = Audits Completed &divide; Total Lead — of the leads actually loaded into that type's audit-tracking sheet, how many have been audited.</p>
   <p class="desc" id="consultWindowNote" style="margin:8px 0 0"></p>
 </div>
 
@@ -519,15 +519,19 @@
       var data = JSON.parse(jsonStr);
       var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
       function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
-      var map = { date: find(/^date$/i), consultType: find(/consult_type/i), totalConsult: find(/total_consult/i) };
-      if(!map.date || !map.consultType || !map.totalConsult) throw new Error("could not resolve Extract 1 columns");
+      var map = { date: find(/^date$/i), consultType: find(/consult_type/i), status: find(/^status$/i), totalConsult: find(/total_consult/i) };
+      if(!map.date || !map.consultType || !map.status || !map.totalConsult) throw new Error("could not resolve Extract 1 columns");
       return map;
     });
   }
   function loadTotalConsultLive(){
     var floor = isoDateNDaysAgo(400);
     return resolveConsultColumns().then(function(cols){
-      var tq = "select " + cols.date + ", " + cols.consultType + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= '" + floor + "' group by " + cols.date + ", " + cols.consultType + " order by " + cols.date;
+      /* Completed-level Total Consult (explicit request, 2026-09-28): only Extract 1 rows whose Status is
+         "Completed" count — Cancelled/Pending consults are excluded. PDS Cancellation is the one exception:
+         every one of its Extract 1 rows is Status "Cancelled" by definition (it IS the cancelled-consult
+         pool), so for that type the Cancelled rows are what count; otherwise its Total Consult would be 0. */
+      var tq = "select " + cols.date + ", " + cols.consultType + ", " + cols.status + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= '" + floor + "' group by " + cols.date + ", " + cols.consultType + ", " + cols.status + " order by " + cols.date;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent(tq);
       return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
@@ -541,9 +545,11 @@
         var c = row.c || [];
         var iso = c[0] && c[0].v ? String(c[0].v) : null;
         var rawType = c[1] && c[1].v ? String(c[1].v) : null;
-        var total = (c[2] && typeof c[2].v === "number") ? c[2].v : 0;
+        var status = c[2] && c[2].v ? String(c[2].v).trim() : "";
+        var total = (c[3] && typeof c[3].v === "number") ? c[3].v : 0;
         var type = rawType ? CONSULT_TYPE_MAP[rawType] : null;
         if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso) || !type) return;
+        if(type === "PDS Cancellation" ? !/^cancel/i.test(status) : !/^completed$/i.test(status)) return;
         out.push([iso, type, total]);
       });
       if(!out.length) throw new Error("no rows parsed");
@@ -815,7 +821,7 @@
     var consultStart = addDaysIso(state.filter.start, -1), consultEnd = addDaysIso(state.filter.end, -1);
     var consultByType = aggregateTotalConsultByType(state.totalConsultRows, consultStart, consultEnd);
     var cwEl = document.getElementById("consultWindowNote");
-    if(cwEl) cwEl.innerHTML = 'Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
+    if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> counts only <b>Completed</b> consults from Extract 1 (PDS Cancellation: its cancelled consults). Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
     var totalLeadLive = !!(state.totalLeadRows && state.totalLeadRows.length);
     var leadByType = aggregateTotalLeadByType(state.totalLeadRows, consultStart, consultEnd);
     var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
@@ -830,7 +836,7 @@
     function fstep(lbl, val, sub, hl){ return '<div class="fstep'+(hl?' hl':'')+'"><div class="lbl">'+esc(lbl)+'</div><div class="val tnum">'+val+'</div><div class="sub">'+esc(sub)+'</div></div>'; }
     function fconv(pct, k, d){ return '<div class="fconv"><div class="pct tnum">'+fmtPct(pct, d)+'</div><div class="k">'+esc(k)+'</div>'+ARROW+'</div>'; }
     document.getElementById("funnel").innerHTML =
-      fstep("Total Consult Volume", consultOk ? fmtInt(consultGrandTotal) : "—", "All 5 audit types · Extract 1") +
+      fstep("Total Consult Volume", consultOk ? fmtInt(consultGrandTotal) : "—", "Completed consults · Extract 1") +
       fconv(pctPopulated, "populated for audit", 2) +
       fstep("Total Audits Populated", leadOk ? fmtInt(leadGrandTotal) : "—", "Total Lead in audit sheets") +
       fconv(pctCoverage, "of leads audited", 1) +
