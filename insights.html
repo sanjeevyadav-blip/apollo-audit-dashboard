@@ -557,12 +557,17 @@
     });
   }
   var consultCols = null;
+  /* Extract 1's Date column can be text or a real date (it became a date on 2026-09-30) — handle both. */
+  function dLit(iso, isDate){ return isDate ? "date '"+iso+"'" : "'"+iso+"'"; }
+  function cellIso(cell){ if(!cell||cell.v==null) return null; var m=/^Date\((\d+),(\d+),(\d+)/.exec(String(cell.v)); if(m) return m[1]+"-"+pad2(parseInt(m[2],10)+1)+"-"+pad2(m[3]); var s=String(cell.f||cell.v).trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:null; }
   function resolveConsultCols(){
     if(consultCols) return Promise.resolve(consultCols);
     return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select * limit 1").then(function(j){
       var cols=j.table.cols.map(function(c,i){ return {L:colLetter(i), l:(c.label||"").trim()}; });
       function f(re){ for(var i=0;i<cols.length;i++) if(re.test(cols[i].l)) return cols[i].L; return null; }
       consultCols = {date:f(/^date$/i), type:f(/consult_type/i), status:f(/^status$/i), doctor:f(/doctor_name/i), total:f(/total_consult/i)};
+      var dc = j.table.cols.filter(function(c,i){ return colLetter(i)===consultCols.date; })[0];
+      consultCols.dateIsDate = !!(dc && /^date/.test(dc.type||""));
       if(!consultCols.date||!consultCols.type||!consultCols.status||!consultCols.total) throw new Error("Extract 1 columns not found");
       return consultCols;
     });
@@ -570,9 +575,9 @@
   function loadStatusMix(){
     var floor = addDaysIso(isoToday(), -400);
     return resolveConsultCols().then(function(c){
-      return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select "+c.date+","+c.type+","+c.status+",sum("+c.total+") where "+c.date+" >= '"+floor+"' group by "+c.date+","+c.type+","+c.status);
+      return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select "+c.date+","+c.type+","+c.status+",sum("+c.total+") where "+c.date+" >= "+dLit(floor,c.dateIsDate)+" group by "+c.date+","+c.type+","+c.status);
     }).then(function(j){
-      var out=[]; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var d=x[0]&&x[0].v, t=x[1]&&CONSULT_TYPE_MAP[x[1].v], st=x[2]&&x[2].v, n=x[3]&&typeof x[3].v==="number"?x[3].v:0; if(d&&t&&st) out.push({date:String(d), t:t, st:String(st), n:n}); });
+      var out=[]; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var d=cellIso(x[0]), t=x[1]&&CONSULT_TYPE_MAP[x[1].v], st=x[2]&&x[2].v, n=x[3]&&typeof x[3].v==="number"?x[3].v:0; if(d&&t&&st) out.push({date:String(d), t:t, st:String(st), n:n}); });
       return out;
     });
   }
@@ -582,7 +587,7 @@
     if(docStatusCache[key]) return Promise.resolve(docStatusCache[key]);
     return resolveConsultCols().then(function(c){
       if(!c.doctor) throw new Error("no doctor column");
-      return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select "+c.doctor+","+c.status+",sum("+c.total+") where "+c.date+" >= '"+start+"' and "+c.date+" <= '"+end+"' group by "+c.doctor+","+c.status);
+      return gvizJson(FILE_CONSULT, "gid="+CONSULT_GID, "select "+c.doctor+","+c.status+",sum("+c.total+") where "+c.date+" >= "+dLit(start,c.dateIsDate)+" and "+c.date+" <= "+dLit(end,c.dateIsDate)+" group by "+c.doctor+","+c.status);
     }).then(function(j){
       var by={}; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var d=x[0]&&x[0].v, st=x[1]&&x[1].v, n=x[2]&&typeof x[2].v==="number"?x[2].v:0; if(!d||!st) return; if(!by[d]) by[d]={doctor:d,total:0,Cancelled:0,Completed:0,Pending:0}; by[d].total+=n; by[d][st]=(by[d][st]||0)+n; });
       var list=Object.keys(by).map(function(k){ return by[k]; });

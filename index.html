@@ -2432,6 +2432,17 @@
      column insertion here self-corrects instead of quietly breaking Total Consult and % Audited
      again. This sums Total_Consult across every row regardless of Status (Cancelled/Completed/
      Pending combined), the same "whole pool" behavior Total Consult had before Status existed. */
+  /* Extract 1's Date column has flipped between plain text and a real Sheets date (it became a date on
+     2026-09-30, which made every "Date >= '...'" comparison match nothing and blanked Total Consult).
+     These two helpers make the query and the parsing work for either type. */
+  function consultDateLiteral(iso, isDate){ return isDate ? "date '" + iso + "'" : "'" + iso + "'"; }
+  function consultCellIso(cell){
+    if(!cell || cell.v == null) return null;
+    var m = /^Date\((\d+),(\d+),(\d+)/.exec(String(cell.v));
+    if(m) return m[1] + "-" + (parseInt(m[2],10)+1 < 10 ? "0" : "") + (parseInt(m[2],10)+1) + "-" + (parseInt(m[3],10) < 10 ? "0" : "") + parseInt(m[3],10);
+    var s = String(cell.f || cell.v).trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  }
   function resolveConsultColumns(){
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent("select * limit 1");
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
@@ -2443,6 +2454,8 @@
       var cols = data.table.cols.map(function(c, i){ return {letter: colIndexToLetter(i), label: (c.label||"").trim()}; });
       function find(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i].label)) return cols[i].letter; } return null; }
       var map = { date: find(/^date$/i), consultType: find(/consult_type/i), status: find(/^status$/i), totalConsult: find(/total_consult/i) };
+      var dateCol = data.table.cols.filter(function(c, i){ return colIndexToLetter(i) === map.date; })[0];
+      map.dateIsDate = !!(dateCol && /^date/.test(dateCol.type || ""));
       if(!map.date || !map.consultType || !map.status || !map.totalConsult){
         throw new Error("could not resolve Extract 1 columns");
       }
@@ -2456,7 +2469,7 @@
          "Completed" count — Cancelled/Pending consults are excluded. PDS Cancellation is the one exception:
          every one of its Extract 1 rows is Status "Cancelled" by definition (it IS the cancelled-consult
          pool), so for that type the Cancelled rows are what count; otherwise its Total Consult would be 0. */
-      var tq = "select " + cols.date + ", " + cols.consultType + ", " + cols.status + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= '" + floor + "' group by " + cols.date + ", " + cols.consultType + ", " + cols.status + " order by " + cols.date;
+      var tq = "select " + cols.date + ", " + cols.consultType + ", " + cols.status + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= " + consultDateLiteral(floor, cols.dateIsDate) + " group by " + cols.date + ", " + cols.consultType + ", " + cols.status + " order by " + cols.date;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent(tq);
       return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
@@ -2468,7 +2481,7 @@
       var out = [];
       (data.table && data.table.rows ? data.table.rows : []).forEach(function(row){
         var c = row.c || [];
-        var iso = c[0] && c[0].v ? String(c[0].v) : null;
+        var iso = consultCellIso(c[0]);
         var rawType = c[1] && c[1].v ? String(c[1].v) : null;
         var status = c[2] && c[2].v ? String(c[2].v).trim() : "";
         var total = (c[3] && typeof c[3].v === "number") ? c[3].v : 0;
