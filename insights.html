@@ -529,8 +529,21 @@
       });
     });
   }
+  /* PDS Cancellation: old tab for appointments before 28 Sep, "PDS_Cancellation_Sheet_2" from 28 Sep on
+     (split by appointment date, or audit date − 1 when the appointment is blank). */
+  var CANCEL_SWITCH_DATE = "2026-09-28";
   function loadCancellation(){
-    return gviz(FILE_CANCEL, "gid="+CANCEL_GID, "select *", 0).then(function(rows){
+    return Promise.all([
+      loadCancellationTab("gid="+CANCEL_GID),
+      loadCancellationTab("sheet="+encodeURIComponent("PDS_Cancellation_Sheet_2")).catch(function(){ return []; })
+    ]).then(function(res){
+      function basis(r){ return r.p || (r.a ? addDaysIso(r.a,-1) : null); }
+      return res[0].filter(function(r){ var b=basis(r); return !b || b < CANCEL_SWITCH_DATE; })
+        .concat(res[1].filter(function(r){ var b=basis(r); return b && b >= CANCEL_SWITCH_DATE; }));
+    });
+  }
+  function loadCancellationTab(base){
+    return gviz(FILE_CANCEL, base, "select *", 0).then(function(rows){
       var hdr = rows[0].map(function(x){ return String(x).trim(); });
       function c(re){ return findIdx(hdr,re); }
       var ix = {appt:c(/^date of appointment/i), doc:c(/^doctor name$/i), dtype:c(/^doctor type$/i), spec:c(/^specialty$/i), aud:c(/^date of audit$/i),

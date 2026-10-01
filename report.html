@@ -442,22 +442,34 @@
     var idxAuditDate = header.indexOf("Date of Audit");
     var idxReason = header.indexOf("Reason for the cancellation");
     var idxAuditor = header.indexOf("Auditor Name");
+    var idxAppt = -1; for(var hk=0; hk<header.length; hk++){ if(/^date of appointment/i.test(header[hk])){ idxAppt = hk; break; } }
     if(idxAuditDate===-1 || idxReason===-1) return [];
     var out = [];
     for(var i=1;i<rows.length;i++){
       var r = rows[i]; if(!r || r.length<2) continue;
-      var iso = parseDateMDY(r[idxAuditDate]);
-      out.push({ date: iso, auditor: idxAuditor!==-1 ? canonicalAuditorName(r[idxAuditor]) : "" });
+      var iso = cxDate(r[idxAuditDate]);
+      out.push({ date: iso, appt: idxAppt!==-1 ? cxDate(r[idxAppt]) : null, auditor: idxAuditor!==-1 ? canonicalAuditorName(r[idxAuditor]) : "" });
     }
     return out;
   }
+  /* PDS Cancellation moved to a new tab on 2026-09-28 (explicit request): "PDS_Cancellation_Sheet_2" holds
+     appointments from 28 Sep onward, the original "PDS Cancellation Sheet" (gid 909502922) everything before.
+     The split is by appointment date (Date of Appointment, or Date of Audit − 1 if the appointment is blank):
+     checked live on 2026-10-01 that the new tab also carries a copy of the 48 appointments from 27 Sep, none of
+     them audited there (their audits — 21 so far — are in the old tab), and that the old tab has no appointment
+     from 28 Sep on. So < 28 Sep comes only from the old tab and ≥ 28 Sep only from the new one — nothing is
+     counted twice and no audit is lost. */
+  var CANCEL_SWITCH_DATE = "2026-09-28";
+  var CANCEL_NEW_TAB = "PDS_Cancellation_Sheet_2";
+  function cancelBasisDate(appt, audit){ return appt || (audit ? addDaysIso(audit, -1) : null); }
+  function cxDate(s){ s = String(s||"").trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; return parseFlexMDY(s); }
   function loadCancellationLive(){
-    var url = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&gid=909502922";
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
-      if(!r.ok) throw new Error("http "+r.status);
-      return r.text();
-    }).then(function(csvText){
-      var rows = parseCancellationCsv(csvText);
+    var base = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&";
+    function getRows(q){ return fetch(base + q + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }).then(parseCancellationCsv); }
+    return Promise.all([getRows("gid=909502922"), getRows("sheet=" + encodeURIComponent(CANCEL_NEW_TAB)).catch(function(){ return []; })]).then(function(res){
+      var oldRows = res[0].filter(function(r){ var b = cancelBasisDate(r.appt, r.date); return !b || b < CANCEL_SWITCH_DATE; });
+      var newRows = res[1].filter(function(r){ var b = cancelBasisDate(r.appt, r.date); return b && b >= CANCEL_SWITCH_DATE; });
+      var rows = oldRows.concat(newRows);
       if(!rows.length) throw new Error("no rows parsed");
       return rows;
     });
@@ -590,7 +602,8 @@
     {kind: "checklist", file: FILE_AUDIT, sheet: "Non Pharma Audit Sheet", type: "Non Pharma"},
     {kind: "labeled", file: FILE_WLP_SOURCE, sheet: MOUNJARO_SOURCE_TAB, type: "PDS- Mounjaro"},
     {kind: "labeled", file: FILE_WLP_SOURCE, sheet: WLP_SOURCE_TAB, type: "WLP - Non Pharma"},
-    {kind: "labeled", file: FILE_CANCEL, gid: "909502922", type: "PDS Cancellation"}
+    {kind: "labeled", file: FILE_CANCEL, gid: "909502922", type: "PDS Cancellation", before: "2026-09-28"},
+    {kind: "labeled", file: FILE_CANCEL, sheet: "PDS_Cancellation_Sheet_2", type: "PDS Cancellation", from: "2026-09-28"}
   ];
   function parseGvizDateValue(v){
     var m = /^Date\((\d+),(\d+),(\d+)\)/.exec(v||"");
@@ -638,6 +651,8 @@
         var auditIso = c[1] && c[1].v ? parseGvizDateValue(c[1].v) : null;
         var iso = apptIso || (auditIso ? addDaysIso(auditIso, -1) : null); /* D-1 rule: lead dated by its appointment; an audited row with no appointment date on record falls back to (audit date − 1) */
         if(!iso || iso < floor) return;
+        if(src.before && iso >= src.before) return;   /* PDS Cancellation old/new tab split by appointment date */
+        if(src.from && iso < src.from) return;
         out.push([iso, src.type, 1]);
       });
       return out;
