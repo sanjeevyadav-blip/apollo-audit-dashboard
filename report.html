@@ -562,7 +562,13 @@
         var total = (c[3] && typeof c[3].v === "number") ? c[3].v : 0;
         var type = rawType ? CONSULT_TYPE_MAP[rawType] : null;
         if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso) || !type) return;
-        if(type === "PDS Cancellation" ? !/^cancel/i.test(status) : !/^completed$/i.test(status)) return;
+        /* WLP - Non Pharma (GLP) is counted at BOOKED level — every status (Completed + Cancelled + Pending) —
+           per explicit request on 2026-10-01: Extract 1 marks some audited GLP consults Cancelled/Pending, so
+           Completed-only undercounts it. PDS Cancellation keeps its cancelled pool; all others are Completed only. */
+        var keep = type === "PDS Cancellation" ? /^cancel/i.test(status)
+                 : type === "WLP - Non Pharma" ? true
+                 : /^completed$/i.test(status);
+        if(!keep) return;
         out.push([iso, type, total]);
       });
       if(!out.length) throw new Error("no rows parsed");
@@ -834,7 +840,7 @@
     var consultStart = addDaysIso(state.filter.start, -1), consultEnd = addDaysIso(state.filter.end, -1);
     var consultByType = aggregateTotalConsultByType(state.totalConsultRows, consultStart, consultEnd);
     var cwEl = document.getElementById("consultWindowNote");
-    if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> counts only <b>Completed</b> consults from Extract 1 (PDS Cancellation: its cancelled consults). Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
+    if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> counts only <b>Completed</b> consults from Extract 1, except <b>WLP - Non Pharma</b> at <b>booked</b> level (Completed + Cancelled + Pending) and PDS Cancellation (its cancelled consults). Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
     var totalLeadLive = !!(state.totalLeadRows && state.totalLeadRows.length);
     var leadByType = aggregateTotalLeadByType(state.totalLeadRows, consultStart, consultEnd);
     var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
