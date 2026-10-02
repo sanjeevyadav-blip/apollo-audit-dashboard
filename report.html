@@ -294,7 +294,10 @@
     while(n > 0){ var rem = (n - 1) % 26; s = String.fromCharCode(65 + rem) + s; n = Math.floor((n - 1) / 26); }
     return s;
   }
-  function mtdBoundaryEnd(dataMaxDate){ return addDaysIso(dataMaxDate, -1); }
+  /* Today's date on the viewer's own clock (IST for the team) — not UTC, which is still "yesterday" until 5:30 AM IST. */
+  function localTodayIso(){ var d = new Date(); var m = d.getMonth()+1, dd = d.getDate(); return d.getFullYear() + "-" + (m<10?"0":"") + m + "-" + (dd<10?"0":"") + dd; }
+  /* MTD = 1st of the month up to D-1, D = today's calendar date (same rule as the main dashboard). */
+  function mtdBoundaryEnd(){ return addDaysIso(localTodayIso(), -1); }
   function parseCSV(text){
     var rows = [], row = [], field = "", inQuotes = false;
     for(var i=0;i<text.length;i++){
@@ -787,11 +790,11 @@
   ];
   var activeChip = "mtd";
   function chipRange(key){
-    var end = state.dataMaxDate;
+    var end = localTodayIso();
     if(key==="today") return {start:end, end:end};
     if(key==="yesterday"){ var y=addDaysIso(end,-1); return {start:y, end:y}; }
     if(key==="7d") return {start:addDaysIso(end,-6), end:end};
-    if(key==="mtd"){ var mtdEnd = mtdBoundaryEnd(end); return {start:monthStartOf(mtdEnd), end:mtdEnd}; }
+    if(key==="mtd"){ var mtdEnd = mtdBoundaryEnd(); return {start:monthStartOf(mtdEnd), end:mtdEnd}; }
     if(key==="30d") return {start:addDaysIso(end,-29), end:end};
     if(key==="all"){
       var minDate = (state.auditRows||[]).reduce(function(m,r){return r[0]<m?r[0]:m;}, end);
@@ -985,8 +988,8 @@
   track("totalLead", loadTotalLeadLive(), function(rows){ state.totalLeadRows = rows; });
 
   /* initial paint while everything is still connecting */
-  state.filter.start = monthStartOf(mtdBoundaryEnd(state.dataMaxDate));
-  state.filter.end = mtdBoundaryEnd(state.dataMaxDate);
+  state.filter.start = monthStartOf(mtdBoundaryEnd());
+  state.filter.end = mtdBoundaryEnd();
   render();
 })();
 </script>

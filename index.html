@@ -619,7 +619,7 @@
   state.doctorWiseSortCol = "orders"; /* which Doctor-wise Audit Summary column is currently sorted — "doctor"/"doctorType"/"count"/"avgScore"/"orders"/"auditPct", set by clicking a column heading */
   state.doctorWiseSortDir = "desc"; /* "asc" or "desc" for the column above; default (Orders, desc) matches the table's original fixed sort */
   state.dataMaxDate = DATA_MAX_DATE;
-  state.filter = { start: DATA_MAX_DATE.slice(0,8)+"01", end: DATA_MAX_DATE };
+  state.filter = (function(){ var d=new Date(); d.setDate(d.getDate()-1); var m=d.getMonth()+1, dd=d.getDate(); var e=d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd; return { start: e.slice(0,8)+"01", end: e }; })(); /* MTD from first paint, before any sheet has loaded */
   var liveOK = { audit:false, cs:false, project:false, cancel:false, wlpSource:false, mounjaroSource:false, nonPharmaSource:false, training:false, tickets:false, csat:false, orders:false, totalConsult:false, totalLead:false };
   var lastError = { audit:null, cs:null, project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null, totalConsult:null, totalLead:null };
   var rowDropWarning = { project:null, cancel:null, wlpSource:null, mounjaroSource:null, nonPharmaSource:null, training:null, tickets:null, csat:null, orders:null, totalConsult:null, totalLead:null }; /* set by checkRowCountDrop below — diagnostic only, never blocks real data from rendering (see that function's comment) */
@@ -751,16 +751,13 @@
     d.setUTCDate(d.getUTCDate()+n);
     return d.toISOString().slice(0,10);
   }
+  /* Today's date on the viewer's own clock (IST for the team) — not UTC, which is still "yesterday" until 5:30 AM IST. */
+  function localTodayIso(){ var d = new Date(); var m = d.getMonth()+1, dd = d.getDate(); return d.getFullYear() + "-" + (m<10?"0":"") + m + "-" + (dd<10?"0":"") + dd; }
   function mtdBoundaryEnd(){
-    /* "MTD" on this dashboard means through D-1 (yesterday), not through today: today's rows in the
-       live sheets are usually still filling in as the day goes on, so folding today into MTD would
-       make an otherwise-settled month-to-date number wobble depending on what time of day someone
-       loads the page. state.dataMaxDate is the latest day ANY live source has data for (call it D —
-       it can legitimately be today), so MTD's end is always D-1 relative to that, never a fixed
-       real-world "yesterday" — this stays correct even if the live feed itself is running a day or
-       more behind. Only the MTD chip and the MTD banner use this; Today/Yesterday/Last 7/30 days/All
-       Time are unaffected and still end at D itself. */
-    return addDaysIso(state.dataMaxDate, -1);
+    /* MTD = 1st of the month up to D-1, where D is TODAY on the calendar (explicit rule: "if today is 28 Sep,
+       MTD means 1–27 Sep"). Previously this counted back from the latest audit date in the sheet, which made
+       MTD one day short early in the morning before any audit of the day had been logged (2026-10-02 fix). */
+    return addDaysIso(localTodayIso(), -1);
   }
   function daysBetween(a,b){
     return Math.round((new Date(b+"T00:00:00Z") - new Date(a+"T00:00:00Z"))/86400000)+1;
@@ -1296,7 +1293,7 @@
   var activeChip = "mtd";
 
   function chipRange(key){
-    var end = state.dataMaxDate;
+    var end = localTodayIso();   /* chips count from today's calendar date (Today = today, Yesterday = today-1, MTD = 1st..today-1) */
     if(key==="today") return {start:end, end:end};
     if(key==="yesterday"){ var y=addDaysIso(end,-1); return {start:y, end:y}; }
     if(key==="7d") return {start:addDaysIso(end,-6), end:end};

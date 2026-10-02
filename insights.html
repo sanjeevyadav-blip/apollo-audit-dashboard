@@ -445,7 +445,7 @@
   function weekStart(iso){ var d=new Date(iso+"T00:00:00Z"); var dow=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-dow); return d.toISOString().slice(0,10); }
   function fmtDateLabel(iso){ if(!iso) return "—"; return new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"}); }
   function fmtShort(iso){ return new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"2-digit",month:"short",timeZone:"UTC"}); }
-  function isoToday(){ var d=new Date(); return d.getUTCFullYear()+"-"+pad2(d.getUTCMonth()+1)+"-"+pad2(d.getUTCDate()); }
+  function isoToday(){ var d=new Date(); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }   /* viewer's local (IST) date, not UTC */
   function colLetter(idx){ var n=idx+1,s=""; while(n>0){ var r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26);} return s; }
   function parseCSV(text){
     var rows=[],row=[],field="",q=false;
@@ -614,7 +614,7 @@
   var CHIPS=[{key:"yesterday",label:"Yesterday"},{key:"7d",label:"Last 7 Days"},{key:"mtd",label:"MTD"},{key:"30d",label:"Last 30 Days"},{key:"90d",label:"Last 90 Days"},{key:"all",label:"All Time"}];
   var activeChip="mtd";
   function chipRange(k){
-    var end=state.dataMaxDate;
+    var end=isoToday();   /* same rule on every page: chips count from today; MTD = 1st of month .. today-1 */
     if(k==="yesterday"){ var y=addDaysIso(end,-1); return {start:y,end:y}; }
     if(k==="7d") return {start:addDaysIso(end,-6),end:end};
     if(k==="mtd"){ var e=addDaysIso(end,-1); return {start:monthStartOf(e),end:e}; }
