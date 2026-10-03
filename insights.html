@@ -99,6 +99,11 @@
   .metric-tbl tr.hl td.v{color:var(--accent-ink)}
   footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-soft);
     display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .src-list{flex:1 1 100%;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin-top:8px;align-items:baseline}
+  .src-list .sn{font-family:var(--font-mono);color:var(--ink)}
+  .src-list a{color:var(--accent-ink);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .src-list a:hover{text-decoration:underline}
+  @media (max-width:560px){ .src-list{grid-template-columns:1fr} .src-list a{margin-bottom:4px} }
   footer code{ font-family:var(--font-mono); background:var(--surface-2); border:1px solid var(--line); padding:1px 5px; border-radius:4px; }
   @media (max-width:560px){ .filter-range{margin-left:0;text-align:left;width:100%} }
 
@@ -385,7 +390,7 @@
 </div>
 
 <footer>
-  <span>Source: the same live Google Sheets the dashboard already reads &mdash; <code>PDS Audit Sheet</code>, <code>Non Pharma Audit Sheet</code>, <code>PDS-Mounjaro</code>, <code>BS WLP Audits</code>, <code>PDS Cancellations</code>, <code>Extract 1</code>, <code>Orders</code>. No new sheets.</span>
+  <div style="flex:1 1 100%"><span>Source: the same live Google Sheets the dashboard already reads. No new sheets.</span><div class="src-list"><span class="sn">PDS Audit Sheet :</span><a href="https://docs.google.com/spreadsheets/d/1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA/edit#gid=0" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA/edit#gid=0</a><span class="sn">Non Pharma Audit Sheet :</span><a href="https://docs.google.com/spreadsheets/d/1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA/edit#gid=324972189" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA/edit#gid=324972189</a><span class="sn">PDS-Mounjaro :</span><a href="https://docs.google.com/spreadsheets/d/15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ/edit#gid=1328268744" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ/edit#gid=1328268744</a><span class="sn">BS WLP Audits :</span><a href="https://docs.google.com/spreadsheets/d/15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ/edit#gid=1348901453" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ/edit#gid=1348901453</a><span class="sn">PDS Cancellation Sheet (before 28 Sep) :</span><a href="https://docs.google.com/spreadsheets/d/1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY/edit#gid=909502922" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY/edit#gid=909502922</a><span class="sn">PDS_Cancellation_Sheet_2 (from 28 Sep) :</span><a href="https://docs.google.com/spreadsheets/d/1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY/edit#gid=796650823" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY/edit#gid=796650823</a><span class="sn">Extract 1 · Total_Consults :</span><a href="https://docs.google.com/spreadsheets/d/10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg/edit#gid=1752463132" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg/edit#gid=1752463132</a><span class="sn">Extract 1 · Consult Count (Orders) :</span><a href="https://docs.google.com/spreadsheets/d/1XObT_WGM7pUIjVWC_1it6yHtTRSf8m2ARPSp6KCyINg/edit#gid=330090925" target="_blank" rel="noopener">https://docs.google.com/spreadsheets/d/1XObT_WGM7pUIjVWC_1it6yHtTRSf8m2ARPSp6KCyINg/edit#gid=330090925</a></div></div>
   <span>Snapshot: <b id="asOfLabel">&mdash;</b></span>
 </footer>
 <div class="tip" id="tip"></div>
