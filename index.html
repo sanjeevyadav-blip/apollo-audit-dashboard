@@ -1487,16 +1487,17 @@
        accept several values; an empty selection means "all". Auditor options = everyone with audits
        in the range (within the chosen project types); Doctor Type options = every type among the
        doctors audited in the range (within the chosen auditors/project types). A picked value that
-       drops out of the list after a date change is quietly removed. */
+       has no rows in the new range stays ticked and listed. */
     var dwTypes = state.doctorWiseTypeFilter, dwAud = state.doctorWiseAuditorFilter;
     var doctorWiseAuditorNames = auditLive ? combinedAuditRows.reduce(function(acc,r){
       if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && r[4] && (!dwTypes.length || dwTypes.indexOf(r[1])!==-1) && acc.indexOf(r[2])===-1) acc.push(r[2]);
       return acc;
     }, []).sort() : [];
-    if(auditLive) state.doctorWiseAuditorFilter = dwAud = dwAud.filter(function(nm){ return nm==="__none__" || doctorWiseAuditorNames.indexOf(nm)!==-1; });
+    /* picks are never dropped automatically (a pick with no rows in this range just matches nothing) — they stay listed so they can be unticked */
+    dwAud.forEach(function(nm){ if(nm!=="__none__" && doctorWiseAuditorNames.indexOf(nm)===-1) doctorWiseAuditorNames.push(nm); });
     var doctorWiseAll = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, dwAud, dwTypes) : [];
     var doctorTypeNames = doctorWiseAll.reduce(function(acc,d){ var t=d.doctorType||"—"; if(acc.indexOf(t)===-1) acc.push(t); return acc; }, []).sort();
-    if(auditLive) state.doctorWiseDoctorTypeFilter = state.doctorWiseDoctorTypeFilter.filter(function(t){ return t==="__none__" || doctorTypeNames.indexOf(t)!==-1; });
+    state.doctorWiseDoctorTypeFilter.forEach(function(t){ if(t!=="__none__" && doctorTypeNames.indexOf(t)===-1) doctorTypeNames.push(t); });
     var dwDocTypes = state.doctorWiseDoctorTypeFilter;
     renderMultiSelect("ms-auditor", doctorWiseAuditorNames, dwAud, "All auditors", "auditors");
     renderMultiSelect("ms-type", ["PDS","PDS- Mounjaro","Non Pharma","WLP - Non Pharma"], dwTypes, "All project types", "project types");
