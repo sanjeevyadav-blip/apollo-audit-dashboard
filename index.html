@@ -397,7 +397,7 @@
 
     <div class="panel">
       <h2>Doctor&#8209;wise Audit Summary</h2>
-      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s Completed consults in the same range (D&minus;1), from the Total_Consults &ldquo;Extract 1&rdquo; tab; Audit % = Audits Completed &divide; Orders. Click any column heading to sort by it.</p>
+      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s Completed consults in the same range (D&minus;1), from the Total_Consults &ldquo;Extract 1&rdquo; tab; Fulfillment % = Completed &divide; Total consults (Completed + Cancelled + Pending); Audit % = Audits Completed &divide; Orders. Click any column heading to sort by it.</p>
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
@@ -424,6 +424,7 @@
             <th class="num sortable" data-sort="count">Audits Completed<span class="sort-arrow" data-arrow="count"></span></th>
             <th class="num sortable" data-sort="avgScore">Avg Score<span class="sort-arrow" data-arrow="avgScore"></span></th>
             <th class="num sortable" data-sort="orders">Orders<span class="sort-arrow" data-arrow="orders"></span></th>
+            <th class="num sortable" data-sort="fulfillPct" title="Completed consults ÷ Total consults (Completed + Cancelled + Pending)">Fulfillment %<span class="sort-arrow" data-arrow="fulfillPct"></span></th>
             <th class="num sortable" data-sort="auditPct">Audit %<span class="sort-arrow" data-arrow="auditPct"></span></th>
           </tr></thead>
           <tbody id="doctorWiseBody"></tbody>
@@ -988,7 +989,9 @@
       if(!r.date || r.date<start || r.date>end || !r.doctor) return;
       var key = normalizeDoctorKey(r.doctor);
       if(!key) return;
-      by[key] = (by[key]||0) + (r.orders||0);
+      var b = by[key] || (by[key] = {orders: 0, total: 0});
+      b.orders += (r.orders||0);
+      b.total += (r.total||0);
     });
     return by;
   }
@@ -1472,8 +1475,12 @@
     var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter, state.doctorWiseTypeFilter) : [];
     var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, addDaysIso(state.filter.start, -1), addDaysIso(state.filter.end, -1)) /* D-1 rule: orders are appointment-dated, same as consults */ : null;
     doctorWiseRows.forEach(function(d){
-      d.orders = doctorOrdersByKey ? (doctorOrdersByKey[normalizeDoctorKey(d.doctor)] || 0) : null;
+      var o = doctorOrdersByKey ? doctorOrdersByKey[normalizeDoctorKey(d.doctor)] : null;
+      d.orders = doctorOrdersByKey ? (o ? o.orders : 0) : null;
+      d.totalConsults = doctorOrdersByKey ? (o ? o.total : 0) : null;
       d.auditPct = (d.orders!==null && d.orders>0) ? (d.count/d.orders*100) : null;
+      /* Fulfillment = Completed consults ÷ Total consults (every status: Completed + Cancelled + Pending), same D-1 window */
+      d.fulfillPct = (d.totalConsults!==null && d.totalConsults>0) ? (d.orders/d.totalConsults*100) : null;
     });
     /* Generic click-to-sort: whichever column the user last clicked (state.doctorWiseSortCol) ranks
        the table, in the direction they chose (state.doctorWiseSortDir). Text columns (doctor,
@@ -1496,7 +1503,7 @@
       }
       return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
     });
-    var DOCTOR_WISE_COL_LABEL = { doctor:"Doctor Name", doctorType:"Doctor Type", count:"Audits Completed", avgScore:"Avg Score", orders:"Orders", auditPct:"Audit %" };
+    var DOCTOR_WISE_COL_LABEL = { doctor:"Doctor Name", doctorType:"Doctor Type", count:"Audits Completed", avgScore:"Avg Score", orders:"Orders", fulfillPct:"Fulfillment %", auditPct:"Audit %" };
     Array.prototype.forEach.call(document.querySelectorAll("#doctorWiseTable .sort-arrow"), function(el){
       var col = el.getAttribute("data-arrow");
       if(col === state.doctorWiseSortCol){
@@ -1519,8 +1526,8 @@
       ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(state.doctorWiseTypeFilter==="all" ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
-      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
-    }).join("") : '<tr><td colspan="6" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
+      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum" title="'+(d.totalConsults===null?'':fmtInt(d.orders)+' completed of '+fmtInt(d.totalConsults)+' total consults')+'">'+(d.fulfillPct===null?'—':fmtPct(d.fulfillPct,1))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
+    }).join("") : '<tr><td colspan="7" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
 
     if(combinedAuditRows){
       /* MTD banner — always current month through D-1, independent of the filter above (see
@@ -1775,7 +1782,7 @@
      click of a new column; clicking the already-active column flips direction). Headings are static
      markup (only the arrow glyphs get rewritten each render), so these listeners are attached once
      here rather than re-bound on every render. */
-  var DOCTOR_WISE_SORT_DEFAULT_DIR = { doctor:"asc", doctorType:"asc", count:"desc", avgScore:"desc", orders:"desc", auditPct:"desc" };
+  var DOCTOR_WISE_SORT_DEFAULT_DIR = { doctor:"asc", doctorType:"asc", count:"desc", avgScore:"desc", orders:"desc", fulfillPct:"desc", auditPct:"desc" };
   Array.prototype.forEach.call(document.querySelectorAll("#doctorWiseTable th.sortable"), function(th){
     th.addEventListener("click", function(){
       var col = th.getAttribute("data-sort");
@@ -2435,17 +2442,23 @@
       });
       if(!L.date || !L.status || !L.doctor || !L.total) throw new Error("could not resolve Extract 1 columns");
       var floor = isoDateNDaysAgo(400);
-      return getJson("select " + L.date + ", " + L.doctor + ", sum(" + L.total + ") where " + L.status + " = 'Completed' and " + L.date + " >= " + consultDateLiteral(floor, isDate) + " group by " + L.date + ", " + L.doctor);
+      /* every status, so Fulfillment (Completed ÷ all consults) can be computed alongside Orders (Completed) */
+      return getJson("select " + L.date + ", " + L.doctor + ", " + L.status + ", sum(" + L.total + ") where " + L.date + " >= " + consultDateLiteral(floor, isDate) + " group by " + L.date + ", " + L.doctor + ", " + L.status);
     }).then(function(d){
-      var out = [];
+      var byKey = {}, out = [];
       (d.table && d.table.rows ? d.table.rows : []).forEach(function(row){
         var c = row.c || [];
         var iso = consultCellIso(c[0]);
         var doctor = c[1] && c[1].v ? String(c[1].v).trim() : "";
-        var orders = (c[2] && typeof c[2].v === "number") ? c[2].v : 0;
+        var status = c[2] && c[2].v ? String(c[2].v).trim() : "";
+        var n = (c[3] && typeof c[3].v === "number") ? c[3].v : 0;
         if(!iso || !doctor) return;
-        out.push({date: iso, doctor: doctor, orders: orders});
+        var k = iso + "|" + doctor;
+        var rec = byKey[k] || (byKey[k] = {date: iso, doctor: doctor, orders: 0, total: 0});
+        rec.total += n;                                  /* all statuses = Total consult */
+        if(/^completed$/i.test(status)) rec.orders += n; /* Completed = Orders */
       });
+      for(var k in byKey) out.push(byKey[k]);
       if(!out.length) throw new Error("no rows parsed");
       return out;
     });
