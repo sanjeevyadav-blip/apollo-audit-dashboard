@@ -424,7 +424,8 @@
     var s = String(raw||"").trim().replace(/\s+/g," ");
     return s.replace(/^(Dr|Dt)\.?\s+/i, function(m,p1){ return p1.charAt(0).toUpperCase()+p1.slice(1).toLowerCase()+". "; });
   }
-  function normalizeDoctorKey(raw){ return String(raw||"").trim().toLowerCase().replace(/^dr\.?\s+/,"").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim(); }
+  var DOCTOR_KEY_ALIASES = { "vinod bharani": "b vinod" };   /* same Dr ID 00ab52f2-…: audit sheets "Dr. Vinod Bharani" = Extract 1 "Dr. B Vinod" */
+  function normalizeDoctorKey(raw){ var k=String(raw||"").trim().toLowerCase().replace(/^dr[\s.]+/,"").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim(); return DOCTOR_KEY_ALIASES[k]||k; }
   var MON = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
   function pad2(n){ n=parseInt(n,10); return n<10?"0"+n:""+n; }
   /* Accepts every date shape seen in these sheets: 2026-08-23, 08-24-2026, 8/24/2026, 4-30-2026, 1-Sep-2026 */

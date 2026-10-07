@@ -700,8 +700,14 @@
      pattern doesn't fully absorb. Used only to MATCH a doctor across two sheets (the Orders sheet
      against the Merge Overall Sheet's Doctor Name) — never shown to the user, who always sees the
      original spelling from whichever sheet drives that table. */
+  /* Same doctor, different name in different sheets (confirmed by the same Dr ID): the audit sheets say
+     "Dr. Vinod Bharani", Extract 1 says "Dr. B Vinod" (Dr ID 00ab52f2-0e54-42e3-b686-c9a1cf9cce5a).
+     Keys are normalizeDoctorKey output; add more pairs here as they're found. */
+  var DOCTOR_KEY_ALIASES = { "vinod bharani": "b vinod" };
   function normalizeDoctorKey(raw){
-    return String(raw||"").trim().toLowerCase().replace(/^dr\.?\s+/,"").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+    /* "Dr", "Dr.", "Dr.." and "Dr " prefixes all stripped (Extract 1 has some "Dr.. Name" entries) */
+    var k = String(raw||"").trim().toLowerCase().replace(/^dr[\s.]+/,"").replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+    return DOCTOR_KEY_ALIASES[k] || k;
   }
   /* The Trainer Acknowledgement sheet's "Trainer Name" field is free-text and wildly inconsistent
      ("Dr.Preethi", "DR PREETHI", "dr preethi k", "Dr Divya Bhanu", "DrDivyaBhanu", co-trainer pairs
