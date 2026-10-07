@@ -259,6 +259,19 @@
   .page-toggle svg{width:15px;height:15px;flex:none}
   .page-toggle .pg{font-family:var(--font-mono);font-size:10px;opacity:.75;letter-spacing:.06em}
   @media (max-width:560px){ .page-toggle a{padding:8px 12px;font-size:11.5px} .page-toggle .pg{display:none} .page-toggle{flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 32px);border-radius:18px} }
+  /* multi-select dropdown (Doctor-wise Audit Summary filters) */
+  .ms{position:relative}
+  .ms-btn{font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 26px 4px 8px;background:var(--surface);color:var(--ink);cursor:pointer;min-width:160px;max-width:260px;text-align:left;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ms-btn::after{content:"";position:absolute;right:9px;top:50%;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-70%) rotate(45deg);opacity:.7}
+  .ms-btn.on{border-color:var(--accent);color:var(--accent)}
+  .ms-pop{display:none;position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:240px;max-height:300px;overflow:auto;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px}
+  .ms.open .ms-pop{display:block}
+  .ms-act{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 6px 6px;border-bottom:1px solid var(--line);margin-bottom:3px;position:sticky;top:-4px;background:var(--surface)}
+  .ms-act button{background:none;border:0;padding:0;font:inherit;font-size:11px;font-weight:600;color:var(--accent);cursor:pointer}
+  .ms-opt{display:flex;align-items:center;gap:8px;padding:5px 6px;font-size:12px;color:var(--ink);border-radius:5px;cursor:pointer;user-select:none}
+  .ms-opt:hover{background:var(--surface-2)}
+  .ms-opt input{accent-color:var(--accent);margin:0;cursor:pointer}
+  .ms-empty{padding:8px 6px;font-size:11.5px;color:var(--ink-soft)}
 </style>
 </head>
 <body>
@@ -401,19 +414,15 @@
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
-          <select id="doctorWiseAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
-            <option value="all">All auditors</option>
-          </select>
+          <div class="ms" id="ms-auditor"><button type="button" class="ms-btn">All auditors</button><div class="ms-pop"></div></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Project Type</span>
-          <select id="doctorWiseTypeFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
-            <option value="all">All project types</option>
-            <option value="PDS">PDS</option>
-            <option value="PDS- Mounjaro">PDS- Mounjaro</option>
-            <option value="Non Pharma">Non Pharma</option>
-            <option value="WLP - Non Pharma">WLP - Non Pharma</option>
-          </select>
+          <div class="ms" id="ms-type"><button type="button" class="ms-btn">All project types</button><div class="ms-pop"></div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Doctor Type</span>
+          <div class="ms" id="ms-doctorType"><button type="button" class="ms-btn">All doctor types</button><div class="ms-pop"></div></div>
         </div>
       </div>
       <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
@@ -615,8 +624,9 @@
   state.cancelSummary = STATIC_CANCEL_SUMMARY;
   state.reasonToggle = "yes"; /* "yes" = Genuine, "no" = Not genuine — which reason-mix list the gc-pill toggle currently shows */
   state.dailyTimeAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Daily Working Time table below, no other panel */
-  state.doctorWiseTypeFilter = "all"; /* "all", or one TYPE_ORDER key — narrows only the Doctor-wise Audit Summary table (PDS Cancellation not offered: its rows carry no doctor name) */
-  state.doctorWiseAuditorFilter = "all"; /* "all", or a specific auditor name — narrows only the Doctor-wise Audit Summary table, no other panel */
+  state.doctorWiseTypeFilter = []; /* multi-select: [] = all; otherwise the TYPE_ORDER keys picked (PDS Cancellation not offered: its rows carry no doctor name) */
+  state.doctorWiseDoctorTypeFilter = []; /* multi-select: [] = all; otherwise Doctor Type values (CLINIC_247, PAYROLL, …) */
+  state.doctorWiseAuditorFilter = []; /* multi-select: [] = all; otherwise the auditor names picked */
   state.doctorWiseSortCol = "orders"; /* which Doctor-wise Audit Summary column is currently sorted — "doctor"/"doctorType"/"count"/"avgScore"/"orders"/"auditPct", set by clicking a column heading */
   state.doctorWiseSortDir = "desc"; /* "asc" or "desc" for the column above; default (Orders, desc) matches the table's original fixed sort */
   state.dataMaxDate = DATA_MAX_DATE;
@@ -962,8 +972,8 @@
     auditRows.forEach(function(r){
       var date=r[0], type=r[1], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
       if(date<start || date>end || !doctorName) return;
-      if(typeFilter && typeFilter!=="all" && type!==typeFilter) return;
-      if(auditorFilter && auditorFilter!=="all" && auditor!==auditorFilter) return;
+      if(typeFilter && typeFilter.length && typeFilter.indexOf(type)===-1) return;
+      if(auditorFilter && auditorFilter.length && auditorFilter.indexOf(auditor)===-1) return;
       if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
       var b = by[doctorName];
       b.count += 1;
@@ -1342,6 +1352,26 @@
     renderFilteredSections();
   });
 
+  /* Draws one multi-select: button label ("All …" / the single pick / "N auditors") and a checkbox per
+     option. An empty selection shows every box ticked, since nothing filtered = everything included;
+     ["__none__"] is the "Clear" state (nothing ticked, table empty). */
+  function renderMultiSelect(id, options, selected, allLabel, noun){
+    var box = document.getElementById(id); if(!box) return;
+    box._options = options.slice();
+    var btn = box.querySelector(".ms-btn"), pop = box.querySelector(".ms-pop");
+    var all = !selected.length, cleared = selected.length===1 && selected[0]==="__none__";
+    var picks = cleared ? [] : selected;
+    btn.textContent = all ? allLabel : cleared ? "None selected" : (picks.length === 1 ? picks[0] : picks.length + " " + noun);
+    btn.title = all ? allLabel : picks.join(", ");
+    btn.classList.toggle("on", !all);
+    var scroll = pop.scrollTop;
+    pop.innerHTML = '<div class="ms-act"><button type="button" data-ms-all>Select all</button><span style="font-size:11px;color:var(--ink-soft)">'+(all ? "All "+options.length : picks.length+" of "+options.length)+'</span><button type="button" data-ms-clear>Clear</button></div>' +
+      (options.length ? options.map(function(o){
+        var on = all || picks.indexOf(o) !== -1;
+        return '<label class="ms-opt"><input type="checkbox" value="'+esc(o)+'"'+(on?' checked':'')+'><span>'+esc(o)+'</span></label>';
+      }).join("") : '<div class="ms-empty">Nothing in this range</div>');
+    pop.scrollTop = scroll;
+  }
   function renderFilteredSections(){
     if(state.filter.start > state.filter.end){ var t=state.filter.start; state.filter.start=state.filter.end; state.filter.end=t; }
     document.getElementById("filterStart").value = state.filter.start;
@@ -1453,26 +1483,25 @@
        from the separate Orders sheet via normalizeDoctorKey, independent of the auditor filter.
        Every column heading is click-to-sort (state.doctorWiseSortCol/Dir, toggled by the listeners
        near the bottom of the script) rather than a single fixed ranking. */
-    var doctorWiseSel = document.getElementById("doctorWiseAuditorFilter");
-    if(auditLive){
-      var doctorWiseAuditorNames = Array.prototype.filter.call(
-        combinedAuditRows.reduce(function(acc,r){
-          if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && (state.doctorWiseTypeFilter==="all" || r[1]===state.doctorWiseTypeFilter) && acc.indexOf(r[2])===-1) acc.push(r[2]);
-          return acc;
-        }, []).sort(),
-        function(nm){ return !!nm; }
-      );
-      if(state.doctorWiseAuditorFilter!=="all" && doctorWiseAuditorNames.indexOf(state.doctorWiseAuditorFilter)===-1){
-        state.doctorWiseAuditorFilter = "all";
-      }
-      doctorWiseSel.innerHTML = '<option value="all">All auditors</option>' + doctorWiseAuditorNames.map(function(nm){
-        return '<option value="'+esc(nm)+'"'+(state.doctorWiseAuditorFilter===nm?' selected':'')+'>'+esc(nm)+'</option>';
-      }).join("");
-      doctorWiseSel.value = state.doctorWiseAuditorFilter;
-    } else {
-      doctorWiseSel.innerHTML = '<option value="all">All auditors</option>';
-    }
-    var doctorWiseRows = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, state.doctorWiseAuditorFilter, state.doctorWiseTypeFilter) : [];
+    /* Multi-select filters (explicit request 2026-10-07): Auditor, Project Type and Doctor Type each
+       accept several values; an empty selection means "all". Auditor options = everyone with audits
+       in the range (within the chosen project types); Doctor Type options = every type among the
+       doctors audited in the range (within the chosen auditors/project types). A picked value that
+       drops out of the list after a date change is quietly removed. */
+    var dwTypes = state.doctorWiseTypeFilter, dwAud = state.doctorWiseAuditorFilter;
+    var doctorWiseAuditorNames = auditLive ? combinedAuditRows.reduce(function(acc,r){
+      if(r[0]>=state.filter.start && r[0]<=state.filter.end && r[2] && r[4] && (!dwTypes.length || dwTypes.indexOf(r[1])!==-1) && acc.indexOf(r[2])===-1) acc.push(r[2]);
+      return acc;
+    }, []).sort() : [];
+    if(auditLive) state.doctorWiseAuditorFilter = dwAud = dwAud.filter(function(nm){ return nm==="__none__" || doctorWiseAuditorNames.indexOf(nm)!==-1; });
+    var doctorWiseAll = auditLive ? aggregateDoctorWise(combinedAuditRows, state.filter.start, state.filter.end, dwAud, dwTypes) : [];
+    var doctorTypeNames = doctorWiseAll.reduce(function(acc,d){ var t=d.doctorType||"—"; if(acc.indexOf(t)===-1) acc.push(t); return acc; }, []).sort();
+    if(auditLive) state.doctorWiseDoctorTypeFilter = state.doctorWiseDoctorTypeFilter.filter(function(t){ return t==="__none__" || doctorTypeNames.indexOf(t)!==-1; });
+    var dwDocTypes = state.doctorWiseDoctorTypeFilter;
+    renderMultiSelect("ms-auditor", doctorWiseAuditorNames, dwAud, "All auditors", "auditors");
+    renderMultiSelect("ms-type", ["PDS","PDS- Mounjaro","Non Pharma","WLP - Non Pharma"], dwTypes, "All project types", "project types");
+    renderMultiSelect("ms-doctorType", doctorTypeNames, dwDocTypes, "All doctor types", "doctor types");
+    var doctorWiseRows = doctorWiseAll.filter(function(d){ return !dwDocTypes.length || dwDocTypes.indexOf(d.doctorType||"—")!==-1; });
     var doctorOrdersByKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, addDaysIso(state.filter.start, -1), addDaysIso(state.filter.end, -1)) /* D-1 rule: orders are appointment-dated, same as consults */ : null;
     doctorWiseRows.forEach(function(d){
       var o = doctorOrdersByKey ? doctorOrdersByKey[normalizeDoctorKey(d.doctor)] : null;
@@ -1515,15 +1544,16 @@
       }
     });
     var doctorWiseFilterParts = [];
-    if(state.doctorWiseTypeFilter!=="all") doctorWiseFilterParts.push(state.doctorWiseTypeFilter);
-    if(state.doctorWiseAuditorFilter!=="all") doctorWiseFilterParts.push(state.doctorWiseAuditorFilter);
+    if(state.doctorWiseTypeFilter.length) doctorWiseFilterParts.push(state.doctorWiseTypeFilter.join(", ").replace("__none__","no project type"));
+    if(state.doctorWiseAuditorFilter.length) doctorWiseFilterParts.push(state.doctorWiseAuditorFilter.join(", ").replace("__none__","no auditor"));
+    if(state.doctorWiseDoctorTypeFilter.length) doctorWiseFilterParts.push(state.doctorWiseDoctorTypeFilter.join(", ").replace("__none__","no doctor type"));
     var doctorWiseFilterMsg = doctorWiseFilterParts.length ? " Filtered to "+doctorWiseFilterParts.join(" · ")+"." : "";
-    if(state.doctorWiseTypeFilter!=="all") doctorWiseFilterMsg += " Orders isn't split by project type, so Audit % here compares this type's audits against the doctor's total orders.";
+    if(state.doctorWiseTypeFilter.length) doctorWiseFilterMsg += " Orders isn't split by project type, so Audit % here compares this type's audits against the doctor's total orders.";
     var doctorWiseSortDirLabel = DOCTOR_WISE_TEXT_COLS[state.doctorWiseSortCol]
       ? (state.doctorWiseSortDir==="asc" ? "A to Z" : "Z to A")
       : (state.doctorWiseSortDir==="asc" ? "low to high" : "high to low");
     document.getElementById("doctorWiseDesc").textContent = auditLive
-      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(state.doctorWiseTypeFilter==="all" ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
+      ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(!state.doctorWiseTypeFilter.length ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter.join(" + ").replace("__none__","no project type")+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
       return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum" title="'+(d.totalConsults===null?'':fmtInt(d.orders)+' completed of '+fmtInt(d.totalConsults)+' total consults')+'">'+(d.fulfillPct===null?'—':fmtPct(d.fulfillPct,1))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
@@ -1769,13 +1799,35 @@
   });
 
   /* Doctor-wise Audit Summary auditor filter — same pattern, narrows only that one table. */
-  document.getElementById("doctorWiseAuditorFilter").addEventListener("change", function(e){
-    state.doctorWiseAuditorFilter = e.target.value;
-    renderFilteredSections();
+  /* Multi-select wiring for the Doctor-wise filters. Each .ms keeps its open/closed state on the
+     container (renderMultiSelect only rewrites the button text and the option list), so ticking
+     boxes doesn't close the panel; clicking outside closes it. */
+  var MS_STATE_KEY = { "ms-auditor":"doctorWiseAuditorFilter", "ms-type":"doctorWiseTypeFilter", "ms-doctorType":"doctorWiseDoctorTypeFilter" };
+  Object.keys(MS_STATE_KEY).forEach(function(id){
+    var box = document.getElementById(id);
+    if(!box) return;
+    var key = MS_STATE_KEY[id];
+    box.querySelector(".ms-btn").addEventListener("click", function(e){
+      e.stopPropagation();
+      var wasOpen = box.classList.contains("open");
+      Array.prototype.forEach.call(document.querySelectorAll(".ms.open"), function(m){ m.classList.remove("open"); });
+      if(!wasOpen) box.classList.add("open");
+    });
+    var pop = box.querySelector(".ms-pop");
+    pop.addEventListener("click", function(e){
+      e.stopPropagation();
+      if(e.target.matches("[data-ms-all]")){ state[key] = []; renderFilteredSections(); }
+      else if(e.target.matches("[data-ms-clear]")){ state[key] = ["__none__"]; renderFilteredSections(); }
+    });
+    pop.addEventListener("change", function(){
+      var picked = Array.prototype.filter.call(pop.querySelectorAll(".ms-opt input"), function(c){ return c.checked; }).map(function(c){ return c.value; });
+      /* everything ticked = "all"; nothing ticked = show nothing */
+      state[key] = (box._options && picked.length === box._options.length) ? [] : (picked.length ? picked : ["__none__"]);
+      renderFilteredSections();
+    });
   });
-  document.getElementById("doctorWiseTypeFilter").addEventListener("change", function(e){
-    state.doctorWiseTypeFilter = e.target.value;
-    renderFilteredSections();
+  document.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".ms.open"), function(m){ m.classList.remove("open"); });
   });
 
   /* Doctor-wise Audit Summary column sorting — click a heading to sort by it (ascending on first
