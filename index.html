@@ -397,7 +397,7 @@
 
     <div class="panel">
       <h2>Doctor&#8209;wise Audit Summary</h2>
-      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s order volume in the same range, from a separate Orders sheet; Audit % = Audits Completed &divide; Orders. Click any column heading to sort by it.</p>
+      <p class="desc" id="doctorWiseDesc">Every audited doctor, selected range &mdash; across PDS, PDS&ndash;Mounjaro, Non Pharma and WLP&ndash;Non Pharma combined (PDS Cancellation rows don&rsquo;t carry a doctor name, same as Doctor coverage below). Orders is that doctor&rsquo;s Completed consults in the same range (D&minus;1), from the Total_Consults &ldquo;Extract 2&rdquo; tab; Audit % = Audits Completed &divide; Orders. Click any column heading to sort by it.</p>
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
@@ -526,8 +526,8 @@
   var TICKETS_GID   = "2075545445";
   var FILE_CSAT     = "1ZpL8LwvgG_QNeSbqKtQ5SAmL8wrLg2cbfsXt-AfeDmM"; /* "CSAT Rating & Patient Review", "Negative Review Appointments" tab */
   var CSAT_GID      = "1513006442";
-  var FILE_ORDERS   = "1XObT_WGM7pUIjVWC_1it6yHtTRSf8m2ARPSp6KCyINg"; /* per-doctor Orders volume sheet, explicitly provided as the source for the Doctor-wise Audit Summary's "Orders" column */
-  var ORDERS_GID    = "330090925";
+  var FILE_ORDERS   = "10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg"; /* Total_Consults file, "Extract 2" tab — source for the Doctor-wise Audit Summary's "Orders" column (Completed consults per doctor per day) */
+  var ORDERS_GID    = "874680989";
   var FILE_TOTAL_CONSULT = "10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg"; /* "Extract 1" tab — Date, Consult_Type, Doctor_Name, Doctor_Type, Total_Consult: the full per-doctor consult/appointment pool per audit type. This is the "Audit assigned to Auditor" denominator for the Project-wise Audit Summary's "% Audited" column (Total Audits Completed ÷ this total), confirmed with the user to be the full case pool rather than some smaller pre-flagged-for-audit subset, since no such subset is tracked live anywhere. Per-auditor % (views 2/3, Auditor working time / Daily Working Time) was explicitly deferred: this sheet has no per-auditor column, so there's no reliable way to say how many of these consults were "assigned" to any one auditor. */
   var TOTAL_CONSULT_GID = "1752463132";
   var CONSULT_TYPE_MAP = { "PDS":"PDS", "PDS Mounjaro":"PDS- Mounjaro", "Non Pharma":"Non Pharma", "PDS Cancellation":"PDS Cancellation", "GLP":"WLP - Non Pharma" }; /* maps Extract 1's own Consult_Type text onto this dashboard's internal audit-type keys (TYPE_ORDER above) — note "GLP" here maps to the internal key "WLP - Non Pharma", which is itself displayed to the user as "GLP" (see RAW_NAME) */
@@ -2404,26 +2404,42 @@
     });
   }
 
-  /* Orders — dedicated per-doctor order-volume sheet (A=appointment_date, B=FULLNAME, C=Orders),
-     explicitly provided as the source for the Doctor-wise Audit Summary's "Orders" column. */
+  /* Orders — per explicit request (2026-10-07) now read from the Total_Consults file's "Extract 2" tab
+     (gid 874680989): one row per Date × Consult_Type × Status × Doctor_Name with Total_Consult. The old
+     "Consult Count" sheet stopped refreshing on 10 Sep 2026. A doctor's Orders for a day = the sum of
+     Total_Consult over that doctor's Completed rows (all consult types), which reproduces the old
+     sheet's per-day totals within ~0.5%. Summed server-side so only one row per doctor per day comes
+     back; columns resolved by header label, and the Date column works whether it is text or a date. */
   function loadOrdersLive(){
-    var url = "https://docs.google.com/spreadsheets/d/" + FILE_ORDERS + "/gviz/tq?tqx=out:csv&gid=" + ORDERS_GID + "&tq=" + encodeURIComponent("select A,B,C");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
-      if(!r.ok) throw new Error("http "+r.status);
-      return r.text();
-    }).then(function(csvText){
-      var rows = parseCSV(csvText);
-      if(rows.length < 2) throw new Error("no rows parsed");
+    var base = "https://docs.google.com/spreadsheets/d/" + FILE_ORDERS + "/gviz/tq?gid=" + ORDERS_GID + "&tqx=out:json&tq=";
+    function getJson(tq){
+      return fetch(base + encodeURIComponent(tq) + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("http "+r.status);
+        return r.text();
+      }).then(function(t){ return JSON.parse(t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "")); });
+    }
+    return getJson("select * limit 1").then(function(d){
+      var cols = d.table.cols, L = {}, isDate = false;
+      cols.forEach(function(c, i){
+        var lab = (c.label||"").trim().toLowerCase(), letter = colIndexToLetter(i);
+        if(lab === "date"){ L.date = letter; isDate = /^date/.test(c.type||""); }
+        else if(lab === "status") L.status = letter;
+        else if(lab === "doctor_name") L.doctor = letter;
+        else if(lab === "total_consult") L.total = letter;
+      });
+      if(!L.date || !L.status || !L.doctor || !L.total) throw new Error("could not resolve Extract 2 columns");
+      var floor = isoDateNDaysAgo(400);
+      return getJson("select " + L.date + ", " + L.doctor + ", sum(" + L.total + ") where " + L.status + " = 'Completed' and " + L.date + " >= " + consultDateLiteral(floor, isDate) + " group by " + L.date + ", " + L.doctor);
+    }).then(function(d){
       var out = [];
-      for(var i=1;i<rows.length;i++){
-        var r = rows[i]; if(!r) continue;
-        var iso = parseFlexMDY(r[0]); if(!iso) continue;
-        var doctor = (r[1]||"").trim(); if(!doctor) continue;
-        var ordersRaw = (r[2]||"").trim();
-        var orders = ordersRaw ? parseFloat(ordersRaw) : 0;
-        if(isNaN(orders)) orders = 0;
+      (d.table && d.table.rows ? d.table.rows : []).forEach(function(row){
+        var c = row.c || [];
+        var iso = consultCellIso(c[0]);
+        var doctor = c[1] && c[1].v ? String(c[1].v).trim() : "";
+        var orders = (c[2] && typeof c[2].v === "number") ? c[2].v : 0;
+        if(!iso || !doctor) return;
         out.push({date: iso, doctor: doctor, orders: orders});
-      }
+      });
       if(!out.length) throw new Error("no rows parsed");
       return out;
     });
