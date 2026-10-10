@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clinical Compliance Scorecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cc.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="pages"><nav>
+    <a class="on" href="./"><span class="k">PAGE 1</span>Board View</a>
+    <a href="deepdive.html"><span class="k">PAGE 2</span>Deep-dive</a>
+  </nav></div>
+
+  <header class="top">
+    <div class="top-id">
+      <span class="mark">APOLLO 24|7</span>
+      <div>
+        <h1>Clinical Compliance Scorecard</h1>
+        <p>Board view &middot; clinical audit quality and patient escalations, combined into one score</p>
+      </div>
+    </div>
+    <div class="top-meta">
+      <span class="status-chip off" id="status"><span class="dot"></span><span id="statusText">Loading live data…</span></span>
+      <span>Data through <b id="through">—</b></span>
+      <span class="noprint"><button class="btn" onclick="window.print()">Print / Save PDF</button> <a class="btn" href="deepdive.html">Open deep-dive &rarr;</a></span>
+    </div>
+  </header>
+
+  <div class="periodbar">
+    <span class="lbl">Period</span>
+    <div class="chips" id="periodChips"></div>
+    <span class="range" id="rangeLabel"></span>
+  </div>
+
+  <div id="note"></div>
+  <div id="content"><div class="loading">Reading the audit, ticket and order sheets…</div></div>
+
+  <footer>
+    <div><b style="color:var(--ink)">How the score works.</b> Overall = 25% Audit Score + 75% Escalation Score. Audit Score = average audit score of all scored audits in the period (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma). Escalation Score = average of Consult, Pharmacy and Diagnostics escalation-free %, where escalation-free % = 100 &times; (1 &minus; weighted tickets &divide; orders) and weighted tickets = 2 &times; High + 1 &times; Medium. RAG: green &ge; 97, amber 95&ndash;97, red &lt; 95. Full method, High/Medium list and sources on the <a href="deepdive.html">deep-dive page</a>.</div>
+  </footer>
+</div>
+
+<script src="cc-core.js"></script>
+<script>
+(function(){
+  "use strict";
+  var U = CC.util, DATA = null, PERIODS = [], SEL = null;
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function fi(n){ return (n==null||isNaN(n)) ? "—" : Math.round(n).toLocaleString("en-IN"); }
+  function f1(n,d){ return (n==null||isNaN(n)) ? "—" : n.toFixed(d==null?1:d); }
+  function ragLabel(r){ return r==="green"?"On track":(r==="amber"?"Watch":(r==="red"?"Action needed":"No data")); }
+  /* change arrow; higherIsBetter decides the colour */
+  function delta(cur, prev, d, higherIsBetter, suffix){
+    if(cur==null||prev==null||isNaN(cur)||isNaN(prev)) return '<span class="delta flat">no comparison</span>';
+    var diff = cur-prev, eps = Math.pow(10,-(d==null?1:d))/2;
+    if(Math.abs(diff) < eps) return '<span class="delta flat">&#9644; no change</span>';
+    var good = higherIsBetter ? diff>0 : diff<0;
+    return '<span class="delta '+(good?'up':'down')+'">'+(diff>0?'&#9650; +':'&#9660; ')+f1(diff,d)+(suffix||'')+'</span>';
+  }
+
+  function render(){
+    var p = SEL, pv = CC.previousOf(p);
+    var R = CC.compute(DATA, p.start, p.end), P = CC.compute(DATA, pv.start, pv.end);
+    var prevOk = pv.start >= CC.CFG.FIRST_MONTH+"-01";
+    if(!prevOk) P = null;
+    document.getElementById("rangeLabel").innerHTML = U.dateLabel(p.start)+" &ndash; "+U.dateLabel(p.end)+(P?' &middot; compared with <b>'+esc(pv.label)+'</b>':'');
+    Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", c.dataset.k===p.key); });
+
+    /* data-quality note */
+    var notes=[];
+    if(R.audit.incomplete){
+      notes.push("<b>Audit data is incomplete for this period.</b> The live "+R.audit.missing.map(function(m){ return esc(m.type)+" sheet"+(m.from?" starts on "+U.dateLabel(m.from):" has no rows"); }).join(", ")+
+        ", so the Audit Score here only covers the audits still held in the sheets. Older audits need an archive sheet (or the BigQuery archive) to be counted.");
+    }
+    document.getElementById("note").innerHTML = notes.map(function(n){ return '<div class="note">'+n+'</div>'; }).join("");
+
+    var A=R.audit, T=R.tickets, PT=P&&P.tickets;
+    /* the comparison window's audits may be missing (rolling audit sheets): then don't compare audit or overall */
+    var auditCmp = !!(P && !P.audit.incomplete && !A.incomplete);
+    var PA = auditCmp ? P.audit : null;
+    var html = '';
+    /* ---- hero ---- */
+    html += '<div class="hero">';
+    html += '<div class="panel score-card '+R.rag+'"><div class="k">Overall clinical compliance score</div>'+
+      '<div class="score-big"><span class="v tnum">'+f1(R.overall)+'</span><span class="of">/ 100</span></div>'+
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="rag '+R.rag+'">'+ragLabel(R.rag)+'</span>'+(auditCmp?delta(R.overall,P.overall,1,true)+' <span style="font-size:11.5px;color:var(--ink-soft)">vs '+esc(pv.label)+'</span>':(P?'<span style="font-size:11.5px;color:var(--ink-soft)">no like-for-like comparison: '+esc(pv.label)+' audit data incomplete</span>':''))+'</div>'+
+      '<div class="formula"><code>25% &times; '+f1(A.score)+'</code> + <code>75% &times; '+f1(T.score,2)+'</code> = <code>'+f1(R.overall,2)+'</code></div></div>';
+
+    var covPct = A.coverage, covMax = 5, tgtL = CC.CFG.COVERAGE_TARGET_LOW, tgtH = CC.CFG.COVERAGE_TARGET_HIGH;
+    html += '<div class="panel"><span class="weight">25%</span><div class="lbl">Audit Score</div>'+
+      '<div class="comp-big"><span class="v tnum">'+f1(A.score)+'</span><span class="u">%</span></div>'+
+      (PA?delta(A.score,PA.score,1,true,' pts'):(P?'<span class="delta flat">no comparison (audit data incomplete)</span>':''))+
+      '<ul class="facts"><li><span><b>'+fi(A.scored)+'</b> scored audits &middot; <b>'+fi(A.zero)+'</b> zero-score (critical)</span></li>'+
+      '<li><span><b>'+f1(A.passPct)+'%</b> of audits scored 90% or more</span></li></ul>'+
+      '<div class="cov"><div class="lbl" style="margin-bottom:5px">Audit coverage &middot; <b style="color:var(--ink);font-family:var(--font-mono)">'+f1(covPct,2)+'%</b> of '+fi(A.consults)+' consults (target '+tgtL+'&ndash;'+tgtH+'%)</div>'+
+      '<div class="bar"><span class="tgt" style="left:'+(tgtL/covMax*100)+'%;width:'+((tgtH-tgtL)/covMax*100)+'%"></span><i style="width:'+Math.min(100,(covPct||0)/covMax*100)+'%"></i></div>'+
+      '<div class="cap"><span>0%</span><span>'+covMax+'%</span></div></div></div>';
+
+    html += '<div class="panel"><span class="weight">75%</span><div class="lbl">Escalation Score</div>'+
+      '<div class="comp-big"><span class="v tnum">'+f1(T.score,2)+'</span><span class="u">%</span></div>'+
+      (PT?delta(T.score,PT.score,2,true,' pts'):'')+
+      '<ul class="facts"><li><span><b>'+fi(T.tickets)+'</b> patient escalations &middot; <b>'+fi(T.high)+'</b> High &middot; <b>'+fi(T.medium)+'</b> Medium</span></li>'+
+      '<li><span><b>'+f1(T.per10k)+'</b> weighted escalations per 10,000 orders '+(PT?delta(T.per10k,PT.per10k,1,false):'')+'</span></li>'+
+      '<li><span>across <b>'+fi(T.orders)+'</b> orders (consult, pharmacy, diagnostics)</span></li></ul></div>';
+    html += '</div>';
+
+    /* ---- business lines ---- */
+    html += '<div class="section-label"><span class="n">01</span>By business line</div>';
+    html += '<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Business line</th><th class="num">Orders</th><th class="num">Escalations</th><th class="num">High</th><th class="num">Medium</th><th class="num">Weighted / 10k orders</th><th class="num">vs '+(P?esc(pv.label):'previous')+'</th><th class="num">Escalation-free score</th></tr></thead><tbody>';
+    T.lines.forEach(function(b,i){
+      var pb = PT ? PT.lines[i] : null;
+      var r = CC.rag(b.score);
+      html += '<tr><td><b>'+esc(b.label)+'</b></td><td class="num">'+fi(b.orders)+'</td><td class="num">'+fi(b.tickets)+'</td><td class="num">'+fi(b.high)+'</td><td class="num">'+fi(b.medium)+'</td>'+
+        '<td class="num">'+f1(b.per10k)+'</td><td class="num">'+(pb?delta(b.per10k,pb.per10k,1,false):'—')+'</td>'+
+        '<td class="num"><span class="rag '+r+'" style="font-family:var(--font-mono)">'+f1(b.score,2)+'</span></td></tr>';
+    });
+    html += '<tr class="total"><td>All</td><td class="num">'+fi(T.orders)+'</td><td class="num">'+fi(T.tickets)+'</td><td class="num">'+fi(T.high)+'</td><td class="num">'+fi(T.medium)+'</td><td class="num">'+f1(T.per10k)+'</td><td class="num">'+(PT?delta(T.per10k,PT.per10k,1,false):'—')+'</td><td class="num">'+f1(T.score,2)+' <span style="font-weight:400;color:var(--ink-soft)">(avg)</span></td></tr>';
+    html += '</tbody></table></div></div>';
+
+    /* ---- key points + trend ---- */
+    html += '<div class="grid2" style="margin-top:0">';
+    html += '<div><div class="section-label"><span class="n">02</span>Key points for the board</div><div class="panel"><ul class="points">'+keyPoints(R,P,pv).join("")+'</ul></div></div>';
+    html += '<div><div class="section-label"><span class="n">03</span>Month-on-month trend</div><div class="panel">'+trend()+'</div></div>';
+    html += '</div>';
+
+    document.getElementById("content").innerHTML = html;
+  }
+
+  function keyPoints(R,P,pv){
+    var out=[], A=R.audit, T=R.tickets;
+    var cls = R.rag==="green"?"":(R.rag==="amber"?"warn":"crit");
+    out.push('<li class="'+cls+'"><span class="ic">1</span><span>Overall clinical compliance is <b>'+f1(R.overall)+'</b> ('+ragLabel(R.rag).toLowerCase()+')'+
+      ((P&&!P.audit.incomplete&&!A.incomplete)?', '+(R.overall>=P.overall?'up':'down')+' '+f1(Math.abs(R.overall-P.overall))+' points on '+esc(pv.label):'')+'. Escalation Score '+f1(T.score,2)+(P?' ('+(T.score>=P.tickets.score?'up':'down')+' from '+f1(P.tickets.score,2)+')':'')+'.</span></li>');
+    var worst = T.lines.filter(function(b){ return b.per10k!=null; }).sort(function(a,b){ return b.per10k-a.per10k; })[0];
+    if(worst){
+      var pw = P ? P.tickets.lines.filter(function(b){ return b.key===worst.key; })[0] : null;
+      out.push('<li class="warn"><span class="ic">2</span><span><b>'+esc(worst.label)+'</b> has the highest escalation rate: <b>'+f1(worst.per10k)+'</b> weighted escalations per 10,000 orders'+
+        (pw&&pw.per10k!=null?' ('+(worst.per10k>pw.per10k?'up':'down')+' from '+f1(pw.per10k)+')':'')+'.</span></li>');
+    }
+    var allHigh=[]; T.lines.forEach(function(b){ b.catList.forEach(function(c){ if(c.sev==="High") allHigh.push({bu:b.label, cat:c.cat, n:c.n}); }); });
+    allHigh.sort(function(a,b){ return b.n-a.n; });
+    if(allHigh.length && T.high){
+      var top=allHigh[0];
+      out.push('<li class="crit"><span class="ic">3</span><span>Top High-severity issue: <b>'+esc(top.cat)+'</b> ('+esc(top.bu)+'), <b>'+fi(top.n)+'</b> tickets, '+f1(top.n/T.high*100,0)+'% of all High tickets.</span></li>');
+    }
+    var cov=A.coverage, inT = cov!=null && cov>=CC.CFG.COVERAGE_TARGET_LOW;
+    out.push('<li class="'+(inT?'':'warn')+'"><span class="ic">4</span><span>Audits covered <b>'+f1(cov,2)+'%</b> of consults (target '+CC.CFG.COVERAGE_TARGET_LOW+'&ndash;'+CC.CFG.COVERAGE_TARGET_HIGH+'%), with an average audit score of <b>'+f1(A.score)+'%</b> and <b>'+fi(A.zero)+'</b> zero-score audits.</span></li>');
+    return out;
+  }
+
+  function trend(){
+    var rows = PERIODS.map(function(p){ var r=CC.compute(DATA,p.start,p.end); return {p:p, r:r}; });
+    function block(name, get, d, max, min, alt){
+      return '<div class="trend-row"><div class="nm">'+name+'</div><div class="trend-cols">'+rows.map(function(x){
+        var v=get(x.r); var w = v==null?0:Math.max(2,Math.min(100,(v-min)/(max-min)*100));
+        return '<div class="tcol"><span class="m">'+esc(x.p.short)+(x.p.partial?' MTD':'')+(x.r.audit.incomplete?' *':'')+'</span><span class="bar"><i'+(alt?' class="alt"':'')+' style="width:'+w+'%"></i></span><span class="v">'+f1(v,d)+'</span></div>';
+      }).join("")+'</div></div>';
+    }
+    return '<div class="trend">'+
+      block("Overall score", function(r){ return r.overall; }, 1, 100, 90)+
+      block("Audit Score %", function(r){ return r.audit.score; }, 1, 100, 80)+
+      block("Escalation Score %", function(r){ return r.tickets.score; }, 2, 100, 98)+
+      block("Weighted escalations / 10k orders", function(r){ return r.tickets.per10k; }, 1, 150, 0, true)+
+      '</div><p class="desc" style="margin:12px 0 0">Bars are scaled to show change: overall 90&ndash;100, audit 80&ndash;100, escalation 98&ndash;100, escalation rate 0&ndash;150. * = audit data incomplete that month: the live PDS and Non Pharma audit sheets only hold audits from '+U.dateLabel(DATA.auditFrom&&DATA.auditFrom["PDS"])+', so those months\' audit and overall scores lean on the projects that are still complete.</p>';
+  }
+
+  function setStatus(){
+    var st = DATA.status, bad = Object.keys(st).filter(function(k){ return st[k]!=="ok"; });
+    var chip=document.getElementById("status");
+    chip.className = "status-chip"+(bad.length?" warn":"");
+    document.getElementById("statusText").textContent = bad.length ? "Partially live" : "Live from Google Sheets";
+    chip.title = Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n");
+    document.getElementById("through").textContent = U.dateLabel(DATA.through);
+  }
+
+  CC.load().then(function(d){
+    DATA = d; PERIODS = CC.periods(d); setStatus();
+    if(!PERIODS.length){ document.getElementById("content").innerHTML='<div class="panel empty">No data could be read from the sheets.</div>'; return; }
+    /* default: the last complete month, or MTD if nothing complete yet */
+    /* default: the latest period whose audit data is complete (the audit sheets keep a rolling window),
+       otherwise the last complete month */
+    var okP = PERIODS.filter(function(p){ return !CC.compute(DATA,p.start,p.end).audit.incomplete; });
+    var full = PERIODS.filter(function(p){ return !p.partial; });
+    SEL = okP.length ? okP[okP.length-1] : (full.length ? full[full.length-1] : PERIODS[PERIODS.length-1]);
+    var saved=null; try{ saved=localStorage.getItem("cc_period"); }catch(e){}
+    PERIODS.forEach(function(p){ if(p.key===saved) SEL=p; });
+    document.getElementById("periodChips").innerHTML = PERIODS.map(function(p){ return '<button class="chip" data-k="'+p.key+'"'+(CC.compute(DATA,p.start,p.end).audit.incomplete?' title="Audit data incomplete for this month"':'')+'>'+esc(p.label)+(CC.compute(DATA,p.start,p.end).audit.incomplete?' *':'')+'</button>'; }).join("");
+    document.getElementById("periodChips").addEventListener("click", function(e){
+      var k=e.target.dataset&&e.target.dataset.k; if(!k) return;
+      PERIODS.forEach(function(p){ if(p.key===k) SEL=p; });
+      try{ localStorage.setItem("cc_period", k); }catch(err){}
+      render();
+    });
+    render();
+  }).catch(function(e){
+    document.getElementById("content").innerHTML='<div class="panel empty">Could not load data: '+esc(e&&e.message||e)+'</div>';
+  });
+})();
+</script>
+</body>
+</html>
