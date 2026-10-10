@@ -81,7 +81,8 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 
 /* hero */
 .hero{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);gap:16px}
-@media (max-width:960px){ .hero{grid-template-columns:1fr} }
+.hero.two{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}
+@media (max-width:960px){ .hero,.hero.two{grid-template-columns:1fr} }
 .score-card{position:relative;overflow:hidden;border-top:4px solid var(--line-strong)}
 .score-card.green{border-top-color:var(--good)} .score-card.amber{border-top-color:var(--warn)} .score-card.red{border-top-color:var(--crit)}
 .score-card .k{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}

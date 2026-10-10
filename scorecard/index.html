@@ -21,7 +21,7 @@
       <span class="mark">APOLLO 24|7</span>
       <div>
         <h1>Clinical Compliance Scorecard</h1>
-        <p>Board view &middot; clinical audit quality and patient escalations, combined into one score</p>
+        <p>Board view &middot; one score from clinical audits and patient escalations &middot; 100 minus points lost to problems found</p>
       </div>
     </div>
     <div class="top-meta">
@@ -41,7 +41,7 @@
   <div id="content"><div class="loading">Reading the audit, ticket and order sheets…</div></div>
 
   <footer>
-    <div><b style="color:var(--ink)">How the score works.</b> Overall = 25% Audit Score + 75% Escalation Score. Audit Score = average audit score of all scored audits in the period (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma). Escalation Score = average of Consult, Pharmacy and Diagnostics escalation-free %, where escalation-free % = 100 &times; (1 &minus; weighted tickets &divide; orders) and weighted tickets = 2 &times; High + 1 &times; Medium. RAG: green &ge; 97, amber 95&ndash;97, red &lt; 95. Full method, High/Medium list and sources on the <a href="deepdive.html">deep-dive page</a>.</div>
+    <div><b style="color:var(--ink)">How the score works.</b> Every period starts at 100 and loses points for each problem found, heaviest first: <b>4</b> points per 1% of audits with a critical error (zero score), <b>3</b> points per High-severity ticket per 1,000 orders, <b>2</b> points per Medium-severity ticket per 1,000 orders, and <b>1</b> point per audit point missed on non-critical parameters. Ticket rates are the average of Consult, Pharmacy and Diagnostics, each against its own orders. RAG: green &ge; 85, amber 75&ndash;85, red &lt; 75. Full method, High/Medium list and sources on the <a href="deepdive.html">deep-dive page</a>.</div>
   </footer>
 </div>
 
@@ -75,51 +75,55 @@
     var notes=[];
     if(R.audit.incomplete){
       notes.push("<b>Audit data is incomplete for this period.</b> The live "+R.audit.missing.map(function(m){ return esc(m.type)+" sheet"+(m.from?" starts on "+U.dateLabel(m.from):" has no rows"); }).join(", ")+
-        ", so the Audit Score here only covers the audits still held in the sheets. Older audits need an archive sheet (or the BigQuery archive) to be counted.");
+        ", so the audit deductions here only use the audits still held in the sheets. Older audits need an archive sheet (or the BigQuery archive) to be counted.");
     }
     document.getElementById("note").innerHTML = notes.map(function(n){ return '<div class="note">'+n+'</div>'; }).join("");
 
-    var A=R.audit, T=R.tickets, PT=P&&P.tickets;
-    /* the comparison window's audits may be missing (rolling audit sheets): then don't compare audit or overall */
+    var A=R.audit, T=R.tickets, D=R.deductions, PT=P&&P.tickets;
+    /* the comparison window's audits may be missing (rolling audit sheets): then don't compare the overall
+       score or the audit-based deductions — ticket deductions still compare */
     var auditCmp = !!(P && !P.audit.incomplete && !A.incomplete);
-    var PA = auditCmp ? P.audit : null;
+    var PD = P ? P.deductions : null;
+    var KEYS = ["critical","high","medium","others"];
+    var NAMES = {critical:"Critical errors", high:"High tickets", medium:"Medium tickets", others:"Non-critical audit misses"};
+    var HOW = {critical:"zero-score audits as % of audits &times; 4", high:"High tickets per 1,000 orders &times; 3", medium:"Medium tickets per 1,000 orders &times; 2", others:"audit points missed on other parameters &times; 1"};
     var html = '';
-    /* ---- hero ---- */
-    html += '<div class="hero">';
+    /* ---- hero: score + where the points go ---- */
+    html += '<div class="hero two">';
     html += '<div class="panel score-card '+R.rag+'"><div class="k">Overall clinical compliance score</div>'+
       '<div class="score-big"><span class="v tnum">'+f1(R.overall)+'</span><span class="of">/ 100</span></div>'+
-      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="rag '+R.rag+'">'+ragLabel(R.rag)+'</span>'+(auditCmp?delta(R.overall,P.overall,1,true)+' <span style="font-size:11.5px;color:var(--ink-soft)">vs '+esc(pv.label)+'</span>':(P?'<span style="font-size:11.5px;color:var(--ink-soft)">no like-for-like comparison: '+esc(pv.label)+' audit data incomplete</span>':''))+'</div>'+
-      '<div class="formula"><code>25% &times; '+f1(A.score)+'</code> + <code>75% &times; '+f1(T.score,2)+'</code> = <code>'+f1(R.overall,2)+'</code></div></div>';
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="rag '+R.rag+'">'+ragLabel(R.rag)+'</span>'+
+        (auditCmp?delta(R.overall,P.overall,1,true)+' <span style="font-size:11.5px;color:var(--ink-soft)">vs '+esc(pv.label)+'</span>':(P?'<span style="font-size:11.5px;color:var(--ink-soft)">no like-for-like comparison: '+esc(pv.label)+' audit data incomplete</span>':''))+'</div>'+
+      '<div class="formula">Starts at <code>100</code>, minus <code>'+f1(D.total)+'</code> points lost to problems found.</div>'+
+      '<ul class="facts"><li><span><b>'+fi(A.scored)+'</b> audits scored &middot; <b>'+f1(A.coverage,2)+'%</b> of consults (target '+CC.CFG.COVERAGE_TARGET_LOW+'&ndash;'+CC.CFG.COVERAGE_TARGET_HIGH+'%)</span></li>'+
+      '<li><span><b>'+fi(T.tickets)+'</b> patient escalations on <b>'+fi(T.orders)+'</b> orders</span></li></ul></div>';
 
-    var covPct = A.coverage, covMax = 5, tgtL = CC.CFG.COVERAGE_TARGET_LOW, tgtH = CC.CFG.COVERAGE_TARGET_HIGH;
-    html += '<div class="panel"><span class="weight">25%</span><div class="lbl">Audit Score</div>'+
-      '<div class="comp-big"><span class="v tnum">'+f1(A.score)+'</span><span class="u">%</span></div>'+
-      (PA?delta(A.score,PA.score,1,true,' pts'):(P?'<span class="delta flat">no comparison (audit data incomplete)</span>':''))+
-      '<ul class="facts"><li><span><b>'+fi(A.scored)+'</b> scored audits &middot; <b>'+fi(A.zero)+'</b> zero-score (critical)</span></li>'+
-      '<li><span><b>'+f1(A.passPct)+'%</b> of audits scored 90% or more</span></li></ul>'+
-      '<div class="cov"><div class="lbl" style="margin-bottom:5px">Audit coverage &middot; <b style="color:var(--ink);font-family:var(--font-mono)">'+f1(covPct,2)+'%</b> of '+fi(A.consults)+' consults (target '+tgtL+'&ndash;'+tgtH+'%)</div>'+
-      '<div class="bar"><span class="tgt" style="left:'+(tgtL/covMax*100)+'%;width:'+((tgtH-tgtL)/covMax*100)+'%"></span><i style="width:'+Math.min(100,(covPct||0)/covMax*100)+'%"></i></div>'+
-      '<div class="cap"><span>0%</span><span>'+covMax+'%</span></div></div></div>';
-
-    html += '<div class="panel"><span class="weight">75%</span><div class="lbl">Escalation Score</div>'+
-      '<div class="comp-big"><span class="v tnum">'+f1(T.score,2)+'</span><span class="u">%</span></div>'+
-      (PT?delta(T.score,PT.score,2,true,' pts'):'')+
-      '<ul class="facts"><li><span><b>'+fi(T.tickets)+'</b> patient escalations &middot; <b>'+fi(T.high)+'</b> High &middot; <b>'+fi(T.medium)+'</b> Medium</span></li>'+
-      '<li><span><b>'+f1(T.per10k)+'</b> weighted escalations per 10,000 orders '+(PT?delta(T.per10k,PT.per10k,1,false):'')+'</span></li>'+
-      '<li><span>across <b>'+fi(T.orders)+'</b> orders (consult, pharmacy, diagnostics)</span></li></ul></div>';
+    var maxPts = Math.max.apply(null, KEYS.map(function(k){ return D[k].pts||0; }).concat([1]));
+    html += '<div class="panel"><div class="lbl" style="margin-bottom:4px">Where the points are lost</div><p class="desc" style="margin-bottom:10px">Heaviest problem first. Bigger bar = more room to improve.</p>'+
+      '<div class="tbl-wrap"><table><thead><tr><th>Problem</th><th class="num">Rate</th><th class="num">Points lost</th><th class="num">vs '+(P?esc(pv.label):'previous')+'</th></tr></thead><tbody>'+
+      KEYS.map(function(k){
+        var x=D[k], px=PD?PD[k]:null, isAudit=(k==="critical"||k==="others");
+        var cmp = px && (!isAudit || auditCmp) ? delta(x.pts,px.pts,1,false) : '<span class="delta flat">—</span>';
+        var w = x.pts==null?0:Math.max(3, x.pts/maxPts*100);
+        var cls = k==="critical"?"crit":(k==="high"?"crit":(k==="medium"?"warn":""));
+        return '<tr><td class="wrap"><b>'+NAMES[k]+'</b><div style="font-size:11px;color:var(--ink-soft)">'+HOW[k]+'</div></td>'+
+          '<td class="num">'+f1(x.rate,2)+'<div style="font-size:10.5px;color:var(--ink-soft);font-family:var(--font-body)">'+x.unit+'</div></td>'+
+          '<td class="num"><span class="meter"><span class="track" style="width:110px"><i class="'+cls+'" style="width:'+w.toFixed(1)+'%"></i></span><b>&minus;'+f1(x.pts)+'</b></span></td>'+
+          '<td class="num">'+cmp+'</td></tr>';
+      }).join("")+
+      '<tr class="total"><td>Total points lost</td><td></td><td class="num">&minus;'+f1(D.total)+'</td><td class="num">'+(auditCmp?delta(D.total,PD.total,1,false):'—')+'</td></tr>'+
+      '</tbody></table></div></div>';
     html += '</div>';
 
     /* ---- business lines ---- */
-    html += '<div class="section-label"><span class="n">01</span>By business line</div>';
-    html += '<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Business line</th><th class="num">Orders</th><th class="num">Escalations</th><th class="num">High</th><th class="num">Medium</th><th class="num">Weighted / 10k orders</th><th class="num">vs '+(P?esc(pv.label):'previous')+'</th><th class="num">Escalation-free score</th></tr></thead><tbody>';
+    html += '<div class="section-label"><span class="n">01</span>Patient escalations by business line</div>';
+    html += '<div class="panel"><p class="desc">Each line counts equally in the High and Medium deductions (the deduction uses the average of the three rates).</p><div class="tbl-wrap"><table><thead><tr><th>Business line</th><th class="num">Orders</th><th class="num">High</th><th class="num">High / 1,000</th><th class="num">Medium</th><th class="num">Medium / 1,000</th><th class="num">Points lost (3&times;H + 2&times;M)</th><th class="num">vs '+(P?esc(pv.label):'previous')+'</th></tr></thead><tbody>';
     T.lines.forEach(function(b,i){
       var pb = PT ? PT.lines[i] : null;
-      var r = CC.rag(b.score);
-      html += '<tr><td><b>'+esc(b.label)+'</b></td><td class="num">'+fi(b.orders)+'</td><td class="num">'+fi(b.tickets)+'</td><td class="num">'+fi(b.high)+'</td><td class="num">'+fi(b.medium)+'</td>'+
-        '<td class="num">'+f1(b.per10k)+'</td><td class="num">'+(pb?delta(b.per10k,pb.per10k,1,false):'—')+'</td>'+
-        '<td class="num"><span class="rag '+r+'" style="font-family:var(--font-mono)">'+f1(b.score,2)+'</span></td></tr>';
+      html += '<tr><td><b>'+esc(b.label)+'</b></td><td class="num">'+fi(b.orders)+'</td><td class="num">'+fi(b.high)+'</td><td class="num">'+f1(b.highPer1k,2)+'</td><td class="num">'+fi(b.medium)+'</td><td class="num">'+f1(b.medPer1k,2)+'</td>'+
+        '<td class="num"><b>&minus;'+f1(b.ptsLost)+'</b></td><td class="num">'+(pb?delta(b.ptsLost,pb.ptsLost,1,false):'—')+'</td></tr>';
     });
-    html += '<tr class="total"><td>All</td><td class="num">'+fi(T.orders)+'</td><td class="num">'+fi(T.tickets)+'</td><td class="num">'+fi(T.high)+'</td><td class="num">'+fi(T.medium)+'</td><td class="num">'+f1(T.per10k)+'</td><td class="num">'+(PT?delta(T.per10k,PT.per10k,1,false):'—')+'</td><td class="num">'+f1(T.score,2)+' <span style="font-weight:400;color:var(--ink-soft)">(avg)</span></td></tr>';
+    html += '<tr class="total"><td>Average of the three</td><td class="num">'+fi(T.orders)+'</td><td class="num">'+fi(T.high)+'</td><td class="num">'+f1(D.high.rate,2)+'</td><td class="num">'+fi(T.medium)+'</td><td class="num">'+f1(D.medium.rate,2)+'</td><td class="num">&minus;'+f1((D.high.pts||0)+(D.medium.pts||0))+'</td><td class="num">'+(PD?delta((D.high.pts||0)+(D.medium.pts||0),(PD.high.pts||0)+(PD.medium.pts||0),1,false):'—')+'</td></tr>';
     html += '</tbody></table></div></div>';
 
     /* ---- key points + trend ---- */
@@ -132,41 +136,38 @@
   }
 
   function keyPoints(R,P,pv){
-    var out=[], A=R.audit, T=R.tickets;
+    var out=[], A=R.audit, T=R.tickets, D=R.deductions;
     var cls = R.rag==="green"?"":(R.rag==="amber"?"warn":"crit");
-    out.push('<li class="'+cls+'"><span class="ic">1</span><span>Overall clinical compliance is <b>'+f1(R.overall)+'</b> ('+ragLabel(R.rag).toLowerCase()+')'+
-      ((P&&!P.audit.incomplete&&!A.incomplete)?', '+(R.overall>=P.overall?'up':'down')+' '+f1(Math.abs(R.overall-P.overall))+' points on '+esc(pv.label):'')+'. Escalation Score '+f1(T.score,2)+(P?' ('+(T.score>=P.tickets.score?'up':'down')+' from '+f1(P.tickets.score,2)+')':'')+'.</span></li>');
-    var worst = T.lines.filter(function(b){ return b.per10k!=null; }).sort(function(a,b){ return b.per10k-a.per10k; })[0];
-    if(worst){
-      var pw = P ? P.tickets.lines.filter(function(b){ return b.key===worst.key; })[0] : null;
-      out.push('<li class="warn"><span class="ic">2</span><span><b>'+esc(worst.label)+'</b> has the highest escalation rate: <b>'+f1(worst.per10k)+'</b> weighted escalations per 10,000 orders'+
-        (pw&&pw.per10k!=null?' ('+(worst.per10k>pw.per10k?'up':'down')+' from '+f1(pw.per10k)+')':'')+'.</span></li>');
-    }
+    var cmpOk = P && !P.audit.incomplete && !A.incomplete;
+    out.push('<li class="'+cls+'"><span class="ic">1</span><span>Clinical compliance score is <b>'+f1(R.overall)+'</b> / 100 ('+ragLabel(R.rag).toLowerCase()+')'+
+      (cmpOk?', '+(R.overall>=P.overall?'up':'down')+' '+f1(Math.abs(R.overall-P.overall))+' points on '+esc(pv.label):'')+'. <b>'+f1(D.total)+'</b> points are lost to problems found.</span></li>');
+    var NAMES = {critical:"critical errors (zero-score audits)", high:"High-severity tickets", medium:"Medium-severity tickets", others:"non-critical audit misses"};
+    var big = ["critical","high","medium","others"].filter(function(k){ return D[k].pts!=null; }).sort(function(a,b){ return D[b].pts-D[a].pts; })[0];
+    if(big) out.push('<li class="warn"><span class="ic">2</span><span>Biggest improvement area: <b>'+NAMES[big]+'</b>, costing <b>'+f1(D[big].pts)+'</b> points ('+f1(D[big].rate,2)+' '+D[big].unit+').</span></li>');
+    var worst = T.lines.filter(function(b){ return b.ptsLost!=null; }).sort(function(a,b){ return b.ptsLost-a.ptsLost; })[0];
     var allHigh=[]; T.lines.forEach(function(b){ b.catList.forEach(function(c){ if(c.sev==="High") allHigh.push({bu:b.label, cat:c.cat, n:c.n}); }); });
     allHigh.sort(function(a,b){ return b.n-a.n; });
     if(allHigh.length && T.high){
       var top=allHigh[0];
-      out.push('<li class="crit"><span class="ic">3</span><span>Top High-severity issue: <b>'+esc(top.cat)+'</b> ('+esc(top.bu)+'), <b>'+fi(top.n)+'</b> tickets, '+f1(top.n/T.high*100,0)+'% of all High tickets.</span></li>');
+      out.push('<li class="crit"><span class="ic">3</span><span>Top High-severity ticket: <b>'+esc(top.cat)+'</b> ('+esc(top.bu)+'), <b>'+fi(top.n)+'</b> tickets, '+f1(top.n/T.high*100,0)+'% of all High tickets'+(worst?'. <b>'+esc(worst.label)+'</b> loses the most points from tickets (&minus;'+f1(worst.ptsLost)+').':'.')+'</span></li>');
     }
-    var cov=A.coverage, inT = cov!=null && cov>=CC.CFG.COVERAGE_TARGET_LOW;
-    out.push('<li class="'+(inT?'':'warn')+'"><span class="ic">4</span><span>Audits covered <b>'+f1(cov,2)+'%</b> of consults (target '+CC.CFG.COVERAGE_TARGET_LOW+'&ndash;'+CC.CFG.COVERAGE_TARGET_HIGH+'%), with an average audit score of <b>'+f1(A.score)+'%</b> and <b>'+fi(A.zero)+'</b> zero-score audits.</span></li>');
+    out.push('<li class="'+(A.zero?'crit':'')+'"><span class="ic">4</span><span><b>'+fi(A.zero)+'</b> critical errors in <b>'+fi(A.scored)+'</b> audits ('+f1(D.critical.rate,2)+'%); audit coverage <b>'+f1(A.coverage,2)+'%</b> of consults against the '+CC.CFG.COVERAGE_TARGET_LOW+'&ndash;'+CC.CFG.COVERAGE_TARGET_HIGH+'% target.</span></li>');
     return out;
   }
 
   function trend(){
     var rows = PERIODS.map(function(p){ var r=CC.compute(DATA,p.start,p.end); return {p:p, r:r}; });
-    function block(name, get, d, max, min, alt){
+    function block(name, get, d, max, min, alt, neg){
       return '<div class="trend-row"><div class="nm">'+name+'</div><div class="trend-cols">'+rows.map(function(x){
         var v=get(x.r); var w = v==null?0:Math.max(2,Math.min(100,(v-min)/(max-min)*100));
-        return '<div class="tcol"><span class="m">'+esc(x.p.short)+(x.p.partial?' MTD':'')+(x.r.audit.incomplete?' *':'')+'</span><span class="bar"><i'+(alt?' class="alt"':'')+' style="width:'+w+'%"></i></span><span class="v">'+f1(v,d)+'</span></div>';
+        return '<div class="tcol"><span class="m">'+esc(x.p.short)+(x.p.partial?' MTD':'')+(x.r.audit.incomplete?' *':'')+'</span><span class="bar"><i'+(alt?' class="alt"':'')+' style="width:'+w+'%"></i></span><span class="v">'+(neg&&v!=null?'&minus;':'')+f1(v,d)+'</span></div>';
       }).join("")+'</div></div>';
     }
     return '<div class="trend">'+
-      block("Overall score", function(r){ return r.overall; }, 1, 100, 90)+
-      block("Audit Score %", function(r){ return r.audit.score; }, 1, 100, 80)+
-      block("Escalation Score %", function(r){ return r.tickets.score; }, 2, 100, 98)+
-      block("Weighted escalations / 10k orders", function(r){ return r.tickets.per10k; }, 1, 150, 0, true)+
-      '</div><p class="desc" style="margin:12px 0 0">Bars are scaled to show change: overall 90&ndash;100, audit 80&ndash;100, escalation 98&ndash;100, escalation rate 0&ndash;150. * = audit data incomplete that month: the live PDS and Non Pharma audit sheets only hold audits from '+U.dateLabel(DATA.auditFrom&&DATA.auditFrom["PDS"])+', so those months\' audit and overall scores lean on the projects that are still complete.</p>';
+      block("Overall score", function(r){ return r.overall; }, 1, 100, 50)+
+      block("Points lost: audits (critical + other misses)", function(r){ var D=r.deductions; return (D.critical.pts||0)+(D.others.pts||0); }, 1, 20, 0, true, true)+
+      block("Points lost: tickets (High + Medium)", function(r){ var D=r.deductions; return (D.high.pts||0)+(D.medium.pts||0); }, 1, 20, 0, true, true)+
+      '</div><p class="desc" style="margin:12px 0 0">Overall bars run from 50 to 100; points-lost bars from 0 to 20. * = audit data incomplete that month (the live PDS and Non Pharma audit sheets only hold audits from '+U.dateLabel(DATA.auditFrom&&DATA.auditFrom["PDS"])+'), so its audit deductions and overall score are not comparable.</p>';
   }
 
   function setStatus(){

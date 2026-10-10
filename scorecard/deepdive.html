@@ -90,14 +90,27 @@
     var A=R.audit, T=R.tickets, h='';
     var aC = !!(P && !P.audit.incomplete && !A.incomplete);   /* audit comparisons only when both windows have complete audit data */
 
-    /* 01 score build-up */
-    h += '<div class="section-label"><span class="n">01</span>Score build-up</div><div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Component</th><th class="num">Value</th><th class="num">Weight</th><th class="num">Contribution</th><th class="num">'+(P?'vs '+esc(pv.label):'Change')+'</th><th>How it is calculated</th></tr></thead><tbody>';
-    h += '<tr><td><b>Audit Score</b></td><td class="num">'+f1(A.score,2)+'%</td><td class="num">25%</td><td class="num">'+f1(A.score!=null?A.score*CC.CFG.WEIGHT_AUDIT:null,2)+'</td><td class="num">'+(aC?delta(A.score,P.audit.score,2,true):'—')+'</td><td class="wrap">Average Attained % of '+fi(A.scored)+' scored audits (zero-score audits included)</td></tr>';
-    T.lines.forEach(function(b,i){
-      h += '<tr><td style="padding-left:26px">'+esc(b.label)+' escalation-free</td><td class="num">'+f1(b.score,2)+'%</td><td class="num">25% of 75%</td><td class="num">'+f1(b.score!=null?b.score*CC.CFG.WEIGHT_TICKETS/3:null,2)+'</td><td class="num">'+(P?delta(b.score,P.tickets.lines[i].score,2,true):'—')+'</td><td class="wrap">100 &times; (1 &minus; ('+fi(b.high)+' High &times; 2 + '+fi(b.medium)+' Medium) &divide; '+fi(b.orders)+' orders)</td></tr>';
+    /* 01 score build-up (deduction model) */
+    var D=R.deductions, PD=P?P.deductions:null;
+    var ROWS=[
+      ["critical","Critical errors","Zero-score audits ÷ scored audits"],
+      ["high","High-severity tickets","Average of the 3 lines' High tickets per 1,000 orders"],
+      ["medium","Medium-severity tickets","Average of the 3 lines' Medium tickets per 1,000 orders"],
+      ["others","Non-critical audit misses","100 − average score of audits that scored above 0"]
+    ];
+    h += '<div class="section-label"><span class="n">01</span>Score build-up</div><div class="panel"><p class="desc">Start at 100 and lose points for each problem, heaviest first. Audit-based rows are only compared when both periods have complete audit data.</p><div class="tbl-wrap"><table><thead><tr><th>Problem</th><th class="num">Rate</th><th>Unit</th><th class="num">Points per unit</th><th class="num">Points lost</th><th class="num">'+(P?'vs '+esc(pv.label):'Change')+'</th><th>How the rate is measured</th></tr></thead><tbody>';
+    h += '<tr><td><b>Starting score</b></td><td></td><td></td><td></td><td class="num">100.0</td><td></td><td></td></tr>';
+    var detail = {
+      critical: fi(A.zero)+' zero-score audits of '+fi(A.scored)+' scored',
+      high: T.lines.map(function(b){ return esc(b.label)+' '+f1(b.highPer1k,2); }).join(' · '),
+      medium: T.lines.map(function(b){ return esc(b.label)+' '+f1(b.medPer1k,2); }).join(' · '),
+      others: 'average score of non-zero audits '+f1(A.nonZeroAvg,1)+'%'
+    };
+    ROWS.forEach(function(r){
+      var k=r[0], x=D[k], px=PD?PD[k]:null, isAudit=(k==="critical"||k==="others");
+      h += '<tr><td><b>'+r[1]+'</b></td><td class="num">'+f1(x.rate,2)+'</td><td>'+x.unit+'</td><td class="num">'+x.weight+'</td><td class="num"><b>&minus;'+f1(x.pts,2)+'</b></td><td class="num">'+(px&&(!isAudit||aC)?delta(x.pts,px.pts,2,false):'—')+'</td><td class="wrap">'+r[2]+'<div style="font-size:11px;color:var(--ink-soft)">'+detail[k]+'</div></td></tr>';
     });
-    h += '<tr><td><b>Escalation Score</b></td><td class="num">'+f1(T.score,2)+'%</td><td class="num">75%</td><td class="num">'+f1(T.score!=null?T.score*CC.CFG.WEIGHT_TICKETS:null,2)+'</td><td class="num">'+(P?delta(T.score,P.tickets.score,2,true):'—')+'</td><td class="wrap">Average of the three business lines above</td></tr>';
-    h += '<tr class="total"><td>Overall score</td><td class="num">'+f1(R.overall,2)+'</td><td class="num">100%</td><td class="num">'+f1(R.overall,2)+'</td><td class="num">'+(aC?delta(R.overall,P.overall,2,true):'—')+'</td><td><span class="rag '+R.rag+'">'+(R.rag==="green"?"On track":R.rag==="amber"?"Watch":R.rag==="red"?"Action needed":"No data")+'</span></td></tr>';
+    h += '<tr class="total"><td>Overall score</td><td></td><td></td><td></td><td class="num">'+f1(R.overall,2)+'</td><td class="num">'+(aC?delta(R.overall,P.overall,2,true):'—')+'</td><td><span class="rag '+R.rag+'">'+(R.rag==="green"?"On track":R.rag==="amber"?"Watch":R.rag==="red"?"Action needed":"No data")+'</span></td></tr>';
     h += '</tbody></table></div></div>';
 
     /* 02 audits by project */
@@ -114,7 +127,7 @@
     T.lines.forEach(function(b,i){
       var pb = P ? P.tickets.lines[i] : null, pc = {};
       if(pb) pb.catList.forEach(function(c){ pc[c.cat]=c; });
-      h += '<div class="panel"><h2>'+esc(b.label)+' <span style="font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);font-weight:500">&middot; '+fi(b.tickets)+' tickets &middot; '+fi(b.orders)+' orders &middot; '+f1(b.per10k)+' weighted / 10k &middot; score '+f1(b.score,2)+'</span></h2>'+
+      h += '<div class="panel"><h2>'+esc(b.label)+' <span style="font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);font-weight:500">&middot; '+fi(b.tickets)+' tickets &middot; '+fi(b.orders)+' orders &middot; '+f1(b.highPer1k,2)+' High &amp; '+f1(b.medPer1k,2)+' Medium per 1,000 orders &middot; &minus;'+f1(b.ptsLost)+' points</span></h2>'+
         '<p class="desc">'+fi(b.high)+' High &middot; '+fi(b.medium)+' Medium &middot; '+fi(b.pending)+' still pending &middot; average first response '+f1(b.frt)+' hrs, resolution '+f1(b.res)+' hrs</p>';
       if(!b.catList.length){ h += '<div class="empty">No tickets in this range.</div></div>'; return; }
       h += '<div class="tbl-wrap"><table><thead><tr><th>Category</th><th>Severity</th><th class="num">Tickets</th><th class="num">Share</th><th class="num">Per 10k orders</th><th class="num">vs prev (per 10k)</th><th class="num">Pending</th><th class="num">Avg 1st response (hrs)</th><th class="num">Avg resolution (hrs)</th></tr></thead><tbody>';
@@ -129,12 +142,12 @@
 
     /* 04 weekly trend */
     var wk = CC.weeks(s,e);
-    h += '<div class="section-label"><span class="n">04</span>Weekly trend</div><div class="panel"><p class="desc">Monday&ndash;Sunday weeks inside the selected range (first and last weeks can be partial). Escalation columns are weighted escalations per 10,000 orders.</p><div class="tbl-wrap"><table><thead><tr><th>Week</th><th class="num">Overall</th><th class="num">Audit score</th><th class="num">Audits</th>'+
-      T.lines.map(function(b){ return '<th class="num">'+esc(b.label)+' / 10k</th>'; }).join("")+'<th class="num">Escalation score</th></tr></thead><tbody>';
+    h += '<div class="section-label"><span class="n">04</span>Weekly trend</div><div class="panel"><p class="desc">Monday&ndash;Sunday weeks inside the selected range (first and last weeks can be partial). Business-line columns are points lost to tickets (3 &times; High + 2 &times; Medium per 1,000 orders).</p><div class="tbl-wrap"><table><thead><tr><th>Week</th><th class="num">Overall</th><th class="num">Audit score</th><th class="num">Audits</th>'+
+      T.lines.map(function(b){ return '<th class="num">'+esc(b.label)+' pts lost</th>'; }).join("")+'<th class="num">Critical %</th><th class="num">Total pts lost</th></tr></thead><tbody>';
     wk.forEach(function(w){
       var r=CC.compute(DATA,w.start,w.end);
       h += '<tr><td>'+U.shortDate(w.start)+(w.end!==w.start?' &ndash; '+U.shortDate(w.end):'')+'</td><td class="num"><b>'+f1(r.overall,2)+'</b></td><td class="num">'+f1(r.audit.score)+'%</td><td class="num">'+fi(r.audit.audits)+'</td>'+
-        r.tickets.lines.map(function(b){ return '<td class="num">'+f1(b.per10k)+'</td>'; }).join("")+'<td class="num">'+f1(r.tickets.score,2)+'</td></tr>';
+        r.tickets.lines.map(function(b){ return '<td class="num">'+(b.ptsLost==null?'—':'&minus;'+f1(b.ptsLost))+'</td>'; }).join("")+'<td class="num">'+f1(r.deductions.critical.rate,2)+'</td><td class="num"><b>&minus;'+f1(r.deductions.total)+'</b></td></tr>';
     });
     h += '</tbody></table></div></div>';
 
@@ -145,11 +158,12 @@
     var H = CC.HIGH_LABELS;
     function list(arr){ return arr.map(esc).join(", "); }
     return '<h3 style="margin-top:0">Score</h3>'+
-      '<p><code>Overall = 25% &times; Audit Score + 75% &times; Escalation Score</code>. Tickets carry more weight because every patient complaint is captured (100%), while audits are a 2&ndash;3% sample of consults.</p>'+
-      '<p><b>Audit Score</b> = average Attained % of every scored audit completed in the period (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma), by Date of Audit. Zero-score (critical) audits are included, so they pull the score down. PDS Cancellation reviews are counted in coverage but not scored.</p>'+
-      '<p><b>Escalation Score</b> = average of the three business lines&rsquo; escalation-free %: <code>100 &times; (1 &minus; (2 &times; High + 1 &times; Medium) &divide; orders)</code>. Each business line is compared with its own orders (Orders tab: consult, pharma, diagnostics), and the three lines count equally so Pharmacy&rsquo;s large volume doesn&rsquo;t hide Consult or Diagnostics. Tickets are dated by ticket date.</p>'+
-      '<p><b>Audit coverage</b> = audits &divide; completed consults of the day before (D&minus;1), against the 2&ndash;3% target. Shown for context; it is not part of the score.</p>'+
-      '<p><b>RAG</b>: green &ge; 97, amber 95&ndash;97, red &lt; 95. <b>Comparison</b>: a full month is compared with the previous month; a month-to-date period with the same days of last month.</p>'+
+      '<p><code>Score = 100 &minus; (4 &times; Critical + 3 &times; High + 2 &times; Medium + 1 &times; Others)</code>. Every period starts at 100 and loses points for each problem found, the most serious costing the most. This keeps the score in a range (around 75&ndash;85 today) where improvement shows clearly.</p>'+
+      '<p><b>Critical</b> = zero-score audits as a % of scored audits (PDS, PDS&ndash;Mounjaro, Non Pharma, WLP&ndash;Non Pharma), by Date of Audit. 1% of audits with a critical error costs 4 points.</p>'+
+      '<p><b>High</b> and <b>Medium</b> = patient tickets per 1,000 orders. Each business line (Consult, Pharmacy, Diagnostics) is measured against its own orders, and the three rates are averaged so Pharmacy&rsquo;s large volume doesn&rsquo;t hide the others. One High ticket per 1,000 orders costs 3 points; one Medium costs 2. Tickets are dated by ticket date.</p>'+
+      '<p><b>Others</b> = audit points missed on non-critical parameters: 100 minus the average score of audits that scored above 0. Each point missed costs 1 point.</p>'+
+      '<p><b>Audit coverage</b> = audits &divide; completed consults of the day before (D&minus;1), against the 2&ndash;3% target. Shown for context; not part of the score.</p>'+
+      '<p><b>RAG</b>: green &ge; 85, amber 75&ndash;85, red &lt; 75. <b>Comparison</b>: a full month is compared with the previous month; a month-to-date period with the same days of last month.</p>'+
       '<h3>High severity (everything else in the business line is Medium)</h3>'+
       '<div class="map"><div><b>Consult</b>'+list(H.consult)+'</div><div><b>Pharmacy (Medicine tickets)</b>'+list(H.pharma)+'</div><div><b>Diagnostics</b>'+list(H.diagnostics)+'</div></div>'+
       '<h3>Data notes</h3>'+

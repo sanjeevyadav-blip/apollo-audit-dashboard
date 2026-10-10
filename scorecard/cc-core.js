@@ -1,8 +1,9 @@
 /* Clinical Compliance Scorecard — shared data + scoring module (used by the Board page and the Deep-dive page).
    Reads the live Google Sheets straight from the browser (gviz), the same way the audit dashboard does.
 
-   SCORE (agreed 2026-10-10):
-     Overall = 25% Audit Score + 75% Escalation Score
+   SCORE (revised 2026-10-10, deduction model — see compute()):
+     Overall = 100 - (4 x critical-error % + 3 x High tickets per 1,000 orders + 2 x Medium per 1,000 + 1 x non-critical audit points missed)
+   Earlier draft (replaced): Overall = 25% Audit Score + 75% Escalation Score
      Audit Score      = average Attained % of every scored audit (PDS, PDS-Mounjaro, Non Pharma, WLP-Non Pharma)
                         completed in the period (by Date of Audit). Zero-score audits are included and pull it down.
      Escalation Score = average of the three business lines' escalation-free %:
@@ -12,11 +13,13 @@
   "use strict";
 
   var CFG = {
-    WEIGHT_AUDIT: 0.25, WEIGHT_TICKETS: 0.75,
+    /* points lost per unit, heaviest first */
+    D_CRITICAL: 4, D_HIGH: 3, D_MEDIUM: 2, D_OTHERS: 1,
+    /* kept for the escalation-free % shown in the deep-dive */
     HIGH_WEIGHT: 2, MEDIUM_WEIGHT: 1,
     COVERAGE_TARGET_LOW: 2, COVERAGE_TARGET_HIGH: 3,
     /* RAG for the 0-100 scores */
-    RAG: { green: 97, amber: 95 },
+    RAG: { green: 85, amber: 75 },
     FIRST_MONTH: "2026-08",          /* ticket + order data is complete from August 2026 */
     FILE_TICKETS: "1KlB3BOa5VRWux7_6ZTJyP13rA9SRtYoLrBjvtLUcaKU",
     GID_TICKETS_DATA: "0",           /* Consult + Diagnostics tickets */
@@ -58,6 +61,7 @@
     {type:"WLP - Non Pharma", file:CFG.FILE_WLP, sheet:"BS WLP Audits", headers:0}
   ];
   var PROJECTS = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
+  var SCORED_SET = {"PDS":1,"PDS- Mounjaro":1,"Non Pharma":1,"WLP - Non Pharma":1};
 
   /* ---------- helpers ---------- */
   function pad2(n){ n=parseInt(n,10); return n<10?"0"+n:""+n; }
@@ -325,9 +329,33 @@
     T.score = scoreN ? scoreSum/scoreN : null;
     T.per10k = T.orders ? T.weighted/T.orders*10000 : null;
 
-    var overall = (A.score!==null && T.score!==null) ? CFG.WEIGHT_AUDIT*A.score + CFG.WEIGHT_TICKETS*T.score
-                : (T.score!==null ? T.score : A.score);
-    return {start:s, end:e, audit:A, tickets:T, overall:overall, rag:rag(overall), partialInputs:(A.score===null||T.score===null)};
+    /* ---- deduction model (agreed 2026-10-10): start at 100, lose points per problem, heaviest first ----
+       Critical error  = zero-score audits as % of scored audits           x 4 points
+       High ticket     = High tickets per 1,000 orders (avg of 3 lines)    x 3 points
+       Medium ticket   = Medium tickets per 1,000 orders (avg of 3 lines)  x 2 points
+       Others          = audit points lost on non-critical parameters      x 1 point
+                         (100 - average score of the audits that scored above 0) */
+    var nz=0, nzSum=0;
+    data.audits.forEach(function(a){ if(inR(a.date) && a.score!==null && a.score>0 && SCORED_SET[a.type]){ nz++; nzSum+=a.score; } });
+    var hSum=0, mSum=0, lines=0;
+    T.lines.forEach(function(b){
+      b.highPer1k = b.orders ? b.high/b.orders*1000 : null;
+      b.medPer1k  = b.orders ? b.medium/b.orders*1000 : null;
+      b.ptsLost   = b.orders ? CFG.D_HIGH*b.highPer1k + CFG.D_MEDIUM*b.medPer1k : null;
+      if(b.orders){ hSum+=b.highPer1k; mSum+=b.medPer1k; lines++; }
+    });
+    var D = {
+      critical: {rate: A.scored ? A.zero/A.scored*100 : null, unit:"% of audits", weight:CFG.D_CRITICAL, label:"Critical errors (zero-score audits)"},
+      high:     {rate: lines ? hSum/lines : null, unit:"per 1,000 orders", weight:CFG.D_HIGH, label:"High-severity tickets"},
+      medium:   {rate: lines ? mSum/lines : null, unit:"per 1,000 orders", weight:CFG.D_MEDIUM, label:"Medium-severity tickets"},
+      others:   {rate: nz ? 100 - nzSum/nz*100 : null, unit:"audit points missed", weight:CFG.D_OTHERS, label:"Non-critical audit misses"}
+    };
+    var lost=0, have=0;
+    ["critical","high","medium","others"].forEach(function(k){ var x=D[k]; x.pts = x.rate==null ? null : x.rate*x.weight; if(x.pts!=null){ lost+=x.pts; have++; } });
+    D.total = lost;
+    var overall = have ? Math.max(0, 100 - lost) : null;
+    A.nonZeroAvg = nz ? nzSum/nz*100 : null;
+    return {start:s, end:e, audit:A, tickets:T, deductions:D, overall:overall, rag:rag(overall), partialInputs:(have<4)};
   }
 
   /* weekly buckets (Mon-Sun) inside a window, for trend tables */
