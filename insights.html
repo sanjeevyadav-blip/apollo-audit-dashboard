@@ -224,10 +224,28 @@
   .tip{position:fixed;pointer-events:none;z-index:99;background:var(--ink);color:var(--paper);font-size:11.5px;padding:6px 9px;border-radius:6px;box-shadow:var(--shadow);max-width:280px;display:none;line-height:1.4}
   .sec-note{font-size:11px;color:var(--ink-soft);margin:10px 0 0}
   @media (max-width:980px){ .grid2{grid-template-columns:1fr} .stack-row{grid-template-columns:100px 1fr} .stack-row .figs{grid-column:1/-1;text-align:left} }
+
+/* ===== Insights & actions ===== */
+.ins-panel{border-left:5px solid var(--accent)}
+.ins-sum{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px}
+.ins-sum span{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--surface-2,#f6f4ee);border:1px solid var(--line)}
+.ins-sum .h{background:var(--crit-soft);color:var(--crit);border-color:transparent}
+.ins-sum .m{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.ins-sum .l{background:var(--good-soft);color:var(--good);border-color:transparent}
+table.ins td{white-space:normal;vertical-align:top;font-size:12.5px;line-height:1.5}
+table.ins td.f{min-width:260px} table.ins td.a{min-width:260px} table.ins td.o{min-width:120px;color:var(--ink-soft)}
+table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decoration:none;background:var(--accent-soft);color:var(--accent-ink,var(--accent));border-radius:6px;padding:2px 7px;white-space:nowrap}
+.pr{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pr.h{background:var(--crit-soft);color:var(--crit)} .pr.m{background:var(--warn-soft);color:var(--warn)} .pr.l{background:var(--good-soft);color:var(--good)}
+.act-box{margin-top:14px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;background:var(--surface-2,#f6f4ee);font-size:12.8px;line-height:1.55}
+.act-box .k{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:5px;padding:1px 7px;margin-right:6px;background:var(--accent-soft);color:var(--accent-ink,var(--accent))}
+.act-box .k.do{background:var(--warn-soft);color:var(--warn)}
+.act-box p{margin:3px 0}
+.ins-copy{font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer}
 </style>
 </head>
 <body>
-<div class="page-toggle-wrap"><nav class="page-toggle" aria-label="Switch page"><a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 11.5a6 6 0 0 1 12 0" stroke-linecap="round"/><path d="M8 11.5 10.8 7" stroke-linecap="round"/><circle cx="8" cy="11.5" r="1.1" fill="currentColor"/></svg><span class="pg">PAGE 1</span>Compliance Scorecard</a><a href="deepdive.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 3.5h12M2 8h8M2 12.5h5" stroke-linecap="round"/><circle cx="12.5" cy="11.5" r="2.2"/><path d="M14.1 13.1 15 14" stroke-linecap="round"/></svg><span class="pg">PAGE 2</span>Compliance Deep-dive</a><a href="dashboard.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="1.5" y="1.5" width="5.5" height="7" rx="1.2"/><rect x="9" y="1.5" width="5.5" height="4" rx="1.2"/><rect x="9" y="7.5" width="5.5" height="7" rx="1.2"/><rect x="1.5" y="10.5" width="5.5" height="4" rx="1.2"/></svg><span class="pg">PAGE 3</span>Full Dashboard</a><a href="report.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z" stroke-linejoin="round"/><path d="M9.5 1.5v3h3"/><path d="M5.5 12.5v-2.5M8 12.5V8M10.5 12.5V9.5" stroke-linecap="round"/></svg><span class="pg">PAGE 4</span>Audit Coverage Report</a><a href="insights.html" aria-current="page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6 14.5 14.5" stroke-linecap="round"/><path d="M4.8 8.2 6.4 6.6 7.6 7.8 9.4 5.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pg">PAGE 5</span>Quality Insights</a></nav></div>
+<style>@media (max-width:1500px){ .page-toggle a{padding:8px 14px} .page-toggle .pg{display:none} } @media (max-width:1100px){ .page-toggle{flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 32px);border-radius:18px} .page-toggle a{padding:8px 12px} }</style><div class="page-toggle-wrap"><nav class="page-toggle" aria-label="Switch page"><a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 11.5a6 6 0 0 1 12 0" stroke-linecap="round"/><path d="M8 11.5 10.8 7" stroke-linecap="round"/><circle cx="8" cy="11.5" r="1.1" fill="currentColor"/></svg><span class="pg">PAGE 1</span>Compliance Scorecard</a><a href="deepdive.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 3.5h12M2 8h8M2 12.5h5" stroke-linecap="round"/><circle cx="12.5" cy="11.5" r="2.2"/><path d="M14.1 13.1 15 14" stroke-linecap="round"/></svg><span class="pg">PAGE 2</span>Compliance Deep-dive</a><a href="dashboard.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="1.5" y="1.5" width="5.5" height="7" rx="1.2"/><rect x="9" y="1.5" width="5.5" height="4" rx="1.2"/><rect x="9" y="7.5" width="5.5" height="7" rx="1.2"/><rect x="1.5" y="10.5" width="5.5" height="4" rx="1.2"/></svg><span class="pg">PAGE 3</span>Full Dashboard</a><a href="report.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z" stroke-linejoin="round"/><path d="M9.5 1.5v3h3"/><path d="M5.5 12.5v-2.5M8 12.5V8M10.5 12.5V9.5" stroke-linecap="round"/></svg><span class="pg">PAGE 4</span>Audit Coverage Report</a><a href="insights.html" aria-current="page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6 14.5 14.5" stroke-linecap="round"/><path d="M4.8 8.2 6.4 6.6 7.6 7.8 9.4 5.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pg">PAGE 5</span>Quality Insights</a><a href="governance.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 1.5 13.5 3.5v4.2c0 3.2-2.3 5.6-5.5 6.8-3.2-1.2-5.5-3.6-5.5-6.8V3.5z" stroke-linejoin="round"/><path d="M5.6 8.1 7.3 9.8 10.5 6.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pg">PAGE 6</span>Clinical Governance</a></nav></div>
 
 <div class="top">
   <div class="top-id">
@@ -254,6 +272,14 @@
 <div class="filter-bar">
   <span class="fb-lbl">Project Type</span>
   <div class="chip-row" id="typeChipRow"></div>
+</div>
+
+<div class="panel ins-panel" id="insPanel">
+  <div class="panel-head"><div><h2>Key insights &amp; actions</h2>
+    <p class="desc">What the data on this page says for the selected range and project, and what to do about it. Written automatically from the numbers below; priority High = act this week, Medium = this month, Low = keep watching. Click a section number to jump to the detail.</p></div>
+    <button class="ins-copy" type="button" id="insCopy">Copy as text</button></div>
+  <div class="ins-sum" id="insSum"></div>
+  <div class="tbl-wrap"><table class="ins"><thead><tr><th>#</th><th>Priority</th><th>Area</th><th>What the data shows</th><th>Action to take</th><th>Owner</th></tr></thead><tbody id="insBody"><tr><td colspan="6" class="empty-note">Reading the sheets…</td></tr></tbody></table></div>
 </div>
 
 <!-- ============ A. QUALITY ============ -->
@@ -664,8 +690,31 @@
   function leadAuditDay(r){ return r.p ? addDaysIso(r.p,1) : r.a; }
   function typeOk(t){ return state.type==="all" || state.type===t; }
 
+  /* ---------- insights & actions ---------- */
+  var INS=[];
+  function addIns(n, pr, area, finding, action, owner){ INS.push({n:n, pr:pr, area:area, f:finding, a:action, o:owner}); }
+  function panelFor(n){ var hs=document.querySelectorAll(".panel h2"); for(var i=0;i<hs.length;i++){ if(hs[i].textContent.replace(/\s+/g," ").indexOf(n+" · ")===0) return hs[i].closest(".panel"); } return null; }
+  function renderInsights(){
+    var rk={High:0,Medium:1,Low:2}, list=INS.slice().sort(function(a,b){ return rk[a.pr]-rk[b.pr] || (parseFloat(a.n)-parseFloat(b.n)); });
+    var c={High:0,Medium:0,Low:0}; list.forEach(function(x){ c[x.pr]++; });
+    document.getElementById("insSum").innerHTML='<span class="h">'+c.High+' High</span><span class="m">'+c.Medium+' Medium</span><span class="l">'+c.Low+' Low</span><span>'+esc(fmtDateLabel(state.filter.start))+' – '+esc(fmtDateLabel(state.filter.end))+' · '+esc(state.type==="all"?"All projects":state.type)+'</span>';
+    document.getElementById("insBody").innerHTML = list.length ? list.map(function(x){
+      return '<tr><td><a class="go" href="#sec-'+String(x.n).replace(/\W/g,"")+'">'+esc(x.n)+'</a></td><td><span class="pr '+x.pr.charAt(0).toLowerCase()+'">'+x.pr+'</span></td><td><b>'+esc(x.area)+'</b></td><td class="f">'+x.f+'</td><td class="a">'+x.a+'</td><td class="o">'+esc(x.o)+'</td></tr>'; }).join("")
+      : '<tr><td colspan="6" class="empty-note">Reading the sheets…</td></tr>';
+    INS.forEach(function(x){ var p=panelFor(x.n); if(!p) return; p.id="sec-"+String(x.n).replace(/\W/g,"");
+      var box=p.querySelector(":scope > .act-box"); if(!box){ box=document.createElement("div"); box.className="act-box"; p.appendChild(box); }
+      box.innerHTML='<p><span class="k">Insight</span>'+x.f+'</p><p><span class="k do">Action</span>'+x.a+' <span class="pr '+x.pr.charAt(0).toLowerCase()+'">'+x.pr+'</span> <span class="muted" style="font-size:11.5px">Owner: '+esc(x.o)+'</span></p>'; });
+    Array.prototype.forEach.call(document.querySelectorAll(".panel > .act-box"), function(b){ var p=b.parentElement, keep=INS.some(function(x){ return panelFor(x.n)===p; }); if(!keep) b.remove(); });
+  }
+  document.getElementById("insCopy").addEventListener("click", function(){
+    var rk={High:0,Medium:1,Low:2}, txt="Quality Insights – key insights & actions ("+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+")\n"+INS.slice().sort(function(a,b){ return rk[a.pr]-rk[b.pr]; }).map(function(x){ var d=document.createElement("div"); d.innerHTML=x.f; var e=document.createElement("div"); e.innerHTML=x.a; return "• ["+x.pr+"] "+x.area+": "+d.textContent+" → Action: "+e.textContent+" (Owner: "+x.o+")"; }).join("\n");
+    function ok(){ var b=document.getElementById("insCopy"); b.textContent="Copied"; setTimeout(function(){ b.textContent="Copy as text"; },1500); }
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok,function(){}); else { var t=document.createElement("textarea"); t.value=txt; document.body.appendChild(t); t.select(); try{ document.execCommand("copy"); ok(); }catch(e){} t.remove(); }
+  });
+
   /* ---------- render ---------- */
   function render(){
+    INS=[];
     renderChips();
     document.getElementById("filterStart").value=state.filter.start; document.getElementById("filterEnd").value=state.filter.end;
     var nDays=daysBetween(state.filter.start,state.filter.end)+1;
@@ -684,6 +733,7 @@
     Array.prototype.forEach.call(document.querySelectorAll(".cwin"), function(el){ el.textContent = "consults "+fmtDateLabel(addDaysIso(state.filter.start,-1))+" – "+fmtDateLabel(addDaysIso(state.filter.end,-1)); });
     renderParams(); renderZero(scored); renderWatch(scored); renderCoverage(audited); renderAgeing(); renderTat(audited, cancelIn);
     renderCalibration(); renderMinutes(audited, cancelIn); renderCancel(cancelIn); renderStatus(); renderSegments(scored); renderWeekly();
+    renderInsights();
   }
 
   /* 1 — parameter-wise */
@@ -705,6 +755,9 @@
       (worst[0]?tile("Most-missed parameter", fmtPct(worst[0].lostPct,1), worst[0].d.name, true):"") +
       (worst[1]?tile("Second most-missed", fmtPct(worst[1].lostPct,1), worst[1].d.name):"");
     if(!rows.length){ body.innerHTML='<tr><td colspan="6" class="empty-note">No '+esc(type)+' audits in this range.</td></tr>'; return; }
+    if(worst[0]){ var w0=worst[0], pr0=w0.lostPct>=30?"High":(w0.lostPct>=15?"Medium":"Low"), topDoc=(w0.top||"").replace(/<[^>]+>/g,"").split(",")[0];
+      addIns("1", pr0, "Checklist – "+type, '<b>'+esc(w0.d.name)+'</b> is missed in <b>'+fmtPct(w0.lostPct,1)+'</b> of '+fmtInt(w0.n)+' '+esc(type)+' audits'+(worst[1]?'; next is '+esc(worst[1].d.name)+' ('+fmtPct(worst[1].lostPct,1)+')':'')+'.'+(topDoc?' Most misses: '+esc(topDoc)+'.':''),
+        'Run a 15-minute refresher on this checklist item for '+esc(type)+' doctors with two good-call examples; re-check it in next week&rsquo;s audits. Aim: missed in fewer than 10% of audits.', "Clinical training lead"); }
     var html="", lastGroup=null;
     var ordered = stats.slice().sort(function(a,b){ var ga=a.d.group||"", gb=b.d.group||""; if(ga!==gb) return defs.indexOf(a.d)-defs.indexOf(b.d); return (b.lostPct||0)-(a.lostPct||0); });
     /* keep checklist groups in checklist order; within a group, worst first */
@@ -730,6 +783,9 @@
     var by={};
     scored.forEach(function(r){ var k=r.d+"||"+r.t; if(!by[k]) by[k]={d:r.d,t:r.t,z:0,n:0,last:null}; by[k].n++; if(r.s===0){ by[k].z++; if(!by[k].last||r.a>by[k].last) by[k].last=r.a; } });
     var list=Object.keys(by).map(function(k){return by[k];}).filter(function(x){return x.z>0;}).sort(function(a,b){ return b.z-a.z || (b.last>a.last?1:-1); });
+    var rep2=list.filter(function(x){ return x.z>1; });
+    if(scored.length) addIns("2", zero.length?"High":"Low", "Zero-score (fatal) audits", zero.length ? '<b>'+fmtInt(zero.length)+'</b> audits scored 0% ('+fmtPct(zero.length/scored.length*100,2)+' of scored); '+fmtInt(list.length)+' doctors involved'+(rep2.length?', <b>'+rep2.length+' with more than one</b> (e.g. '+esc(rep2[0].d)+', '+rep2[0].z+')':'')+'.' : 'No zero-score audits in this range.',
+      zero.length ? 'Review every zero-score call with the doctor within 48 hours and record the reason. Doctors with 2+ zero scores: formal review and re-audit of 5 consults within 2 weeks.' : 'Keep current controls; no action needed.', "Medical Quality lead");
     document.getElementById("zeroBody").innerHTML = list.length ? list.map(function(x){
       return '<tr><td>'+esc(x.d)+'</td><td class="muted">'+esc(x.t)+'</td><td class="num tnum">'+(x.z>1?'<span class="tag warn">'+x.z+'</span>':x.z)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+fmtShort(x.last)+'</td></tr>';
     }).join("") : '<tr><td colspan="5" class="empty-note">No zero-score audits in this range.</td></tr>';
@@ -750,6 +806,8 @@
     var min=parseInt(document.getElementById("watchMinSel").value,10), weeks=weeksInRange(), by={};
     scored.forEach(function(r){ if(!by[r.d]) by[r.d]={d:r.d,net:{},n:0,sum:0,z:0,wk:{}}; var b=by[r.d]; b.n++; b.sum+=r.s*100; if(r.s===0) b.z++; b.net[r.dt]=1; var w=weekStart(r.a); if(!b.wk[w]) b.wk[w]={n:0,sum:0}; b.wk[w].n++; b.wk[w].sum+=r.s*100; });
     var list=Object.keys(by).map(function(k){ var b=by[k]; b.avg=b.sum/b.n; return b; }).filter(function(b){ return b.n>=min && b.avg<90; }).sort(function(a,b){ return a.avg-b.avg; });
+    if(scored.length) addIns("3", list.length>=5?"High":(list.length?"Medium":"Low"), "Low-score watchlist", list.length ? '<b>'+list.length+' doctors</b> with '+min+'+ audits average under 90%; lowest '+esc(list[0].d)+' at '+fmtPct(list[0].avg,1)+' over '+list[0].n+' audits.' : 'No doctor with '+min+'+ audits averages under 90%.',
+      list.length ? 'One-to-one coaching for these doctors using their own missed items (section 1), then re-audit 10 consults each over the next 2 weeks; escalate if still under 90%.' : 'No action needed.', "Clinical training lead");
     document.getElementById("watchBody").innerHTML = list.length ? list.map(function(b){
       var pts=weeks.map(function(w){ var x=b.wk[w]; return {w:w, v:x?x.sum/x.n:null, n:x?x.n:0}; });
       return '<tr><td>'+esc(b.d)+'<br><span class="muted" style="font-size:10.5px">'+esc(Object.keys(b.net).join(", "))+'</span></td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(b.avg,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td><td>'+sparkline(pts)+'</td></tr>';
@@ -769,6 +827,9 @@
     var totO=list.reduce(function(s,x){return s+x.o;},0), totA=list.reduce(function(s,x){return s+x.n;},0);
     tiles.innerHTML = tile("Doctors with "+min+"+ orders", fmtInt(list.length), fmtInt(totO)+" orders") + tile("Audit % (these doctors)", totO?fmtPct(totA/totO*100,2):"—", fmtInt(totA)+" audits") +
       tile("Under 1% audited", fmtInt(under1), list.length?fmtPct(under1/list.length*100,0)+" of them":"", under1>0) + tile("Not audited at all", fmtInt(none), "in this range", none>0);
+    if(list.length){ var nz=list.filter(function(x){return x.n===0;}).sort(function(a,b){ return b.o-a.o; });
+      addIns("4", none?"High":(under1?"Medium":"Low"), "Audit coverage", (none?'<b>'+fmtInt(none)+'</b> of '+fmtInt(list.length)+' high-volume doctors ('+min+'+ orders) were not audited at all and ':'All '+fmtInt(list.length)+' high-volume doctors ('+min+'+ orders) have audits, but ')+'<b>'+fmtInt(under1)+'</b> are under 1% audited'+(nz[0]?'; biggest gap '+esc(nz[0].d)+' ('+fmtInt(nz[0].o)+' orders, 0 audits)':'')+'.',
+        (none||under1) ? 'Add these doctors to tomorrow&rsquo;s audit lead list so every high-volume doctor has at least 1% of consults audited (minimum 3 audits a month).' : 'Coverage is fine for high-volume doctors; keep the current lead allocation.', "Audit team lead"); }
     body.innerHTML = list.length ? list.slice(0,60).map(function(x){
       return '<tr><td>'+esc(x.d)+'</td><td class="muted" style="font-size:11.5px">'+esc(x.net||"—")+'</td><td class="num tnum">'+fmtInt(x.o)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+meterCell(Math.min(x.pct,100),2,x.pct<1)+'</td><td class="num tnum">'+scoreCell(x.avg,0)+'</td><td>'+(x.n===0?'<span class="tag warn">Not audited</span>':(x.pct<1?'<span class="tag warn">&lt;1%</span>':''))+'</td></tr>';
     }).join("") : '<tr><td colspan="7" class="empty-note">No doctor has '+min+'+ orders in this range.</td></tr>';
@@ -786,6 +847,9 @@
     ALL_TYPES.filter(typeOk).forEach(function(t){ var s=by[t].reduce(function(a,b){return a+b;},0); by[t].forEach(function(v,i){ tot[i]+=v; }); html+='<tr><td>'+esc(t)+'</td>'+by[t].map(function(v,i){ return cell(v,t,i); }).join("")+'<td class="num tnum"><b>'+fmtInt(s)+'</b></td></tr>'; });
     html+='<tr style="font-weight:600"><td>Total</td>'+tot.map(function(v){ return '<td class="num tnum">'+fmtInt(v)+'</td>'; }).join("")+'<td class="num tnum">'+fmtInt(tot.reduce(function(a,b){return a+b;},0))+'</td></tr>';
     document.getElementById("ageBody").innerHTML = state.rows.length ? html : '<tr><td colspan="7" class="empty-note">Loading audit sheets…</td></tr>';
+    if(state.rows.length){ var totAll=tot.reduce(function(a,b){return a+b;},0), old=tot[3]+tot[4], worstT=ALL_TYPES.filter(typeOk).sort(function(a,b){ return (by[b][3]+by[b][4])-(by[a][3]+by[a][4]); })[0];
+      addIns("5", old>200?"High":(old>0?"Medium":"Low"), "Audit backlog", '<b>'+fmtInt(totAll)+'</b> leads are waiting for audit; <b>'+fmtInt(old)+'</b> are 8+ days old'+(worstT&&old?', mostly '+esc(worstT)+' ('+fmtInt(by[worstT][3]+by[worstT][4])+')':'')+'.',
+        old ? 'Work the 0&ndash;3 day leads first (they are still useful), then sample or close leads older than 14 days instead of auditing them late; move auditor time to '+esc(worstT||"the busiest project")+'.' : 'Backlog is fresh; keep the daily cadence.', "Audit team lead"); }
   }
 
   /* 6 — turnaround */
@@ -797,6 +861,9 @@
     function line(k,arr,bold){ var avg=arr.reduce(function(a,b){return a+b;},0)/arr.length, le1=arr.filter(function(x){return x<=1;}).length, gt7=arr.filter(function(x){return x>7;}).length;
       return '<tr'+(bold?' style="font-weight:600"':'')+'><td>'+esc(k)+'</td><td class="num tnum">'+fmtInt(arr.length)+'</td><td class="num tnum">'+fmtNum(avg,1)+'</td><td class="num tnum">'+fmtNum(median(arr),0)+'</td><td class="num tnum">'+meterCell(le1/arr.length*100,0)+'</td><td class="num tnum">'+(gt7?'<span class="tag warn">'+fmtPct(gt7/arr.length*100,1)+'</span>':'0%')+'</td></tr>'; }
     var all=[]; keys.forEach(function(k){ all=all.concat(g[k]); });
+    if(all.length){ var le1=all.filter(function(x){return x<=1;}).length/all.length*100, gt7=all.filter(function(x){return x>7;}).length/all.length*100, av=all.reduce(function(a,b){return a+b;},0)/all.length;
+      addIns("6", gt7>=10?"High":(le1<80?"Medium":"Low"), "Turnaround time", 'Audits happen on average <b>'+fmtNum(av,1)+' days</b> after the consult; '+fmtPct(le1,0)+' within 1 day and '+fmtPct(gt7,1)+' after more than 7 days.',
+        le1<80||gt7>=5 ? 'Audit within 1 day of the consult so feedback reaches the doctor while the call is fresh. Target: 80% of audits within 1 day, none after 7 days.' : 'Turnaround is on target; keep it.', "Audit team lead"); }
     document.getElementById("tatBody").innerHTML = keys.length ? keys.map(function(k){ return line(k,g[k]); }).join("")+line("All",all,true) : '<tr><td colspan="6" class="empty-note">No audits with both dates in this range.</td></tr>';
   }
 
@@ -808,6 +875,10 @@
     types=types.filter(function(t){ return projAvg[t]; });
     document.getElementById("calHead").innerHTML='<tr><th>Auditor</th>'+types.map(function(t){ return '<th class="num">'+esc(t)+'<br><span style="text-transform:none;letter-spacing:0;font-weight:500">avg '+fmtPct(projAvg[t].sum/projAvg[t].n,1)+'</span></th>'; }).join("")+'</tr>';
     var names=Object.keys(auds).sort(function(a,b){ return auds[b]-auds[a]; });
+    var off=[]; names.forEach(function(a){ types.forEach(function(t){ var c=cell[a+"||"+t]; if(!c||c.n<10) return; var dev=c.sum/c.n-projAvg[t].sum/projAvg[t].n; if(Math.abs(dev)>=3) off.push({a:a,t:t,dev:dev}); }); });
+    off.sort(function(x,y){ return Math.abs(y.dev)-Math.abs(x.dev); });
+    if(names.length) addIns("7", off.length?"Medium":"Low", "Auditor calibration", off.length ? '<b>'+off.length+'</b> auditor/project pairs score 3+ points away from the project average, e.g. '+off.slice(0,2).map(function(o){ return esc(o.a)+' on '+esc(o.t)+' ('+(o.dev>0?'+':'−')+Math.abs(o.dev).toFixed(1)+')'; }).join(', ')+'.' : 'All auditors are within 3 points of the project average.',
+      off.length ? 'Hold a monthly calibration session: every auditor scores the same 5 recorded calls and the differences are discussed, so a doctor&rsquo;s score does not depend on who audits them.' : 'Keep a quarterly calibration check.', "Audit team lead");
     document.getElementById("calBody").innerHTML = names.length ? names.map(function(a){
       return '<tr><td>'+esc(a)+'</td>'+types.map(function(t){ var c=cell[a+"||"+t]; if(!c) return '<td class="num muted">—</td>'; var avg=c.sum/c.n, dev=avg-projAvg[t].sum/projAvg[t].n, small=c.n<10;
         var devTxt=(dev>=0?"+":"−")+Math.abs(dev).toFixed(1); var cls=small?"muted":(dev>=1.5?"dev-pos":(dev<=-1.5?"dev-neg":"muted"));
@@ -824,6 +895,9 @@
     function c(a){ if(!a||!a.length) return '<td class="num muted">—</td>'; var m=avg(a); return '<td class="num tnum" data-tip="Avg '+m.toFixed(1)+' min · median '+median(a).toFixed(1)+' min · '+a.length+' audits · ≈'+(60/m).toFixed(1)+' audits/hour">'+m.toFixed(1)+'<span class="muted" style="font-size:10.5px"> min</span></td>'; }
     document.getElementById("minHead").innerHTML='<tr><th>Auditor</th>'+types.map(function(t){ return '<th class="num">'+esc(t)+'</th>'; }).join("")+'<th class="num">All</th><th class="num">Audits timed</th></tr>';
     var names=Object.keys(auds).sort(function(a,b){ return auds[b].length-auds[a].length; });
+    if(rows.length){ var allM=avg(rows.map(function(r){return r.mins;})), fast=names.filter(function(a){ return auds[a].length>=10 && avg(auds[a])<allM*0.6; }), slow=names.filter(function(a){ return auds[a].length>=10 && avg(auds[a])>allM*1.6; });
+      addIns("8", (fast.length||slow.length)?"Medium":"Low", "Minutes per audit", 'An audit takes <b>'+allM.toFixed(1)+' min</b> on average'+(fast.length?'; much faster: '+fast.slice(0,3).map(esc).join(', '):'')+(slow.length?'; much slower: '+slow.slice(0,3).map(esc).join(', '):'')+'.',
+        (fast.length||slow.length) ? 'Spot-check a few very quick audits for thoroughness and ask slow auditors whether a checklist step is unclear; use the average to plan daily audit targets per auditor.' : 'Audit effort is consistent; use '+allM.toFixed(0)+' min per audit to plan capacity.', "Audit team lead"); }
     var html=names.map(function(a){ return '<tr><td>'+esc(a)+'</td>'+types.map(function(t){ return c(cell[a+"||"+t]); }).join("")+c(auds[a])+'<td class="num tnum muted">'+fmtInt(auds[a].length)+'</td></tr>'; }).join("");
     if(names.length) html+='<tr style="font-weight:600"><td>All auditors</td>'+types.map(function(t){ return c(tt[t]); }).join("")+c(rows.map(function(r){return r.mins;}))+'<td class="num tnum">'+fmtInt(rows.length)+'</td></tr>';
     document.getElementById("minBody").innerHTML = html || '<tr><td class="empty-note">No timed audits in this range.</td></tr>';
@@ -840,6 +914,9 @@
       tile("Patient responded", n?fmtPct(resp/n*100,1):"—", fmtInt(cnt("resp","No"))+" didn't");
     var by={}; cancelIn.forEach(function(r){ var k=r.d||"—"; if(!by[k]) by[k]={d:k,n:0,ng:0,rs:0,nc:0,nr:0}; var b=by[k]; b.n++; if(r.gen==="No") b.ng++; if(r.reason==="No") b.rs++; if(r.call==="No") b.nc++; if(r.resp==="No") b.nr++; });
     var list=Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){ return b.ng-a.ng || b.rs-a.rs || b.n-a.n; });
+    if(n){ var ngp=(n-gen)/n*100, top3=list.filter(function(b){ return b.ng>0; }).slice(0,3);
+      addIns("9", ngp>10?"High":(ngp>5?"Medium":"Low"), "PDS cancellations", '<b>'+fmtPct(ngp,1)+'</b> of '+fmtInt(n)+' audited cancellations were not genuine; reason recorded wrongly in '+fmtPct(cnt("reason","No")/n*100,1)+'; doctor did not call in '+fmtPct(cnt("call","No")/n*100,1)+'.'+(top3.length?' Most: '+top3.map(function(b){ return esc(b.d)+' ('+b.ng+')'; }).join(', ')+'.':''),
+        ngp>5 ? 'Counsel the doctors with not-genuine cancellations; make &ldquo;call the patient before cancelling&rdquo; and the correct reason code mandatory. Target: at least 90% genuine.' : 'Cancellations are mostly genuine; keep reviewing.', "PDS operations lead"); }
     body.innerHTML = list.length ? list.slice(0,60).map(function(b){
       return '<tr><td>'+esc(b.d)+'</td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+(b.ng?'<span class="tag warn">'+b.ng+'</span>':'0')+'</td><td class="num tnum">'+meterCell((b.n-b.ng)/b.n*100,0,(b.n-b.ng)/b.n<0.8)+'</td><td class="num tnum">'+fmtInt(b.rs)+'</td><td class="num tnum">'+fmtInt(b.nc)+'</td><td class="num tnum">'+fmtInt(b.nr)+'</td></tr>';
     }).join("") : '<tr><td colspan="7" class="empty-note">No cancellations audited in this range.</td></tr>';
@@ -852,6 +929,9 @@
     else {
       var by={}; ALL_TYPES.forEach(function(t){ by[t]={Completed:0,Cancelled:0,Pending:0}; });
       state.status.forEach(function(r){ if(!inConsultRange(r.date)) return; if(!by[r.t]) return; by[r.t][r.st]=(by[r.t][r.st]||0)+r.n; });
+      var rates=ALL_TYPES.filter(typeOk).filter(function(t){ return t!=="PDS Cancellation"; }).map(function(t){ var b=by[t], tot=b.Completed+b.Cancelled+b.Pending; return {t:t, tot:tot, c:tot?b.Cancelled/tot*100:null}; }).filter(function(x){ return x.tot>0; }).sort(function(a,b){ return b.c-a.c; });
+      if(rates.length){ var r0=rates[0]; addIns("10", r0.c>=15?"High":(r0.c>=8?"Medium":"Low"), "Consult cancellations", 'Highest cancellation rate: <b>'+esc(r0.t)+'</b> at '+fmtPct(r0.c,1)+' of '+fmtInt(r0.tot)+' consults'+(rates[1]?'; then '+esc(rates[1].t)+' '+fmtPct(rates[1].c,1):'')+'.',
+        r0.c>=8 ? 'Look at the doctors with the most cancelled consults (table below) and the cancellation reasons; agree a cancellation-rate limit per doctor and follow up those above it.' : 'Cancellation levels are normal; keep monitoring.', "Consult operations lead"); }
       box.innerHTML = ALL_TYPES.filter(typeOk).map(function(t){ var b=by[t], tot=b.Completed+b.Cancelled+b.Pending; if(!tot) return '<div class="stack-row"><div>'+esc(t)+'</div><div class="muted">No consults in range</div><div></div></div>';
         function seg(k,col){ var v=b[k]; if(!v) return ""; return '<i style="width:'+(v/tot*100).toFixed(2)+'%;background:'+col+'" data-tip="'+esc(t)+' — '+k+': '+fmtInt(v)+' ('+fmtPct(v/tot*100,1)+')"></i>'; }
         return '<div class="stack-row"><div style="font-weight:500">'+esc(t)+'</div><div class="stack">'+seg("Completed","var(--accent)")+seg("Cancelled","var(--warn)")+seg("Pending","var(--line-strong)")+'</div><div class="figs"><b>'+fmtInt(tot)+'</b> · cancelled '+fmtPct(b.Cancelled/tot*100,1)+' · pending '+fmtPct(b.Pending/tot*100,1)+'</div></div>'; }).join("");
@@ -877,7 +957,11 @@
     document.getElementById(id).innerHTML = list.length ? list.map(function(b){ var avg=b.sum/b.n;
       return '<tr><td class="wrap">'+esc(b.k)+'</td><td class="num tnum">'+fmtInt(Object.keys(b.docs).length)+'</td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(avg,1)+'</td><td class="num tnum">'+fmtPct(b.lo/b.n*100,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td></tr>'; }).join("") : '<tr><td colspan="6" class="empty-note">No scored audits in this range.</td></tr>';
   }
-  function renderSegments(scored){ segTable(scored,"dt","netBody"); segTable(scored,"sp","specBody",20); }
+  function renderSegments(scored){ segTable(scored,"dt","netBody"); segTable(scored,"sp","specBody",20);
+    function seg(field){ var by={}; scored.forEach(function(r){ var k=r[field]||"—"; if(!by[k]) by[k]={k:k,n:0,sum:0}; by[k].n++; by[k].sum+=r.s*100; }); return Object.keys(by).map(function(k){ var b=by[k]; b.avg=b.sum/b.n; return b; }).filter(function(b){ return b.n>=20 && b.k!=="—"; }).sort(function(a,b){ return a.avg-b.avg; }); }
+    var nw=seg("dt"), sp=seg("sp"); if(nw.length||sp.length){ var lowN=nw[0], lowS=sp[0], bad=(lowN&&lowN.avg<90)||(lowS&&lowS.avg<90);
+      addIns("11a", bad?"Medium":"Low", "Network & specialty", (lowN?'Lowest network: <b>'+esc(lowN.k)+'</b> '+fmtPct(lowN.avg,1)+' ('+fmtInt(lowN.n)+' audits)':'')+(lowS?(lowN?'; ':'')+'lowest specialty: <b>'+esc(lowS.k)+'</b> '+fmtPct(lowS.avg,1)+' ('+fmtInt(lowS.n)+' audits)':'')+'.',
+        bad ? 'Share the checklist expectations and the most-missed items with this network/specialty group and their partner manager; review again next month.' : 'All networks and specialties average 90%+; no action needed.', "Clinical training lead"); } }
 
   /* bar anchored to the baseline with 4px rounded data end (radius clamps for short bars) */
   function barPath(x, w, h, base, attrs){
@@ -915,6 +999,10 @@
     data.forEach(function(d,i){ var cx=pl+iw*(i+0.5)/data.length; s2+='<text class="axis" x="'+cx+'" y="'+(H-8)+'" text-anchor="middle">'+fmtShort(d.w)+'</text>'; if(d.avg===null) return; var y=pt+ih-ih*(d.avg-lo)/(hi-lo); path+=(path?"L":"M")+cx.toFixed(1)+" "+y.toFixed(1);
       pts+='<g data-tip="'+esc('Week '+fmtShort(d.ws)+'–'+fmtShort(d.we)+'<br>Avg score '+fmtPct(d.avg,1)+' · zero-score '+d.z)+'"><circle cx="'+cx+'" cy="'+y+'" r="12" fill="transparent"></circle><circle cx="'+cx+'" cy="'+y+'" r="4.5" fill="var(--div-pos)" stroke="var(--surface)" stroke-width="2"></circle></g>'; });
     document.getElementById("weekScoreChart").innerHTML=s2+'<path d="'+path+'" fill="none" stroke="var(--div-pos)" stroke-width="2"></path>'+pts+'</svg>';
+    var full=data.filter(function(d){ return !d.partial && d.avg!==null; });
+    if(full.length>=2){ var a0=full[0], a1=full[full.length-1], dv=a1.avg-a0.avg, cov=a1.lead?Math.min(100,a1.done/a1.lead*100):null;
+      addIns("12", dv<=-2?"High":(dv<0?"Medium":"Low"), "Weekly trend", 'Average score moved from '+fmtPct(a0.avg,1)+' (week of '+fmtShort(a0.w)+') to <b>'+fmtPct(a1.avg,1)+'</b> (week of '+fmtShort(a1.w)+'), '+(dv>=0?'up ':'down ')+Math.abs(dv).toFixed(1)+' points'+(cov!==null?'; latest full week covered '+fmtPct(cov,1)+' of leads':'')+'.',
+        dv<0 ? 'Find what changed in the weeks the score fell (new doctors, a project, an auditor) using sections 1, 3 and 7, and act on the main cause.' : 'Quality is stable or improving; keep the current training and audit cadence.', "Medical Quality lead"); }
     document.getElementById("weekBody").innerHTML = data.map(function(d){ return '<tr><td>'+fmtShort(d.ws)+' – '+fmtShort(d.we)+(d.partial?' <span class="muted" style="font-size:11px">(partial)</span>':'')+'</td><td class="num tnum">'+fmtInt(d.lead)+'</td><td class="num tnum">'+fmtInt(d.done)+'</td><td class="num tnum">'+(d.lead?meterCell(Math.min(100,d.done/d.lead*100),1):"—")+'</td><td class="num tnum">'+scoreCell(d.avg,1)+'</td><td class="num tnum">'+(d.z?'<span class="tag warn">'+d.z+'</span>':'0')+'</td></tr>'; }).join("");
   }
 
