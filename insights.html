@@ -301,19 +301,19 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
 <div class="grid2">
   <div class="panel">
     <div class="panel-head"><div><h2>2 &middot; Zero-score (fatal) audits</h2>
-      <p class="desc">Audits scored 0% &mdash; the dashboard&rsquo;s critical-error outcome. (The checklists&rsquo; own "Fatal Error Flag" column is almost never filled, so the 0% score is used instead.)</p></div></div>
+      <p class="desc">Audits scored 0% &mdash; the dashboard&rsquo;s critical-error outcome. Total consults = all the doctor&rsquo;s consults in Extract 1 (every status, D&minus;1 of the range); hover for completed consults and audit %. (The checklists&rsquo; own "Fatal Error Flag" column is almost never filled, so the 0% score is used instead.)</p></div></div>
     <div class="tiles" id="zeroTiles"></div>
     <div class="tbl-wrap scroll" style="max-height:340px">
-      <table><thead><tr><th>Doctor</th><th>Project</th><th class="num">Zero-score</th><th class="num">Audits</th><th class="num">Last zero</th></tr></thead>
+      <table><thead><tr><th>Doctor</th><th>Project</th><th class="num">Total consults</th><th class="num">Zero-score</th><th class="num">Audits</th><th class="num">Last zero</th></tr></thead>
       <tbody id="zeroBody"></tbody></table>
     </div>
   </div>
   <div class="panel">
     <div class="panel-head"><div><h2>3 &middot; Low-score watchlist</h2>
-      <p class="desc">Doctors averaging under 90% with enough audits to be a pattern, lowest first. Sparkline = weekly average score across the range.</p></div>
+      <p class="desc">Doctors averaging under 90% with enough audits to be a pattern, lowest first. Total consults = all of the doctor&rsquo;s consults in Extract 1 (every status) for appointment dates D&minus;1 of the range; hover it for completed consults and audit %. Sparkline = weekly average score across the range.</p></div>
       <label class="ctl"><span>Min audits</span><select id="watchMinSel"><option>5</option><option selected>10</option><option>20</option></select></label></div>
     <div class="tbl-wrap scroll" style="max-height:420px">
-      <table><thead><tr><th>Doctor</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">Zero</th><th>Weekly trend</th></tr></thead>
+      <table><thead><tr><th>Doctor</th><th class="num">Total consults</th><th class="num">Audits</th><th class="num">Avg score</th><th class="num">Zero</th><th>Weekly trend</th></tr></thead>
       <tbody id="watchBody"></tbody></table>
     </div>
   </div>
@@ -606,9 +606,12 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
         if(l==="date"){ L.d=x; isDate=/^date/.test(c.type||""); } else if(l==="status") L.s=x; else if(l==="doctor_name") L.n=x; else if(l==="total_consult") L.t=x; });
       if(!L.d||!L.s||!L.n||!L.t) throw new Error("Extract 1 columns not found");
       var floor=addDaysIso(isoToday(),-400);
-      return gvizJson(FILE_ORDERS, "gid="+ORDERS_GID, "select "+L.d+","+L.n+",sum("+L.t+") where "+L.s+" = 'Completed' and "+L.d+" >= "+dLit(floor,isDate)+" group by "+L.d+","+L.n);
+      return gvizJson(FILE_ORDERS, "gid="+ORDERS_GID, "select "+L.d+","+L.n+","+L.s+",sum("+L.t+") where "+L.d+" >= "+dLit(floor,isDate)+" group by "+L.d+","+L.n+","+L.s);
     }).then(function(j){
-      var out=[]; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var iso=cellIso(x[0]); var d=x[1]&&x[1].v?String(x[1].v).trim():""; var o=x[2]&&typeof x[2].v==="number"?x[2].v:0; if(iso&&d) out.push({date:iso, doctor:d, orders:o}); });
+      /* one row per date x doctor: orders = Completed consults, total = consults of every status */
+      var by={}, out=[]; (j.table.rows||[]).forEach(function(row){ var x=row.c||[]; var iso=cellIso(x[0]); var d=x[1]&&x[1].v?String(x[1].v).trim():""; var st=x[2]&&x[2].v?String(x[2].v).trim():""; var n=x[3]&&typeof x[3].v==="number"?x[3].v:0; if(!iso||!d) return;
+        var k=iso+"|"+d, r=by[k]||(by[k]={date:iso, doctor:d, orders:0, total:0}); r.total+=n; if(/^completed$/i.test(st)) r.orders+=n; });
+      for(var k in by) out.push(by[k]);
       return out;
     });
   }
@@ -773,6 +776,11 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
     body.innerHTML=html;
   }
 
+  /* total consults per doctor (Extract 1, every status) for the D-1 consult window */
+  function consMap(){ var cons={}; (state.orders||[]).forEach(function(o){ if(!inConsultRange(o.date)) return; var k=normalizeDoctorKey(o.doctor); if(!k) return; var c=cons[k]||(cons[k]={t:0,c:0}); c.t+=(o.total!=null?o.total:o.orders); c.c+=o.orders; }); return cons; }
+  function consTd(cons, name, audits){ if(!state.orders) return '<td class="num tnum muted">…</td>'; var c=cons[normalizeDoctorKey(name)]; if(!c) return '<td class="num tnum muted" data-tip="No consults found in Extract 1 for this name">—</td>';
+    return '<td class="num tnum" data-tip="'+esc(fmtInt(c.t)+' consults · '+fmtInt(c.c)+' completed · '+audits+' audits = '+(c.t?fmtPct(audits/c.t*100,1):'—')+' audited')+'">'+fmtInt(c.t)+'</td>'; }
+
   /* 2 — zero-score */
   function renderZero(scored){
     var zero=scored.filter(function(r){ return r.s===0; });
@@ -786,9 +794,10 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
     var rep2=list.filter(function(x){ return x.z>1; });
     if(scored.length) addIns("2", zero.length?"High":"Low", "Zero-score (fatal) audits", zero.length ? '<b>'+fmtInt(zero.length)+'</b> audits scored 0% ('+fmtPct(zero.length/scored.length*100,2)+' of scored); '+fmtInt(list.length)+' doctors involved'+(rep2.length?', <b>'+rep2.length+' with more than one</b> (e.g. '+esc(rep2[0].d)+', '+rep2[0].z+')':'')+'.' : 'No zero-score audits in this range.',
       zero.length ? 'Review every zero-score call with the doctor within 48 hours and record the reason. Doctors with 2+ zero scores: formal review and re-audit of 5 consults within 2 weeks.' : 'Keep current controls; no action needed.', "Medical Quality lead");
+    var cons=consMap();
     document.getElementById("zeroBody").innerHTML = list.length ? list.map(function(x){
-      return '<tr><td>'+esc(x.d)+'</td><td class="muted">'+esc(x.t)+'</td><td class="num tnum">'+(x.z>1?'<span class="tag warn">'+x.z+'</span>':x.z)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+fmtShort(x.last)+'</td></tr>';
-    }).join("") : '<tr><td colspan="5" class="empty-note">No zero-score audits in this range.</td></tr>';
+      return '<tr><td>'+esc(x.d)+'</td><td class="muted">'+esc(x.t)+'</td>'+consTd(cons, x.d, x.n)+'<td class="num tnum">'+(x.z>1?'<span class="tag warn">'+x.z+'</span>':x.z)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+fmtShort(x.last)+'</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-note">No zero-score audits in this range.</td></tr>';
   }
 
   /* 3 — watchlist */
@@ -806,12 +815,14 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
     var min=parseInt(document.getElementById("watchMinSel").value,10), weeks=weeksInRange(), by={};
     scored.forEach(function(r){ if(!by[r.d]) by[r.d]={d:r.d,net:{},n:0,sum:0,z:0,wk:{}}; var b=by[r.d]; b.n++; b.sum+=r.s*100; if(r.s===0) b.z++; b.net[r.dt]=1; var w=weekStart(r.a); if(!b.wk[w]) b.wk[w]={n:0,sum:0}; b.wk[w].n++; b.wk[w].sum+=r.s*100; });
     var list=Object.keys(by).map(function(k){ var b=by[k]; b.avg=b.sum/b.n; return b; }).filter(function(b){ return b.n>=min && b.avg<90; }).sort(function(a,b){ return a.avg-b.avg; });
+    var cons=consMap();
+    function consCell(b){ return consTd(cons, b.d, b.n); }
     if(scored.length) addIns("3", list.length>=5?"High":(list.length?"Medium":"Low"), "Low-score watchlist", list.length ? '<b>'+list.length+' doctors</b> with '+min+'+ audits average under 90%; lowest '+esc(list[0].d)+' at '+fmtPct(list[0].avg,1)+' over '+list[0].n+' audits.' : 'No doctor with '+min+'+ audits averages under 90%.',
       list.length ? 'One-to-one coaching for these doctors using their own missed items (section 1), then re-audit 10 consults each over the next 2 weeks; escalate if still under 90%.' : 'No action needed.', "Clinical training lead");
     document.getElementById("watchBody").innerHTML = list.length ? list.map(function(b){
       var pts=weeks.map(function(w){ var x=b.wk[w]; return {w:w, v:x?x.sum/x.n:null, n:x?x.n:0}; });
-      return '<tr><td>'+esc(b.d)+'<br><span class="muted" style="font-size:10.5px">'+esc(Object.keys(b.net).join(", "))+'</span></td><td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(b.avg,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td><td>'+sparkline(pts)+'</td></tr>';
-    }).join("") : '<tr><td colspan="5" class="empty-note">No doctor with '+min+'+ audits averages under 90% in this range.</td></tr>';
+      return '<tr><td>'+esc(b.d)+'<br><span class="muted" style="font-size:10.5px">'+esc(Object.keys(b.net).join(", "))+'</span></td>'+consCell(b)+'<td class="num tnum">'+fmtInt(b.n)+'</td><td class="num tnum">'+scoreCell(b.avg,1)+'</td><td class="num tnum">'+(b.z?'<span class="tag warn">'+b.z+'</span>':'0')+'</td><td>'+sparkline(pts)+'</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-note">No doctor with '+min+'+ audits averages under 90% in this range.</td></tr>';
   }
 
   /* 4 — coverage */
