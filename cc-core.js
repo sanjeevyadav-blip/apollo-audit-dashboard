@@ -105,7 +105,7 @@
   function monthEnd(ym){ var d=new Date(Date.UTC(+ym.slice(0,4), +ym.slice(5,7), 0)); return d.toISOString().slice(0,10); }
   function prevMonth(ym){ var y=+ym.slice(0,4), m=+ym.slice(5,7)-1; if(m<1){m=12;y--;} return y+"-"+pad2(m); }
   function nextMonth(ym){ var y=+ym.slice(0,4), m=+ym.slice(5,7)+1; if(m>12){m=1;y++;} return y+"-"+pad2(m); }
-  function monthLabel(ym){ return new Date(ym+"-01T00:00:00Z").toLocaleDateString("en-IN",{month:"short",year:"numeric",timeZone:"UTC"}); }
+  function monthLabel(ym){ return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+ym.slice(5,7)-1]+" "+ym.slice(0,4); }
   function dateLabel(iso){ return iso ? new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"}) : "—"; }
   function shortDate(iso){ return new Date(iso+"T00:00:00Z").toLocaleDateString("en-IN",{day:"2-digit",month:"short",timeZone:"UTC"}); }
   function canonicalAuditorName(raw){

@@ -1303,12 +1303,18 @@
     renderFilteredSections();
   }
 
+  /* last month and the month before, named (e.g. "Sep 2026", "Aug 2026"), counted from today's calendar month */
+  var MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function monthBack(n){ var t=localTodayIso(), y=+t.slice(0,4), m=+t.slice(5,7)-n; while(m<1){ m+=12; y--; }
+    var s=y+"-"+(m<10?"0":"")+m+"-01", e=new Date(Date.UTC(y, m, 0)).toISOString().slice(0,10); return {start:s, end:e, label:MONTH_ABBR[m-1]+" "+y}; }
   /* ---------- filter bar + date-filtered sections (Overall / Project-wise / Auditor-wise / Cancellation) ---------- */
   var CHIPS = [
     {key:"today", label:"Today"},
     {key:"yesterday", label:"Yesterday"},
     {key:"7d", label:"Last 7 Days"},
     {key:"mtd", label:"MTD"},
+    {key:"m1", label:monthBack(1).label},
+    {key:"m2", label:monthBack(2).label},
     {key:"30d", label:"Last 30 Days"},
     {key:"all", label:"All Time"}
   ];
@@ -1321,6 +1327,7 @@
     if(key==="7d") return {start:addDaysIso(end,-6), end:end};
     if(key==="mtd"){ var mtdEnd = mtdBoundaryEnd(); return {start:monthStartOf(mtdEnd), end:mtdEnd}; }
     if(key==="30d") return {start:addDaysIso(end,-29), end:end};
+    if(key==="m1"||key==="m2"){ var mb=monthBack(key==="m1"?1:2); return {start:mb.start, end:mb.end}; }
     if(key==="all"){
       var minDate = (state.auditRows||[]).concat(state.archive?state.archive.audits:[]).reduce(function(m,r){return r[0]<m?r[0]:m;}, end);
       return {start:minDate, end:end};

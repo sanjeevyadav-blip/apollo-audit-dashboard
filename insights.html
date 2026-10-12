@@ -703,7 +703,11 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
   /* ---------- state ---------- */
   var state = { rows:[], defs:{}, cancel:[], orders:null, status:null, dataMaxDate:addDaysIso(isoToday(),-1), filter:{start:null,end:null}, type:"all", fetchedAt:null };
   var liveOK = {}, pending = CHECKLISTS.length + 3;
-  var CHIPS=[{key:"yesterday",label:"Yesterday"},{key:"7d",label:"Last 7 Days"},{key:"mtd",label:"MTD"},{key:"30d",label:"Last 30 Days"},{key:"90d",label:"Last 90 Days"},{key:"all",label:"All Time"}];
+  /* last month and the month before, named (e.g. "Sep 2026", "Aug 2026"), counted from today's calendar month */
+  var MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function monthBack(n){ var t=isoToday(), y=+t.slice(0,4), m=+t.slice(5,7)-n; while(m<1){ m+=12; y--; }
+    var s=y+"-"+(m<10?"0":"")+m+"-01", e=new Date(Date.UTC(y, m, 0)).toISOString().slice(0,10); return {start:s, end:e, label:MONTH_ABBR[m-1]+" "+y}; }
+  var CHIPS=[{key:"yesterday",label:"Yesterday"},{key:"7d",label:"Last 7 Days"},{key:"mtd",label:"MTD"},{key:"m1",label:monthBack(1).label},{key:"m2",label:monthBack(2).label},{key:"30d",label:"Last 30 Days"},{key:"90d",label:"Last 90 Days"},{key:"all",label:"All Time"}];
   var activeChip="mtd";
   function chipRange(k){
     var end=isoToday();   /* same rule on every page: chips count from today; MTD = 1st of month .. today-1 */
@@ -712,6 +716,7 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
     if(k==="mtd"){ var e=addDaysIso(end,-1); return {start:monthStartOf(e),end:e}; }
     if(k==="30d") return {start:addDaysIso(end,-29),end:end};
     if(k==="90d") return {start:addDaysIso(end,-89),end:end};
+    if(k==="m1"||k==="m2"){ var mb=monthBack(k==="m1"?1:2); return {start:mb.start,end:mb.end}; }
     if(k==="all"){ var mn=state.rows.reduce(function(m,r){ return (r.a && r.a<m)?r.a:m; }, end); return {start:mn,end:end}; }
     return {start:monthStartOf(end),end:end};
   }
