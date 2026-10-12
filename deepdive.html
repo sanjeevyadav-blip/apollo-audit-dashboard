@@ -44,7 +44,7 @@
   <footer id="sources"></footer>
 </div>
 
-<script src="cc-core.js?v=20261012"></script>
+<script src="cc-core.js?v=20261012b"></script>
 <script>
 (function(){
   "use strict";
@@ -164,7 +164,7 @@
       '<h3>High severity (everything else in the business line is Medium)</h3>'+
       '<div class="map"><div><b>Consult</b>'+list(H.consult)+'</div><div><b>Pharmacy (Medicine tickets)</b>'+list(H.pharma)+'</div><div><b>Diagnostics</b>'+list(H.diagnostics)+'</div></div>'+
       '<h3>Data notes</h3>'+
-      '<p>Scored from August 2026, the first full month of ticket and order data. The PDS and Non Pharma audit sheets keep a rolling window of recent audits (currently from '+esc(U.dateLabel(DATA&&DATA.auditFrom&&DATA.auditFrom["PDS"]))+'), so earlier periods show audit gaps until an archive of older audits is connected.'+
+      '<p>Scored from August 2026, the first full month of ticket and order data. Audits combine the live audit sheets with the past-data sheets (PDS and Non Pharma from '+esc(U.dateLabel(DATA&&DATA.auditFrom&&DATA.auditFrom["PDS"]))+'); where both cover the same dates, the live sheet is used.'+
       (DATA&&DATA.medicineRows>=25000?' The Medicine ticket tab currently holds exactly '+fi(DATA.medicineRows)+' rows, which looks like an export limit; if it is, its oldest days get dropped as new tickets arrive.':'')+'</p>';
   }
   function sourcesHtml(){
@@ -178,7 +178,8 @@
       ["BS WLP Audits","https://docs.google.com/spreadsheets/d/"+CC.CFG.FILE_WLP+"/edit#gid=1348901453"],
       ["PDS Cancellation Sheet (before 28 Sep)","https://docs.google.com/spreadsheets/d/"+CC.CFG.FILE_CANCEL+"/edit#gid=909502922"],
       ["PDS_Cancellation_Sheet_2 (from 28 Sep)","https://docs.google.com/spreadsheets/d/"+CC.CFG.FILE_CANCEL+"/edit#gid=796650823"],
-      ["Extract 1 · Total_Consults","https://docs.google.com/spreadsheets/d/"+CC.CFG.FILE_CONSULT+"/edit#gid="+CC.CFG.CONSULT_GID]
+      ["Extract 1 · Total_Consults","https://docs.google.com/spreadsheets/d/"+CC.CFG.FILE_CONSULT+"/edit#gid="+CC.CFG.CONSULT_GID],
+      ["Past data sheets (index of archived audit sheets)","https://docs.google.com/spreadsheets/d/1ZCXND9OMYLO268W3SuuX7M4BqZag4m3zYzc7PnjnHhI/edit#gid=0"]
     ];
     return '<span>Sources (read live in your browser):</span><div class="src">'+L.map(function(x){ return '<span class="sn">'+esc(x[0])+' :</span><a href="'+x[1]+'" target="_blank" rel="noopener">'+x[1]+'</a>'; }).join("")+'</div>';
   }

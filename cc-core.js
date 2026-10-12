@@ -60,6 +60,33 @@
     {type:"PDS- Mounjaro", file:CFG.FILE_WLP, sheet:"PDS-Mounjaro", headers:0},
     {type:"WLP - Non Pharma", file:CFG.FILE_WLP, sheet:"BS WLP Audits", headers:0}
   ];
+  /* Past data sheets (index: 1ZCXND9OMYLO268W3SuuX7M4BqZag4m3zYzc7PnjnHhI). Same layout as the live tabs; used only
+     for dates before the live tab's first audit. */
+  var ARCHIVE_SOURCES = [
+    {type:"PDS", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"PDS Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"PDS- Mounjaro", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"PDS Mounjaro Audits from Jun 26", headers:0, hdrFix:{at:15, label:"Patient identification - -Age, Weight, Height, Marital Status, LMP (female patients)"}},
+    {type:"WLP - Non Pharma", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"BS WLP from Feb 2026", headers:0}
+  ];
+  var ARCHIVE_CANCEL = {file:"13GgExKCC_7Gstbwl-TOSSSvNzuQ7YNDFvs5KvR903fc", sheet:"PDS Cancellation Sheet"};
+  /* archived sheets don't change: cache what was read for 24 h in this browser and read them one at a time (less load on Google) */
+  function arcIdb(){ return new Promise(function(res,rej){ if(!window.indexedDB) return rej(new Error("no idb")); var q; try{ q=indexedDB.open("apollo_archive",1); }catch(e){ return rej(e); } q.onupgradeneeded=function(){ q.result.createObjectStore("kv"); }; q.onsuccess=function(){ res(q.result); }; q.onerror=function(){ rej(q.error); }; }); }
+  function arcCacheGet(key){ return arcIdb().then(function(db){ return new Promise(function(res){ try{ var q=db.transaction("kv").objectStore("kv").get(key); q.onsuccess=function(){ var v=q.result; res(v && (Date.now()-v.t)<86400000 ? v.d : null); }; q.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }).catch(function(){ return null; }); }
+  function arcCachePut(key, d){ return arcIdb().then(function(db){ try{ db.transaction("kv","readwrite").objectStore("kv").put({t:Date.now(), d:d}, key); }catch(e){} }).catch(function(){}); }
+  function arcSeq(list, fn){ var out=[], p=Promise.resolve(); list.forEach(function(x,i){ p=p.then(function(){ return fn(x,i); }).then(function(v){ out[i]=v; }); }); return p.then(function(){ return out; }); }
+  function loadArchivesAll(){
+    return arcCacheGet("cc_v2").then(function(hit){ if(hit) return hit;
+      return arcSeq(ARCHIVE_SOURCES, function(s){ return loadChecklist(s).catch(function(){ return null; }); }).then(function(list){
+        if(list.every(function(x){ return x; })) arcCachePut("cc_v2", list); return list.map(function(x){ return x||[]; }); }); });
+  }
+  /* the archived Mounjaro tab's header row is missing the "Patient identification" label, so every label from
+     column P onward sits one column to the left of its data; hdrFix puts the missing label back */
+  function fixHdr(hdr, src){ if(!src||!src.hdrFix) return hdr; var h=hdr.slice(); h.splice(src.hdrFix.at, 0, src.hdrFix.label); return h; }
+  function cutByDate(live, arc, key){ var m=null; live.forEach(function(r){ var d=r[key]; if(d && (!m||d<m)) m=d; }); return m ? arc.filter(function(r){ return r[key] && r[key]<m; }) : arc; }
   var PROJECTS = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   var SCORED_SET = {"PDS":1,"PDS- Mounjaro":1,"Non Pharma":1,"WLP - Non Pharma":1};
 
@@ -97,9 +124,9 @@
     if(field.length||row.length){row.push(field);rows.push(row);}
     return rows;
   }
-  function fetchText(url){
-    return fetch(url+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); });
-  }
+  function fetchText(url, tries){ tries=tries==null?2:tries;
+    return fetch(url+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); })
+      .catch(function(e){ if(tries<=0) throw e; return new Promise(function(res){ setTimeout(res, 1200*(3-tries)+Math.random()*800); }).then(function(){ return fetchText(url, tries-1); }); }); }
   function gvizCsv(file, base, tq, headers){
     return fetchText("https://docs.google.com/spreadsheets/d/"+file+"/gviz/tq?tqx=out:csv"+(headers?"&headers="+headers:"")+"&"+base+(tq?"&tq="+encodeURIComponent(tq):"")).then(parseCSV);
   }
@@ -172,7 +199,7 @@
   function loadChecklist(src){
     var base="sheet="+encodeURIComponent(src.sheet);
     return gvizCsv(src.file, base, "select * limit 1", src.headers).then(function(h){
-      var hdr=(h[0]||[]).map(function(x){ return String(x).trim(); });
+      var hdr=fixHdr((h[0]||[]).map(function(x){ return String(x).trim(); }), src);
       var ia=findIdx(hdr,/^date of audit$/i), iu=findIdx(hdr,/^auditor name$/i), is=findIdx(hdr,/^attained %$/i), it=findIdx(hdr,/^doctor type$/i);
       if(ia<0||iu<0||is<0) throw new Error("columns not found in "+src.sheet);
       var sel=[ia,iu,is].concat(it>=0?[it]:[]).map(colLetter).join(",");
@@ -185,8 +212,8 @@
       });
     });
   }
-  function loadCancellationTab(base){
-    return gvizCsv(CFG.FILE_CANCEL, base, "select *", 0).then(function(rows){
+  function loadCancellationTab(base, file){
+    return gvizCsv(file||CFG.FILE_CANCEL, base, "select *", 0).then(function(rows){
       var hdr=rows[0].map(function(x){ return String(x).trim(); });
       var ia=findIdx(hdr,/^date of audit$/i), ip=findIdx(hdr,/^date of appointment/i), iu=findIdx(hdr,/^auditor name$/i);
       if(ia<0) throw new Error("cancellation columns not found");
@@ -199,11 +226,13 @@
   function loadCancellation(){
     return Promise.all([
       loadCancellationTab("gid="+CFG.CANCEL_GID),
-      loadCancellationTab("sheet="+encodeURIComponent(CFG.CANCEL_NEW_TAB)).catch(function(){ return []; })
+      loadCancellationTab("sheet="+encodeURIComponent(CFG.CANCEL_NEW_TAB)).catch(function(){ return []; }),
+      loadCancellationTab("sheet="+encodeURIComponent(ARCHIVE_CANCEL.sheet), ARCHIVE_CANCEL.file).catch(function(){ return []; })
     ]).then(function(res){
       function basis(r){ return r.p || (r.a ? addDaysIso(r.a,-1) : null); }
       var rows = res[0].filter(function(r){ var b=basis(r); return !b || b < CFG.CANCEL_SWITCH_DATE; })
         .concat(res[1].filter(function(r){ var b=basis(r); return b && b >= CFG.CANCEL_SWITCH_DATE; }));
+      rows = rows.concat(cutByDate(rows.filter(function(r){ return r.a; }), res[2].filter(function(r){ return r.a; }), "a"));
       return rows.filter(function(r){ return r.a && r.au; }).map(function(r){ return {type:"PDS Cancellation", date:r.a, score:null, dtype:"—"}; });
     });
   }
@@ -242,7 +271,13 @@
       guard("Consult & Diagnostics tickets", loadTicketsData(), []),
       guard("Medicine tickets", loadTicketsMedicine(), []),
       guard("Orders", loadOrders(), []),
-      guard("Audits", Promise.all(AUDIT_SOURCES.map(function(s){ return loadChecklist(s).catch(function(){ status["Audits"]="partial"; return []; }); })).then(function(a){ return [].concat.apply([],a); }), []),
+      guard("Audits", Promise.all(AUDIT_SOURCES.map(function(s){ return loadChecklist(s).catch(function(){ status["Audits"]="partial"; return []; }); })).then(function(live){
+        return loadArchivesAll().then(function(arc){
+          var out=[].concat.apply([],live);
+          AUDIT_SOURCES.forEach(function(src){ var lv=out.filter(function(x){ return x.type===src.type; }), ar=[];
+            arc.forEach(function(rows,i){ if(ARCHIVE_SOURCES[i].type===src.type) ar=ar.concat(rows); });
+            out=out.concat(cutByDate(lv, ar, "date")); });
+          return out; }); }), []),
       guard("PDS Cancellation reviews", loadCancellation(), []),
       guard("Consults (Extract 1)", loadConsults(), [])
     ]).then(function(r){
