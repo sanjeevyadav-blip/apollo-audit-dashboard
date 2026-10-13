@@ -44,7 +44,7 @@
   <footer id="sources"></footer>
 </div>
 
-<script src="cc-core.js?v=20261013b"></script>
+<script src="cc-core.js?v=20261013c"></script>
 <script>
 (function(){
   "use strict";
@@ -74,12 +74,15 @@
 
   function render(){
     var s=RANGE.start, e=RANGE.end, pv=prevWindow(s,e);
-    var R=CC.compute(DATA,s,e), P=CC.compute(DATA,pv.start,pv.end);
+    var R=CC.compute(DATA,s,e), P=CC.compute(DATA,pv.start,pv.end,CC.ticketEndFor(DATA,{start:s,end:e},pv));
     if(pv.start < CC.CFG.FIRST_MONTH+"-01") P=null;
     document.getElementById("dFrom").value=s; document.getElementById("dTo").value=e;
     document.getElementById("rangeLabel").innerHTML = U.dateLabel(s)+" &ndash; "+U.dateLabel(e)+(P?' &middot; vs <b>'+esc(pv.label)+'</b>':'');
     Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", RANGE.qk ? c.dataset.q===RANGE.qk : (c.dataset.s===s && c.dataset.e===e)); });
     var notes=[];
+    (function(){ var o=R.ordersThrough; if(!o) return; var n=(R.ticketsWaiting||0).toLocaleString("en-IN");
+      if(R.noOrders) notes.push("<b>No order data yet for this range.</b> The Orders tab runs to "+U.dateLabel(o)+", so the score and the ticket rates per 1,000 orders can\u2019t be worked out yet. Audit numbers are shown in full.");
+      else if(R.ticketsWaiting) notes.push("<b>"+n+" tickets dated after "+U.dateLabel(o)+" are not counted yet.</b> The Orders tab runs to "+U.dateLabel(o)+", so ticket numbers stop there until the order counts for the later days arrive. Audit numbers cover the full range."); })();
     if(R.audit.incomplete) notes.push("<b>Audit data is incomplete for this range.</b> "+R.audit.missing.map(function(m){ return esc(m.type)+" audits are only held from "+(m.from?U.dateLabel(m.from):"(none)"); }).join("; ")+". Audit numbers below cover what the live sheets still hold.");
     if(s < (DATA.ticketFrom||s)) notes.push("Ticket data starts on "+U.dateLabel(DATA.ticketFrom)+".");
     document.getElementById("note").innerHTML = notes.map(function(n){ return '<div class="note">'+n+'</div>'; }).join("");
@@ -188,7 +191,7 @@
     var chip=document.getElementById("status"); chip.className="status-chip"+(bad.length?" warn":"");
     document.getElementById("statusText").textContent = bad.length ? "Partially live" : "Live from Google Sheets";
     chip.title = Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n");
-    document.getElementById("through").textContent = U.dateLabel(DATA.through);
+    document.getElementById("through").textContent = U.dateLabel(DATA.through)+(DATA.ordersThrough&&DATA.ordersThrough<DATA.through?" · orders to "+U.dateLabel(DATA.ordersThrough):"");
   }
 
   document.getElementById("sources").innerHTML = sourcesHtml();

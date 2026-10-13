@@ -292,7 +292,8 @@
       /* data-through date: last day that has both tickets and orders */
       var tMax=data.tickets.reduce(function(m,x){ return x.date>m?x.date:m; },"");
       var oMax=data.orders.reduce(function(m,x){ return x.date>m?x.date:m; },"");
-      data.through = (tMax && oMax) ? (tMax<oMax?tMax:oMax) : (tMax||oMax||null);
+      /* dates run to the latest ticket day; ticket rates use only days the Orders tab already has */
+      data.through = (tMax>oMax?tMax:oMax)||null; data.ordersThrough = oMax||null;
       return data;
     });
   }
@@ -344,8 +345,13 @@
 
   /* ---------- scoring ---------- */
   function rag(score){ if(score===null||isNaN(score)) return "none"; return score>=CFG.RAG.green?"green":(score>=CFG.RAG.amber?"amber":"red"); }
-  function compute(data, s, e){
+  /* comparison windows: when the current range runs past the last day in the Orders tab, cut the comparison's
+     ticket days by the same number of days, so both sides compare like with like */
+  function ticketEndFor(D, cur, pv){ var o=D.ordersThrough||D.through; if(!o||!pv||!(cur.end>o)||cur.start>o) return null;
+    var lag=Math.round((new Date(cur.end+"T00:00:00Z")-new Date(o+"T00:00:00Z"))/86400000); return addDaysIso(pv.end,-lag); }
+  function compute(data, s, e, tEnd){
     function inR(d){ return d>=s && d<=e; }
+    function inT(d){ return inR(d) && (!tEnd || d<=tEnd); }
     /* audits */
     var byProj={}; PROJECTS.forEach(function(p){ byProj[p]={type:p, audits:0, scored:0, sum:0, zero:0, pass:0, consults:0}; });
     data.audits.forEach(function(a){ if(!inR(a.date)) return; var b=byProj[a.type]; if(!b) return;
@@ -367,8 +373,9 @@
     /* tickets */
     var bus={};
     BUS.forEach(function(b){ bus[b.key]={key:b.key, label:b.label, orders:0, high:0, medium:0, pending:0, cats:{}, frtSum:0, frtN:0, resSum:0, resN:0}; });
-    data.orders.forEach(function(o){ if(!inR(o.date)) return; BUS.forEach(function(b){ if(o.bu===b.orderBu) bus[b.key].orders+=o.orders; }); });
-    data.tickets.forEach(function(t){ if(!inR(t.date)) return; var b=bus[t.bu]; if(!b) return;
+    data.orders.forEach(function(o){ if(!inT(o.date)) return; BUS.forEach(function(b){ if(o.bu===b.orderBu) bus[b.key].orders+=o.orders; }); });
+    var oT=data.ordersThrough, waiting=0;
+    data.tickets.forEach(function(t){ if(!inT(t.date)) return; if(oT && t.date>oT){ waiting+=(t.n||1); return; } var b=bus[t.bu]; if(!b) return;
       if(t.sev==="High") b.high+=t.n; else b.medium+=t.n;
       if(/pending|open/i.test(t.status)) b.pending+=t.n;
       b.frtSum+=t.frtSum; b.frtN+=t.frtN; b.resSum+=t.resSum; b.resN+=t.resN;
@@ -415,9 +422,10 @@
     var lost=0, have=0;
     ["critical","high","medium","others"].forEach(function(k){ var x=D[k]; x.pts = x.rate==null ? null : x.rate*x.weight; if(x.pts!=null){ lost+=x.pts; have++; } });
     D.total = lost;
-    var overall = have ? Math.max(0, 100 - lost) : null;
+    var noOrders = !!(oT && s>oT);
+    var overall = (have && !noOrders) ? Math.max(0, 100 - lost) : null;
     A.nonZeroAvg = nz ? nzSum/nz*100 : null; A.nzN = nz;
-    return {start:s, end:e, audit:A, tickets:T, deductions:D, overall:overall, rag:rag(overall), partialInputs:(have<4)};
+    return {ticketsWaiting:waiting, ordersThrough:oT, noOrders:noOrders, start:s, end:e, audit:A, tickets:T, deductions:D, overall:overall, rag:rag(overall), partialInputs:(have<4)};
   }
 
   /* weekly buckets (Mon-Sun) inside a window, for trend tables */
@@ -428,6 +436,6 @@
     return out;
   }
 
-  root.CC = { CFG:CFG, BUS:BUS, HIGH:HIGH, HIGH_LABELS:HIGH_LABELS, PROJECTS:PROJECTS, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, compute:compute, weeks:weeks, rag:rag,
+  root.CC = { CFG:CFG, BUS:BUS, HIGH:HIGH, HIGH_LABELS:HIGH_LABELS, PROJECTS:PROJECTS, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, ticketEndFor:ticketEndFor, compute:compute, weeks:weeks, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);

@@ -107,7 +107,7 @@
   </footer>
 </div>
 
-<script src="cc-core.js?v=20261013b"></script>
+<script src="cc-core.js?v=20261013c"></script>
 <script>
 (function(){
   "use strict";
@@ -127,7 +127,7 @@
 
   function render(){
     var p = SEL, pv = CC.previousOf(p);
-    var R = CC.compute(DATA, p.start, p.end), P = CC.compute(DATA, pv.start, pv.end);
+    var R = CC.compute(DATA, p.start, p.end), P = CC.compute(DATA, pv.start, pv.end, CC.ticketEndFor(DATA, p, pv));
     var prevOk = pv.start >= CC.CFG.FIRST_MONTH+"-01";
     if(!prevOk) P = null;
     document.getElementById("rangeLabel").innerHTML = U.dateLabel(p.start)+" &ndash; "+U.dateLabel(p.end)+(P?' &middot; compared with <b>'+esc(pv.label)+'</b>':'');
@@ -136,6 +136,9 @@
 
     /* data-quality note */
     var notes=[];
+    (function(){ var o=R.ordersThrough; if(!o) return; var n=(R.ticketsWaiting||0).toLocaleString("en-IN");
+      if(R.noOrders) notes.push("<b>No order data yet for this range.</b> The Orders tab runs to "+U.dateLabel(o)+", so the score and the ticket rates per 1,000 orders can\u2019t be worked out yet. Audit numbers are shown in full.");
+      else if(R.ticketsWaiting) notes.push("<b>"+n+" tickets dated after "+U.dateLabel(o)+" are not counted yet.</b> The Orders tab runs to "+U.dateLabel(o)+", so ticket numbers stop there until the order counts for the later days arrive. Audit numbers cover the full range."); })();
     if(R.audit.incomplete){
       notes.push("<b>Audit data is incomplete for this period.</b> The live "+R.audit.missing.map(function(m){ return esc(m.type)+" sheet"+(m.from?" starts on "+U.dateLabel(m.from):" has no rows"); }).join(", ")+
         ", so the audit deductions here only use the audits still held in the sheets. Older audits need an archive sheet (or the BigQuery archive) to be counted.");
@@ -310,7 +313,7 @@
     chip.className = "status-chip"+(bad.length?" warn":"");
     document.getElementById("statusText").textContent = bad.length ? "Partially live" : "Live from Google Sheets";
     chip.title = Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n");
-    document.getElementById("through").textContent = U.dateLabel(DATA.through);
+    document.getElementById("through").textContent = U.dateLabel(DATA.through)+(DATA.ordersThrough&&DATA.ordersThrough<DATA.through?" · orders to "+U.dateLabel(DATA.ordersThrough):"");
   }
 
   CC.load().then(function(d){
