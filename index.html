@@ -29,8 +29,9 @@
   </header>
 
   <div class="periodbar">
-    <span class="lbl">Period</span>
+    <span class="lbl">Range</span>
     <div class="chips" id="periodChips"></div>
+    <div class="dates"><input type="date" id="dFrom" aria-label="From"><span style="color:var(--ink-soft);font-size:11px">to</span><input type="date" id="dTo" aria-label="To"></div>
     <span class="range" id="rangeLabel"></span>
   </div>
 
@@ -87,8 +88,8 @@
   <div class="grid2" style="margin-top:16px">
     <div class="panel"><h2>What moves the score</h2><p class="desc">Points gained for each improvement (the same arithmetic the score uses).</p>
       <table class="moves"><tbody>
-        <tr><td>Critical-error audits fall by 0.25% of audits (for example from 0.76% to 0.51%)</td><td class="num">+1.0</td></tr>
-        <tr><td>1 fewer High-severity ticket per 1,000 orders (average of the three lines)</td><td class="num">+3.0</td></tr>
+        <tr><td>Critical-error audits fall by 0.25% of audits (for example from 0.76% to 0.51%)</td><td class="num">+1.5</td></tr>
+        <tr><td>1 fewer High-severity ticket per 1,000 orders (average of the three lines)</td><td class="num">+4.0</td></tr>
         <tr><td>1 fewer Medium-severity ticket per 1,000 orders (average of the three lines)</td><td class="num">+2.0</td></tr>
         <tr><td>Average score of non-zero audits rises by 1 point (for example 93.6% to 94.6%)</td><td class="num">+1.0</td></tr>
       </tbody></table></div>
@@ -102,11 +103,11 @@
   </div>
 
   <footer>
-    <div><b style="color:var(--ink)">How the score works.</b> Every period starts at 100 and loses points for each problem found, heaviest first: <b>4</b> points per 1% of audits with a critical error (zero score), <b>3</b> points per High-severity ticket per 1,000 orders, <b>2</b> points per Medium-severity ticket per 1,000 orders, and <b>1</b> point per audit point missed on non-critical parameters. Ticket rates are the average of Consult, Pharmacy and Diagnostics, each against its own orders. RAG: green &ge; 85, amber 75&ndash;85, red &lt; 75. Full method, High/Medium list and sources on the <a href="deepdive.html">deep-dive page</a>.</div>
+    <div><b style="color:var(--ink)">How the score works.</b> Every period starts at 100 and loses points for each problem found, heaviest first: <b>6</b> points per 1% of audits with a critical error (zero score), <b>4</b> points per High-severity ticket per 1,000 orders, <b>2</b> points per Medium-severity ticket per 1,000 orders, and <b>1</b> point per audit point missed on non-critical parameters. Ticket rates are the average of Consult, Pharmacy and Diagnostics, each against its own orders. RAG: green &ge; 85, amber 75&ndash;85, red &lt; 75. Full method, High/Medium list and sources on the <a href="deepdive.html">deep-dive page</a>.</div>
   </footer>
 </div>
 
-<script src="cc-core.js?v=20261012b"></script>
+<script src="cc-core.js?v=20261013b"></script>
 <script>
 (function(){
   "use strict";
@@ -130,7 +131,8 @@
     var prevOk = pv.start >= CC.CFG.FIRST_MONTH+"-01";
     if(!prevOk) P = null;
     document.getElementById("rangeLabel").innerHTML = U.dateLabel(p.start)+" &ndash; "+U.dateLabel(p.end)+(P?' &middot; compared with <b>'+esc(pv.label)+'</b>':'');
-    Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", c.dataset.k===p.key); });
+    Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", c.dataset.q===(p.qk||"")); });
+    document.getElementById("dFrom").value=p.start; document.getElementById("dTo").value=p.end;
 
     /* data-quality note */
     var notes=[];
@@ -148,7 +150,7 @@
     var KEYS = ["critical","high","medium","others"];
     var NAMES = {critical:"Critical errors", high:"High-severity tickets", medium:"Medium-severity tickets", others:"Non-critical audit misses"};
     var HOW = {critical:"% of audits scoring zero", high:"High tickets per 1,000 orders", medium:"Medium tickets per 1,000 orders", others:"audit points missed on other parameters"};
-    var RANK = {critical:"1 · HEAVIEST · ×4", high:"2 · ×3", medium:"3 · ×2", others:"4 · LIGHTEST · ×1"};
+    var RANK = {critical:"1 · HEAVIEST · ×6", high:"2 · ×4", medium:"3 · ×2", others:"4 · LIGHTEST · ×1"};
     var html = '';
 
     /* ---- banner: gauge + headline + 100 -> score bar ---- */
@@ -160,6 +162,7 @@
       '<div class="sub"><span class="rag big '+R.rag+'">'+ragLabel(R.rag)+'</span>'+cmpTxt+'</div>'+
       '<div class="wf">'+waterfall(R)+'</div></div></div>';
 
+    function CALC(k,x){ var w=CC.CFG[{critical:'D_CRITICAL',high:'D_HIGH',medium:'D_MEDIUM',others:'D_OTHERS'}[k]], r=x.rate, p=x.pts, a='', e='', l=''; if(r==null) return ''; if(k==='critical'){ a='<b>'+fi(A.zero)+'</b> zero-score audits of <b>'+fi(A.scored)+'</b> scored'; e=fi(A.zero)+' &divide; '+fi(A.scored)+' = '+f1(r,2)+'% &times; '+w+' = &minus;'+f1(p,1)+' pts'; } else if(k==='others'){ a='<b>'+fi(A.nzN)+'</b> audits scored above 0, average <b>'+f1(A.nonZeroAvg,1)+'%</b>'; e='100 &minus; '+f1(A.nonZeroAvg,1)+' = '+f1(r,2)+' &times; '+w+' = &minus;'+f1(p,1)+' pts'; } else { var hk=k==='high'?'high':'medium', nm=k==='high'?'High':'Medium'; a='<b>'+fi(T[hk])+'</b> '+nm+' tickets &middot; <b>'+fi(T.orders)+'</b> orders'; l=T.lines.map(function(b){ return esc(b.label)+' '+fi(b[hk])+' / '+fi(b.orders); }).join(' &middot; '); e=f1(r,2)+' per 1,000 (average of the 3 lines) &times; '+w+' = &minus;'+f1(p,1)+' pts'; } return '<div class="calc" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line,rgba(127,127,127,.3));font-size:11.5px;line-height:1.5;color:var(--ink-soft)"><div style="color:var(--ink)">'+a+'</div>'+(l?'<div>'+l+'</div>':'')+'<div class="tnum" style="margin-top:2px">'+e+'</div></div>'; }
     /* ---- deduction tiles ---- */
     var topK = KEYS.filter(function(k){ return D[k].pts!=null; }).sort(function(a,b){ return D[b].pts-D[a].pts; })[0];
     html += '<div class="section-label"><span class="n">01</span>Where the '+f1(D.total)+' points are lost &middot; heaviest problem first</div><div class="tiles4">';
@@ -168,7 +171,7 @@
       var cmp = px && (!isAudit || auditCmp) ? delta(x.pts,px.pts,1,false,' pts')+' <span style="color:var(--ink-soft)">vs '+esc(pv.label)+'</span>' : '<span class="delta flat">no comparison</span>';
       html += '<div class="dtile'+(k===topK?' top':'')+'"><span class="sw" style="background:var(--sev-'+k+')"></span>'+'<div class="rank">'+RANK[k]+(k===topK?' <span class="flag">Biggest gap</span>':'')+'</div><div class="nm">'+NAMES[k]+'</div>'+
         '<div class="pts tnum">&minus;'+f1(x.pts)+'<small>points</small></div>'+
-        '<div class="rate"><b>'+f1(x.rate,2)+'</b> '+HOW[k]+'</div><div class="chg">'+cmp+'</div></div>';
+        '<div class="rate"><b>'+f1(x.rate,2)+'</b> '+HOW[k]+'</div>'+CALC(k,x)+'<div class="chg">'+cmp+'</div></div>';
     });
     html += '</div>';
 
@@ -185,7 +188,7 @@
         '<div class="rows"><span>High tickets</span><b>'+fi(b.high)+'</b><b>'+f1(b.highPer1k,2)+' / 1k</b>'+
         '<span>Medium tickets</span><b>'+fi(b.medium)+'</b><b>'+f1(b.medPer1k,2)+' / 1k</b></div></div>';
     });
-    html += '</div><div class="legend"><span><i style="background:var(--sev-high)"></i>High (3 pts per ticket per 1,000 orders)</span><span><i style="background:var(--sev-medium)"></i>Medium (2 pts)</span><span>The score uses the average of the three lines, so each counts equally.</span></div>';
+    html += '</div><div class="legend"><span><i style="background:var(--sev-high)"></i>High (4 pts per ticket per 1,000 orders)</span><span><i style="background:var(--sev-medium)"></i>Medium (2 pts)</span><span>The score uses the average of the three lines, so each counts equally.</span></div>';
 
     /* ---- key points + trend ---- */
     html += '<div class="grid2" style="margin-top:0">';
@@ -313,21 +316,27 @@
   CC.load().then(function(d){
     DATA = d; PERIODS = CC.periods(d); setStatus();
     if(!PERIODS.length){ document.getElementById("content").innerHTML='<div class="panel empty">No data could be read from the sheets.</div>'; return; }
-    /* default: the last complete month, or MTD if nothing complete yet */
-    /* default: the latest period whose audit data is complete (the audit sheets keep a rolling window),
-       otherwise the last complete month */
-    var okP = PERIODS.filter(function(p){ return !CC.compute(DATA,p.start,p.end).audit.incomplete; });
-    var full = PERIODS.filter(function(p){ return !p.partial; });
-    SEL = okP.length ? okP[okP.length-1] : (full.length ? full[full.length-1] : PERIODS[PERIODS.length-1]);
-    var saved=null; try{ saved=localStorage.getItem("cc_period"); }catch(e){}
-    PERIODS.forEach(function(p){ if(p.key===saved) SEL=p; });
-    document.getElementById("periodChips").innerHTML = PERIODS.map(function(p){ return '<button class="chip" data-k="'+p.key+'"'+(CC.compute(DATA,p.start,p.end).audit.incomplete?' title="Audit data incomplete for this month"':'')+'>'+esc(p.label)+(CC.compute(DATA,p.start,p.end).audit.incomplete?' *':'')+'</button>'; }).join("");
+    /* same range chips as the audit dashboard; default MTD */
+    var CH = CC.quickRanges(d), dF=document.getElementById("dFrom"), dT=document.getElementById("dTo");
+    var saved=null; try{ saved=localStorage.getItem("cc_qk"); }catch(e){}
+    var live=CH.filter(function(p){ return !p.off; });
+    SEL = live.filter(function(p){ return p.qk===saved; })[0] || live.filter(function(p){ return p.qk==="mtd"; })[0] || live[live.length-1] || PERIODS[PERIODS.length-1];
+    dF.min=dT.min=CC.CFG.FIRST_MONTH+"-01"; dF.max=dT.max=DATA.through;
+    document.getElementById("periodChips").innerHTML = CH.map(function(p){
+      if(p.off) return '<button class="chip" disabled style="opacity:.4;cursor:not-allowed" title="No ticket and order data yet for this range (data through '+U.dateLabel(DATA.through)+')">'+esc(p.chip)+'</button>';
+      var inc=CC.compute(DATA,p.start,p.end).audit.incomplete;
+      return '<button class="chip" data-q="'+p.qk+'" title="'+U.dateLabel(p.start)+' – '+U.dateLabel(p.end)+(inc?' · audit data incomplete':'')+'">'+esc(p.chip)+(inc?' *':'')+'</button>'; }).join("");
     document.getElementById("periodChips").addEventListener("click", function(e){
-      var k=e.target.dataset&&e.target.dataset.k; if(!k) return;
-      PERIODS.forEach(function(p){ if(p.key===k) SEL=p; });
-      try{ localStorage.setItem("cc_period", k); }catch(err){}
+      var t=e.target.closest?e.target.closest(".chip"):e.target, k=t&&t.dataset&&t.dataset.q; if(!k) return;
+      CH.forEach(function(p){ if(p.qk===k) SEL=p; });
+      try{ localStorage.setItem("cc_qk", k); }catch(err){}
       render();
     });
+    function onDate(){ if(!(dF.value && dT.value && dF.value<=dT.value)) return;
+      var m=CH.filter(function(p){ return !p.off && p.start===dF.value && p.end===dT.value; })[0]||PERIODS.filter(function(p){ return p.start===dF.value && p.end===dT.value; })[0];
+      SEL = m || {start:dF.value, end:dT.value, label:U.dateLabel(dF.value)+" – "+U.dateLabel(dT.value)};
+      render(); }
+    dF.addEventListener("change", onDate); dT.addEventListener("change", onDate);
     render();
   }).catch(function(e){
     document.getElementById("content").innerHTML='<div class="panel empty">Could not load data: '+esc(e&&e.message||e)+'</div>';

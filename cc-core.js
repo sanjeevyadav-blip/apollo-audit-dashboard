@@ -14,7 +14,7 @@
 
   var CFG = {
     /* points lost per unit, heaviest first */
-    D_CRITICAL: 4, D_HIGH: 3, D_MEDIUM: 2, D_OTHERS: 1,
+    D_CRITICAL: 6, D_HIGH: 4, D_MEDIUM: 2, D_OTHERS: 1,
     /* kept for the escalation-free % shown in the deep-dive */
     HIGH_WEIGHT: 2, MEDIUM_WEIGHT: 1,
     COVERAGE_TARGET_LOW: 2, COVERAGE_TARGET_HIGH: 3,
@@ -297,6 +297,32 @@
     });
   }
 
+
+  /* quick ranges, same set as the audit dashboard: Today, Yesterday, Last 7 Days, MTD, last month, the month before,
+     Last 30 Days, All Time. Counted from today's calendar date, then cut at the data-through day (tickets and
+     orders arrive a day or two late); a range with no data yet is shown disabled. */
+  function localTodayIso(){ var d=new Date(); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+  function quickRanges(D){
+    var thr=D.through, first=CFG.FIRST_MONTH+"-01", out=[]; if(!thr) return out;
+    var T=localTodayIso(); if(T<thr) T=thr;
+    var ym=T.slice(0,7), m1=prevMonth(ym), m2=prevMonth(m1);
+    function mk(k, chip, label, s, e, extra){
+      var o={qk:k, chip:chip, label:label, start:s<first?first:s, end:e>thr?thr:e};
+      o.off = (o.start>o.end) || e<first; if(extra) for(var x in extra) o[x]=extra[x];
+      if(!o.off && o.key && o.end<e) o.partial=true;
+      return o; }
+    var Y=addDaysIso(T,-1);
+    out.push(mk("today","Today","Today",T,T));
+    out.push(mk("yesterday","Yesterday","Yesterday",Y,Y));
+    out.push(mk("7d","Last 7 Days","Last 7 days",addDaysIso(thr,-6),thr));   /* last 7 / 30 days that have data */
+    out.push(mk("mtd","MTD",monthLabel(ym)+" (MTD)",ym+"-01",T,{key:ym, partial:true}));
+    out.push(mk("m1",monthLabel(m1),monthLabel(m1),m1+"-01",monthEnd(m1),{key:m1, short:monthLabel(m1)}));
+    out.push(mk("m2",monthLabel(m2),monthLabel(m2),m2+"-01",monthEnd(m2),{key:m2, short:monthLabel(m2)}));
+    out.push(mk("30d","Last 30 Days","Last 30 days",addDaysIso(thr,-29),thr));
+    out.push(mk("all","All Time","All time",first,thr));
+    out.forEach(function(o){ if(o.key && o.start!==o.key+"-01"){ delete o.key; } });   /* month cut at the data start: compare by days */
+    return out;
+  }
   /* ---------- periods ---------- */
   /* Months from FIRST_MONTH to the data-through month. The last one is MTD when it isn't finished. */
   function periods(data){
@@ -311,6 +337,7 @@
   /* comparison window: the previous full month, or for an MTD window the same days last month (LMTD) */
   function previousOf(p){
     var pm=prevMonth(p.start.slice(0,7)), pmEnd=monthEnd(pm);
+    if(!p.key){ var days=Math.round((new Date(p.end+"T00:00:00Z")-new Date(p.start+"T00:00:00Z"))/86400000)+1, pe=addDaysIso(p.start,-1); return {start:addDaysIso(pe,-(days-1)), end:pe, label:days===1?"previous day":"previous "+days+" days"}; }
     var e = p.partial ? pm+"-"+p.end.slice(8,10) : pmEnd; if(e>pmEnd) e=pmEnd;
     return {key:pm, start:pm+"-01", end:e, label:monthLabel(pm)+(p.partial?" (same days)":""), partial:p.partial};
   }
@@ -365,8 +392,8 @@
     T.per10k = T.orders ? T.weighted/T.orders*10000 : null;
 
     /* ---- deduction model (agreed 2026-10-10): start at 100, lose points per problem, heaviest first ----
-       Critical error  = zero-score audits as % of scored audits           x 4 points
-       High ticket     = High tickets per 1,000 orders (avg of 3 lines)    x 3 points
+       Critical error  = zero-score audits as % of scored audits           x 6 points
+       High ticket     = High tickets per 1,000 orders (avg of 3 lines)    x 4 points
        Medium ticket   = Medium tickets per 1,000 orders (avg of 3 lines)  x 2 points
        Others          = audit points lost on non-critical parameters      x 1 point
                          (100 - average score of the audits that scored above 0) */
@@ -389,7 +416,7 @@
     ["critical","high","medium","others"].forEach(function(k){ var x=D[k]; x.pts = x.rate==null ? null : x.rate*x.weight; if(x.pts!=null){ lost+=x.pts; have++; } });
     D.total = lost;
     var overall = have ? Math.max(0, 100 - lost) : null;
-    A.nonZeroAvg = nz ? nzSum/nz*100 : null;
+    A.nonZeroAvg = nz ? nzSum/nz*100 : null; A.nzN = nz;
     return {start:s, end:e, audit:A, tickets:T, deductions:D, overall:overall, rag:rag(overall), partialInputs:(have<4)};
   }
 
@@ -401,6 +428,6 @@
     return out;
   }
 
-  root.CC = { CFG:CFG, BUS:BUS, HIGH:HIGH, HIGH_LABELS:HIGH_LABELS, PROJECTS:PROJECTS, load:load, periods:periods, previousOf:previousOf, compute:compute, weeks:weeks, rag:rag,
+  root.CC = { CFG:CFG, BUS:BUS, HIGH:HIGH, HIGH_LABELS:HIGH_LABELS, PROJECTS:PROJECTS, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, compute:compute, weeks:weeks, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);
