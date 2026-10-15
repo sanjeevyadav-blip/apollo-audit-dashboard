@@ -573,10 +573,14 @@
     });
   }
   function parseTimeAMPM(s){
-    var m = String(s||"").trim().match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    /* "9:42:48 AM", "10/15/2026 10:17:13", "10/14/2026 9:40:41 AM", "14:05" -> seconds since midnight, or null.
+       The audit sheets switched some rows to a date+time stamp (24-hour or with AM/PM) in October. */
+    var t = String(s||"").trim().replace(/^(\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4})[ T]+/, "");
+    var m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(AM|PM)?$/i);
     if(!m) return null;
-    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=parseInt(m[3],10), ap=m[4].toUpperCase();
-    if(ap==="AM"){ if(h===12) h=0; } else { if(h!==12) h+=12; }
+    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=m[3]?parseInt(m[3],10):0, ap=m[4]?m[4].toUpperCase():"";
+    if(ap==="AM"){ if(h===12) h=0; } else if(ap==="PM"){ if(h!==12) h+=12; }
+    if(h>23||mi>59||se>59) return null;
     return h*3600+mi*60+se;
   }
   function loadTicketsLive(){

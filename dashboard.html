@@ -1046,11 +1046,14 @@
     return p[2]+"-"+p[0]+"-"+p[1];
   }
   function parseTimeAMPM(s){
-    /* "9:42:48 AM" -> seconds since midnight, or null */
-    var m = String(s||"").trim().match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    /* "9:42:48 AM", "10/15/2026 10:17:13", "10/14/2026 9:40:41 AM", "14:05" -> seconds since midnight, or null.
+       The audit sheets switched some rows to a date+time stamp (24-hour or with AM/PM) in October. */
+    var t = String(s||"").trim().replace(/^(\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4})[ T]+/, "");
+    var m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(AM|PM)?$/i);
     if(!m) return null;
-    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=parseInt(m[3],10), ap=m[4].toUpperCase();
-    if(ap==="AM"){ if(h===12) h=0; } else { if(h!==12) h+=12; }
+    var h=parseInt(m[1],10), mi=parseInt(m[2],10), se=m[3]?parseInt(m[3],10):0, ap=m[4]?m[4].toUpperCase():"";
+    if(ap==="AM"){ if(h===12) h=0; } else if(ap==="PM"){ if(h!==12) h+=12; }
+    if(h>23||mi>59||se>59) return null;
     return h*3600+mi*60+se;
   }
   function parseCancellationCsv(csvText){
@@ -1122,7 +1125,7 @@
     for(var i=headerRowIdx+1;i<rows.length;i++){
       var r = rows[i];
       if(!r || r.length<2) continue;
-      var iso = parseDateMDY(r[idxAuditDate]);
+      var iso = parseDateMDY(r[idxAuditDate]) || parseFlexMDY(String(r[idxAuditDate]||"").trim().split(" ")[0]);
       var startSec = idxStart!==-1 ? parseTimeAMPM(r[idxStart]) : null;
       var endSec = idxEnd!==-1 ? parseTimeAMPM(r[idxEnd]) : null;
       var minutes = null;
@@ -1755,6 +1758,9 @@
     if(workRowsSrc){
       var projTime = aggregateProjectTime(workRowsSrc, state.filter.start, state.filter.end);
       document.getElementById("projectTimeDesc").textContent = "Time spent per project, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — same Audit Start/End Time sources as Auditor working time above (plus logged Training session duration), broken out by project instead of combined into one figure.";
+      var timeNote = state.timeLoading ? "Still reading audit start/end times from the PDS, Mounjaro, Cancellation, Non Pharma and WLP sheets — those columns fill in shortly."
+        : (state.timeFailed && state.timeFailed.length ? "Couldn’t read times from: "+state.timeFailed.join(", ")+" (Google sheet busy) — reload the page to try again." : "");
+      if(timeNote){ document.getElementById("projectTimeDesc").textContent += " · "+timeNote; document.getElementById("cancelTimeDesc").textContent += " · "+timeNote; }
       document.getElementById("projectTimeBody").innerHTML = projTime.length ? projTime.map(function(a){
         var cells = PROJECT_TIME_ORDER.map(function(p){ return '<td class="num tnum">'+fmtMinutes(a.projects[p])+'</td>'; }).join("");
         return '<tr><td>'+esc(a.auditor)+'</td>'+cells+'<td class="num tnum" style="font-weight:600">'+fmtMinutes(a.total)+'</td></tr>';
@@ -2466,21 +2472,38 @@
      total. Each source degrades to [] on its own if unreachable, so a hiccup on one tab doesn't kill
      the others or the Cancellation-based time. */
   function loadWorkTimeExtraLive(){
+    /* Fast path: ask gviz for just the four columns we need (date, auditor, start, end) instead of the
+       whole checklist (~11 MB across the four tabs, which made this panel arrive late or not at all on
+       slower connections). The parser finds "Auditor Name" and falls back to date = one column before,
+       start/end = one and two after, which is exactly the shape of these 4-column replies. If a tab's
+       layout ever moves and the narrow reply doesn't parse, that tab is re-read in full. Each read
+       retries twice (Google throttles bursts of large reads). */
     var sources = [
-      {url: WLP_MOUNJARO_CSV_URL, project: "PDS- Mounjaro"},
-      {url: GLP_WLP_CSV_URL, project: "WLP - Non Pharma"},
-      {url: PDS_AUDIT_CSV_URL, project: "PDS"},
-      {url: NON_PHARMA_CSV_URL, project: "Non Pharma"}
+      {url: WLP_MOUNJARO_CSV_URL, project: "PDS- Mounjaro", cols: "K,L,M,N"},
+      {url: GLP_WLP_CSV_URL, project: "WLP - Non Pharma", cols: "J,K,L,M"},
+      {url: PDS_AUDIT_CSV_URL, project: "PDS", cols: "N,O,P,Q"},
+      {url: NON_PHARMA_CSV_URL, project: "Non Pharma", cols: "N,O,P,Q"}
     ];
-    return Promise.all(sources.map(function(s){
-      return fetch(s.url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    function get(url, tries){
+      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
-      }).then(function(csvText){
-        return parseAuditTimeCsv(csvText, s.project);
-      }).catch(function(){ return []; });
-    })).then(function(results){ return results.reduce(function(a,r){ return a.concat(r); }, []); });
+      }).catch(function(e){
+        if(tries>0) return new Promise(function(res){ setTimeout(res, 1500*(3-tries)); }).then(function(){ return get(url, tries-1); });
+        throw e;
+      });
+    }
+    function looksRight(rows){ var timed=rows.filter(function(r){ return r.date && r.auditor && r.minutes!==null; }).length; return rows.length && timed >= rows.length*0.3; }
+    var failed = [];
+    return Promise.all(sources.map(function(s){
+      return get(s.url + "&tq=" + encodeURIComponent("select "+s.cols), 2).then(function(csvText){
+        var rows = parseAuditTimeCsv(csvText, s.project).filter(function(r){ return r.date; });
+        if(looksRight(rows)) return rows;
+        return get(s.url, 2).then(function(t){ return parseAuditTimeCsv(t, s.project); });
+      }).catch(function(){ failed.push(s.project); return []; });
+    })).then(function(results){ var all = results.reduce(function(a,r){ return a.concat(r); }, []); all.failed = failed; return all; });
   }
+
 
   /* Training — "Trainer Acknowledgement (Responses)" form. C=Session Date, D=Trainer Name (free-text,
      matched via matchKnownAuditors since spelling/casing varies a lot), I=Time taken to complete
@@ -2871,22 +2894,28 @@
       render();
     });
 
-    Promise.all([loadCancellationLive(), loadWorkTimeExtraLive(), archiveOnce().catch(function(){ return null; })]).then(function(results){
-      var cancelRows = results[0], extraRows = results[1], arc = results[2];
-      if(arc){
-        cancelRows = cancelRows.concat(cutArchiveRows(cancelRows.filter(function(r){ return r.date; }), arc.cancels.filter(function(r){ return r.date; }), function(r){ return r.date; }, function(){ return "c"; }));
-        extraRows = extraRows.concat(cutArchiveRows(extraRows, arc.times, function(r){ return r.date; }, function(r){ return r.project; }));
-      }
-      rowDropWarning.cancel = checkRowCountDrop("cancel", cancelRows);
-      state.cancelRows = cancelRows;
-      state.extraTimeRows = extraRows;
-      liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now();
+    /* Live cancellation + checklist times show as soon as each arrives; the past-data archive (only
+       needed for ranges before the live tabs start) is merged in whenever it finishes. */
+    state.timeLoading = true;
+    var tLive = {cancel:undefined, extra:undefined, arc:null};
+    function mergeTimes(){
+      var arc = tLive.arc, c = tLive.cancel, x = tLive.extra;
+      if(x){ state.extraTimeRows = arc ? x.concat(cutArchiveRows(x, arc.times, function(r){ return r.date; }, function(r){ return r.project; })) : x; }
+      if(c){ state.cancelRows = arc ? c.concat(cutArchiveRows(c.filter(function(r){ return r.date; }), arc.cancels.filter(function(r){ return r.date; }), function(r){ return r.date; }, function(){ return "c"; })) : c; }
+      state.timeLoading = (tLive.cancel===undefined || tLive.extra===undefined);
+      state.timeFailed = ((x&&x.failed)||[]).concat(tLive.cancel===null ? ["PDS Cancellation"] : []);
       render();
+    }
+    loadCancellationLive().then(function(rows){
+      tLive.cancel = rows; rowDropWarning.cancel = checkRowCountDrop("cancel", rows);
+      liveOK.cancel = true; lastError.cancel = null; state.fetchedAt = Date.now(); mergeTimes();
     }).catch(function(e){
-      liveOK.cancel = false;
+      tLive.cancel = null; liveOK.cancel = false;
       lastError.cancel = "couldn’t reach the live sheet — showing last snapshot (" + (e && e.message ? e.message : "error") + ")";
-      render();
+      mergeTimes();
     });
+    loadWorkTimeExtraLive().then(function(rows){ tLive.extra = rows; mergeTimes(); });
+    archiveOnce().then(function(arc){ tLive.arc = arc; if(tLive.cancel!==undefined || tLive.extra!==undefined) mergeTimes(); }).catch(function(){});
 
     loadCsLive().then(function(cs){
       state.cs = cs;
