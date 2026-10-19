@@ -426,6 +426,7 @@
           <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Doctor Type</span>
           <div class="ms" id="ms-doctorType"><button type="button" class="ms-btn">All doctor types</button><div class="ms-pop"></div></div>
         </div>
+        <button type="button" class="ms-btn" id="doctorWiseXlsx" style="margin-left:auto;width:auto;cursor:pointer;background-image:none;padding-right:12px;font-weight:600" title="Download this table, with the filters and sort shown, as an Excel file">&#8681; Download Excel</button>
       </div>
       <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
         <table id="doctorWiseTable">
@@ -434,6 +435,7 @@
             <th class="sortable" data-sort="doctorType">Doctor Type<span class="sort-arrow" data-arrow="doctorType"></span></th>
             <th class="num sortable" data-sort="count">Audits Completed<span class="sort-arrow" data-arrow="count"></span></th>
             <th class="num sortable" data-sort="avgScore">Avg Score<span class="sort-arrow" data-arrow="avgScore"></span></th>
+            <th class="num sortable" data-sort="critical" title="Audits that scored 0% (a critical error)">Critical Errors<span class="sort-arrow" data-arrow="critical"></span></th>
             <th class="num sortable" data-sort="orders">Orders<span class="sort-arrow" data-arrow="orders"></span></th>
             <th class="num sortable" data-sort="fulfillPct" title="Completed consults ÷ Total consults (Completed + Cancelled + Pending)">Fulfillment %<span class="sort-arrow" data-arrow="fulfillPct"></span></th>
             <th class="num sortable" data-sort="auditPct">Audit %<span class="sort-arrow" data-arrow="auditPct"></span></th>
@@ -978,15 +980,15 @@
       if(date<start || date>end || !doctorName) return;
       if(typeFilter && typeFilter.length && typeFilter.indexOf(type)===-1) return;
       if(auditorFilter && auditorFilter.length && auditorFilter.indexOf(auditor)===-1) return;
-      if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0};
+      if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0, critical:0};
       var b = by[doctorName];
       b.count += 1;
       if(doctorType && (!b.doctorType || b.doctorType==="—")) b.doctorType = doctorType;
-      if(score!==null){ b.weighted += score; b.scoredCount += 1; }
+      if(score!==null){ b.weighted += score; b.scoredCount += 1; if(score===0) b.critical += 1; }   /* critical error = audit scored 0 */
     });
     return Object.keys(by).map(function(k){
       var b = by[k];
-      return { doctor:b.doctor, doctorType:b.doctorType, count:b.count, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
+      return { doctor:b.doctor, doctorType:b.doctorType, count:b.count, critical:b.critical, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
     }).sort(function(a,b){
       /* Descending by audits completed; ties broken alphabetically by doctor name so the ranking is
          fully deterministic instead of depending on object key insertion order. */
@@ -1551,7 +1553,7 @@
       }
       return a.doctor<b.doctor ? -1 : (a.doctor>b.doctor ? 1 : 0);
     });
-    var DOCTOR_WISE_COL_LABEL = { doctor:"Doctor Name", doctorType:"Doctor Type", count:"Audits Completed", avgScore:"Avg Score", orders:"Orders", fulfillPct:"Fulfillment %", auditPct:"Audit %" };
+    var DOCTOR_WISE_COL_LABEL = { doctor:"Doctor Name", doctorType:"Doctor Type", count:"Audits Completed", avgScore:"Avg Score", critical:"Critical Errors", orders:"Orders", fulfillPct:"Fulfillment %", auditPct:"Audit %" };
     Array.prototype.forEach.call(document.querySelectorAll("#doctorWiseTable .sort-arrow"), function(el){
       var col = el.getAttribute("data-arrow");
       if(col === state.doctorWiseSortCol){
@@ -1574,9 +1576,10 @@
     document.getElementById("doctorWiseDesc").textContent = auditLive
       ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(!state.doctorWiseTypeFilter.length ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter.join(" + ").replace("__none__","no project type")+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
+    state.doctorWiseExport = {rows: doctorWiseRows, start: state.filter.start, end: state.filter.end, filters: doctorWiseFilterParts.slice()};
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
-      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum" title="'+(d.totalConsults===null?'':fmtInt(d.orders)+' completed of '+fmtInt(d.totalConsults)+' total consults')+'">'+(d.fulfillPct===null?'—':fmtPct(d.fulfillPct,1))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
-    }).join("") : '<tr><td colspan="7" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
+      return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum"'+(d.critical?' style="color:var(--bad,#d9534f);font-weight:600"':'')+'>'+fmtInt(d.critical||0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum" title="'+(d.totalConsults===null?'':fmtInt(d.orders)+' completed of '+fmtInt(d.totalConsults)+' total consults')+'">'+(d.fulfillPct===null?'—':fmtPct(d.fulfillPct,1))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
+    }).join("") : '<tr><td colspan="8" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
 
     if(combinedAuditRows){
       /* MTD banner — always current month through D-1, independent of the filter above (see
@@ -1856,7 +1859,30 @@
      click of a new column; clicking the already-active column flips direction). Headings are static
      markup (only the arrow glyphs get rewritten each render), so these listeners are attached once
      here rather than re-bound on every render. */
-  var DOCTOR_WISE_SORT_DEFAULT_DIR = { doctor:"asc", doctorType:"asc", count:"desc", avgScore:"desc", orders:"desc", fulfillPct:"desc", auditPct:"desc" };
+  /* Doctor-wise Audit Summary → Excel: exactly the rows on screen (filters + sort), numbers kept as
+     numbers so they can be summed/filtered in Excel. Falls back to CSV if the Excel library didn't load. */
+  document.getElementById("doctorWiseXlsx").addEventListener("click", function(){
+    var X = state.doctorWiseExport;
+    if(!X || !X.rows || !X.rows.length){ alertNote("Nothing to download yet — wait for the table to load."); return; }
+    var head = ["Doctor Name","Doctor Type","Audits Completed","Avg Score %","Critical Errors","Orders","Fulfillment %","Audit %"];
+    function r1(v){ return v===null||v===undefined||isNaN(v) ? "" : Math.round(v*10)/10; }
+    var data = [head].concat(X.rows.map(function(d){ return [d.doctor, d.doctorType, d.count, r1(d.avgScore), d.critical||0, d.orders===null?"":d.orders, r1(d.fulfillPct), r1(d.auditPct)]; }));
+    var name = "Doctor-wise_Audit_Summary_"+X.start+"_to_"+X.end;
+    if(window.XLSX){
+      var ws = XLSX.utils.aoa_to_sheet(data);
+      ws["!cols"] = [{wch:34},{wch:22},{wch:16},{wch:12},{wch:14},{wch:10},{wch:13},{wch:10}];
+      ws["!autofilter"] = {ref: "A1:H"+data.length};
+      var info = XLSX.utils.aoa_to_sheet([["Doctor-wise Audit Summary"],["Range", X.start+" to "+X.end],["Filters", X.filters.length ? X.filters.join(" · ").replace(/__none__/g,"none") : "None"],["Doctors", X.rows.length],["Critical error","An audit that scored 0%"],["Orders","Completed consults in the same range (D-1), Total_Consults Extract 1"],["Downloaded", new Date().toLocaleString("en-IN")]]);
+      info["!cols"] = [{wch:16},{wch:70}];
+      var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Doctor-wise"); XLSX.utils.book_append_sheet(wb, info, "About");
+      XLSX.writeFile(wb, name+".xlsx");
+    } else {
+      var csv = data.map(function(r){ return r.map(function(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(","); }).join("\n");
+      var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff"+csv], {type:"text/csv"})); a.download = name+".csv"; document.body.appendChild(a); a.click(); a.remove();
+    }
+  });
+  function alertNote(msg){ var el=document.getElementById("doctorWiseDesc"); if(el){ el.dataset.prev=el.textContent; el.textContent=msg; setTimeout(function(){ if(el.dataset.prev) el.textContent=el.dataset.prev; }, 2500); } }
+  var DOCTOR_WISE_SORT_DEFAULT_DIR = { doctor:"asc", doctorType:"asc", count:"desc", avgScore:"desc", critical:"desc", orders:"desc", fulfillPct:"desc", auditPct:"desc" };
   Array.prototype.forEach.call(document.querySelectorAll("#doctorWiseTable th.sortable"), function(th){
     th.addEventListener("click", function(){
       var col = th.getAttribute("data-sort");
