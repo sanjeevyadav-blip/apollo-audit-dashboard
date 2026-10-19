@@ -24,7 +24,7 @@
     FILE_TICKETS: "1KlB3BOa5VRWux7_6ZTJyP13rA9SRtYoLrBjvtLUcaKU",
     GID_TICKETS_DATA: "0",           /* Consult + Diagnostics tickets */
     GID_TICKETS_MED: "544383008",    /* Medicine tickets */
-    GID_ORDERS: "1380383189",        /* bu, Date, Orders */
+    GID_ORDERS: "1767514440",        /* bu, Date, Orders */
     FILE_AUDIT: "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA",
     FILE_WLP: "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ",
     FILE_CANCEL: "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY", CANCEL_GID: "909502922",
@@ -52,6 +52,11 @@
     pharma: ["Adverse event", "Cold Chain", "Cold chain temperature not maintained", "Cold Chain Without ICE PACK", "Received expired items", "Medicine not as per prescription", "Received wrong/different items"],
     diagnostics: ["Wrong Report Received", "Hematoma", "Report Challenge"]
   };
+  /* "Did not receive complete item" started appearing in the Medicine tab in October 2026. The ticket
+     sheet's own Dashboard tab leaves it out of the Medicines totals, so it is left out here too
+     (to count it, remove it from this list). */
+  var EXCLUDE_CATS = { pharma: ["did not receive complete item"] };
+  function excluded(bu, cat){ var l=EXCLUDE_CATS[bu]; return !!(l && l.indexOf(String(cat||"").trim().toLowerCase())!==-1); }
   function severity(bu, cat){ return HIGH[bu].indexOf(String(cat||"").trim().toLowerCase()) !== -1 ? "High" : "Medium"; }
 
   var AUDIT_SOURCES = [
@@ -176,7 +181,7 @@
       (j.table.rows||[]).forEach(function(row){
         var c=row.c||[]; function v(i){ return c[i]&&c[i].v!=null ? c[i].v : null; }
         var d=parseAnyDate(v(0)); if(!d) return;
-        var cat=String(v(1)||"(blank)").trim();
+        var cat=String(v(1)||"(blank)").trim(); if(excluded("pharma",cat)) return;
         out.push({date:d, bu:"pharma", cat:cat, sub:"", sev:severity("pharma",cat), status:String(v(2)||"").trim(), n:v(3)||0,
                   frtSum:v(4)||0, frtN:v(5)||0, resSum:v(6)||0, resN:v(7)||0});
       });
@@ -184,7 +189,9 @@
     });
   }
   function loadOrders(){
-    return gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_ORDERS, null, 0).then(function(rows){
+    function ok(rows){ var h=(rows[0]||[]).map(function(x){ return String(x).trim().toLowerCase(); }); return h.indexOf("bu")>=0 && h.indexOf("date")>=0 && h.indexOf("orders")>=0; }
+    return gvizCsv(CFG.FILE_TICKETS, "sheet=Orders", null, 0).then(function(rows){ return ok(rows) ? rows : gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_ORDERS, null, 0); },
+      function(){ return gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_ORDERS, null, 0); }).then(function(rows){
       var h=rows[0].map(function(x){ return String(x).trim().toLowerCase(); });
       var ib=h.indexOf("bu"), id=h.indexOf("date"), io=h.indexOf("orders");
       if(ib<0||id<0||io<0) throw new Error("Orders tab columns not found");
@@ -293,7 +300,7 @@
       var tMax=data.tickets.reduce(function(m,x){ return x.date>m?x.date:m; },"");
       var oMax=data.orders.reduce(function(m,x){ return x.date>m?x.date:m; },"");
       /* dates run to the latest ticket day; ticket rates use only days the Orders tab already has */
-      data.through = (tMax>oMax?tMax:oMax)||null; data.ordersThrough = oMax||null;
+      data.through = tMax||oMax||null; data.ordersThrough = oMax||null;   /* "Data through" = last day in the ticket sheet */
       return data;
     });
   }
