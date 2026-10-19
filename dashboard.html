@@ -352,7 +352,7 @@
     </div>
     <div class="panel">
       <h2>Auditor working time</h2>
-      <p class="desc" id="cancelTimeDesc">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits &mdash; every source that logs start/end time &mdash; plus logged Training session duration. "Training Days" counts training days even when no duration was logged.</p>
+      <p class="desc" id="cancelTimeDesc">Sum of (Audit End Time &minus; Audit Start Time) per auditor, selected range &divide; Working Days. Hours/minutes, not audit count. Combines PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + Mubaraka consults + CSAT audits &mdash; every source that logs start/end time &mdash; plus logged Training session duration. "Training Days" counts training days even when no duration was logged.</p>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Auditor</th><th class="num">Reviews</th><th class="num">Training Days</th><th class="num">Total Time</th><th class="num">Working Days</th><th class="num">Avg/Day</th></tr></thead>
@@ -376,7 +376,7 @@
   <p class="desc" id="projectTimeDesc">Same combined Audit Start/End Time sources as Auditor working time above, broken out per project instead of summed into one figure.</p>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num">Training</th><th class="num">Total</th></tr></thead>
+      <thead><tr><th>Auditor</th><th class="num">PDS</th><th class="num">PDS&ndash; Mounjaro</th><th class="num">PDS Cancellation</th><th class="num">Non Pharma</th><th class="num">WLP Non Pharma</th><th class="num">Patient Tickets</th><th class="num">CSAT Audits</th><th class="num" title="Dt. Mubaraka&rsquo;s consult calls (Ms. Mubaraka Consults Tracker)">Consults</th><th class="num">Training</th><th class="num">Total</th></tr></thead>
       <tbody id="projectTimeBody"></tbody>
     </table>
   </div>
@@ -384,7 +384,7 @@
 
 <div class="panel" style="margin-bottom:30px" id="dailyTimePanel">
   <h2>Daily Working Time &mdash; by auditor &amp; date</h2>
-  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined. Sorted newest date first.</p>
+  <p class="desc" id="dailyTimeDesc">Exactly how many hours/minutes each auditor spent, day by day, in the selected range (from Audit Start/End Time) &mdash; PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + Mubaraka consults + CSAT audits, plus logged Training session duration, combined. Sorted newest date first.</p>
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
     <span class="fb-lbl" style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">Auditor</span>
     <select id="dailyTimeAuditorFilter" style="font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);color:var(--ink)">
@@ -536,6 +536,8 @@
   var TRAINING_GID  = "456645703";
   var FILE_TICKETS  = "1NKOgta897n5SJH38fx-Q3rGiCmfd-x0zEUuAliVhhG4"; /* "Patient escalation Tickets - Audit", "Tickets 2026" tab */
   var TICKETS_GID   = "2075545445";
+  var FILE_MUBARAKA_CONSULTS = "1EaxJ4Y6f2o3g9d5r5-HOnvsjRCGrD8sDAEPyY6lRP3Y"; /* "Ms. Mubaraka Consults Tracker" — Dt. Mubaraka's consult-call time */
+  var MUBARAKA_CONSULTS_GID  = "126456079";
   var FILE_CSAT     = "1ZpL8LwvgG_QNeSbqKtQ5SAmL8wrLg2cbfsXt-AfeDmM"; /* "CSAT Rating & Patient Review", "Negative Review Appointments" tab */
   var CSAT_GID      = "1513006442";
   var FILE_ORDERS   = "10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg"; /* Total_Consults file, "Extract 1" tab — source for the Doctor-wise Audit Summary's "Orders" column (Completed consults per doctor per day) */
@@ -1168,7 +1170,7 @@
      dailyCancellationTime, but grouped by (auditor, project) instead of collapsing every project into
      one total. Requires each row to carry a `project` label (set at parse time — see
      parseCancellationCsv/parseAuditTimeCsv/loadTrainingLive/loadTicketsLive/loadCsatLive). */
-  var PROJECT_TIME_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma","Patient Tickets","CSAT Audits","Training"];
+  var PROJECT_TIME_ORDER = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma","Patient Tickets","CSAT Audits","Consults","Training"];
   function aggregateProjectTime(rows, start, end){
     var byAuditor = {};
     rows.forEach(function(r){
@@ -1743,7 +1745,7 @@
     var trainingDaysByAuditor = aggregateTrainingDays(state.trainingRows, state.filter.start, state.filter.end);
     if(workRowsSrc){
       var timeAgg = aggregateCancellationTime(workRowsSrc, state.filter.start, state.filter.end);
-      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits combined, plus logged Training session duration. \"Training Days\" counts training days even when no duration was logged.";
+      document.getElementById("cancelTimeDesc").textContent = "From Audit Start/End Time, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + Mubaraka consults + CSAT audits combined, plus logged Training session duration. \"Training Days\" counts training days even when no duration was logged.";
       document.getElementById("cancelTimeBody").innerHTML = timeAgg.byAuditor.length ? timeAgg.byAuditor.map(function(a){
         return '<tr><td>'+esc(a.auditor)+'</td><td class="num tnum">'+fmtInt(a.count)+'</td><td class="num tnum">'+fmtInt(trainingDaysByAuditor[a.auditor]||0)+'</td><td class="num tnum">'+fmtMinutes(a.minutes)+'</td>'+
           '<td class="num tnum">'+fmtInt(a.workingDays)+'</td><td class="num tnum">'+(a.avgPerWorkingDay===null?'—':fmtMinutes(a.avgPerWorkingDay))+'</td></tr>';
@@ -1789,7 +1791,7 @@
       }).join("");
       dailySel.value = state.dailyTimeAuditorFilter;
       var dailyTime = state.dailyTimeAuditorFilter==="all" ? dailyTimeAll : dailyTimeAll.filter(function(d){ return d.auditor===state.dailyTimeAuditorFilter; });
-      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Start Time / End Time are that day's earliest logged start and latest logged end; Span (hrs) is the elapsed time between them, which can run longer than Time Spent since Time Spent only sums each audit's own duration and doesn't count gaps between audits. Sorted newest date first."+(state.dailyTimeAuditorFilter!=="all" ? " Filtered to "+esc(state.dailyTimeAuditorFilter)+"." : "");
+      document.getElementById("dailyTimeDesc").textContent = "Exactly how many hours/minutes each auditor spent, day by day, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS + PDS WLP (Mounjaro) + PDS Cancellation + Non Pharma + GLP + Patient Tickets + Mubaraka consults + CSAT audits, plus logged Training session duration, combined (from Audit Start/End Time). Start Time / End Time are that day's earliest logged start and latest logged end; Span (hrs) is the elapsed time between them, which can run longer than Time Spent since Time Spent only sums each audit's own duration and doesn't count gaps between audits. Sorted newest date first."+(state.dailyTimeAuditorFilter!=="all" ? " Filtered to "+esc(state.dailyTimeAuditorFilter)+"." : "");
       document.getElementById("dailyTimeBody").innerHTML = dailyTime.length ? dailyTime.map(function(d){
         return '<tr><td>'+fmtDateLabel(d.date)+'</td><td>'+esc(d.auditor)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td>'+
           '<td class="num tnum">'+fmtTimeOfDay(d.minStart)+'</td><td class="num tnum">'+fmtTimeOfDay(d.maxEnd)+'</td>'+
@@ -2495,13 +2497,28 @@
     }
     function looksRight(rows){ var timed=rows.filter(function(r){ return r.date && r.auditor && r.minutes!==null; }).length; return rows.length && timed >= rows.length*0.3; }
     var failed = [];
-    return Promise.all(sources.map(function(s){
+    /* Dt. Mubaraka's consult calls — "Ms. Mubaraka Consults Tracker": B = Date of the Appointment
+       (DD-MM-YYYY), C/D = Consult Start/End Time. Only these three columns are read (the tab also
+       holds patient phone numbers and names, which this page never fetches). */
+    var consultsP = get("https://docs.google.com/spreadsheets/d/" + FILE_MUBARAKA_CONSULTS + "/gviz/tq?tqx=out:csv&gid=" + MUBARAKA_CONSULTS_GID + "&tq=" + encodeURIComponent("select B,C,D"), 2).then(function(csvText){
+      var rows = parseCSV(csvText), out = [];
+      for(var i=1;i<rows.length;i++){
+        var r = rows[i]; if(!r) continue;
+        var m = String(r[0]||"").trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); if(!m) continue;
+        var iso = m[3]+"-"+(m[2].length<2?"0":"")+m[2]+"-"+(m[1].length<2?"0":"")+m[1];
+        var st = parseTimeAMPM(r[1]), en = parseTimeAMPM(r[2]), minutes = null;
+        if(st!==null && en!==null){ var d = en-st; if(d<0) d+=86400; var mins = d/60; if(mins>0 && mins<=180) minutes = mins; }
+        out.push({date: iso, genuine: "", reason: "", auditor: "Dt. Mubaraka", minutes: minutes, startSec: st, endSec: en, project: "Consults"});
+      }
+      return out;
+    }).catch(function(){ failed.push("Consults (Mubaraka)"); return []; });
+    return Promise.all([consultsP].concat(sources.map(function(s){
       return get(s.url + "&tq=" + encodeURIComponent("select "+s.cols), 2).then(function(csvText){
         var rows = parseAuditTimeCsv(csvText, s.project).filter(function(r){ return r.date; });
         if(looksRight(rows)) return rows;
         return get(s.url, 2).then(function(t){ return parseAuditTimeCsv(t, s.project); });
       }).catch(function(){ failed.push(s.project); return []; });
-    })).then(function(results){ var all = results.reduce(function(a,r){ return a.concat(r); }, []); all.failed = failed; return all; });
+    }))).then(function(results){ var all = results.reduce(function(a,r){ return a.concat(r); }, []); all.failed = failed; return all; });
   }
 
 
