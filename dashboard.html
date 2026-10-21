@@ -3059,6 +3059,8 @@
     });
 
     loadTotalLeadLive().then(function(rows){
+      /* show the live leads straight away; past-data leads are merged in when the archive arrives */
+      state.totalLeadRows = rows; render();
       return archiveOnce().then(function(arc){ return rows.concat(cutArchiveRows(rows, arc.leads, function(r){ return r[0]; }, function(r){ return r[1]; })); }, function(){ return rows; });
     }).then(function(rows){
       rowDropWarning.totalLead = checkRowCountDrop("totalLead", rows);
@@ -3071,6 +3073,54 @@
       render();
     });
   }
+
+  /* "⇩ Excel" on every table panel: downloads the table exactly as it is drawn on screen (current
+     range, filters and sort), turning "2,66,538" into a number and "89%" into a % cell so the file
+     can be summed and filtered. The Doctor-wise Audit Summary keeps its own richer export. */
+  function tableToXlsx(table, title){
+    var range = state.filter && state.filter.start ? state.filter.start+" to "+state.filter.end : "";
+    var aoa = [];
+    Array.prototype.forEach.call(table.querySelectorAll("tr"), function(tr){
+      if(tr.querySelector("td.empty-note")) return;
+      var row = Array.prototype.map.call(tr.querySelectorAll("th,td"), function(c){ return (c.tagName==="TH" ? c.textContent : (c.innerText||c.textContent||"")).replace(/\s+/g," ").replace(/[⇅▲▼]/g,"").trim(); });
+      if(row.length) aoa.push(row);
+    });
+    if(aoa.length < 2){ return false; }
+    var name = (title||"Table").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"")+(range?"_"+range.replace(/ to /,"_to_"):"");
+    if(!window.XLSX){
+      var csv = aoa.map(function(r){ return r.map(function(v){ return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(","); }).join("\n");
+      var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿"+csv], {type:"text/csv"})); a.download = name+".csv"; document.body.appendChild(a); a.click(); a.remove(); return true;
+    }
+    var ws = XLSX.utils.aoa_to_sheet([]);
+    aoa.forEach(function(r, ri){ r.forEach(function(v, ci){
+      var addr = XLSX.utils.encode_cell({r:ri, c:ci}), cell;
+      if(ri>0 && (v==="—" || v==="–")) cell = {t:"s", v:""};
+      else if(ri>0 && /^-?[\d,]+(\.\d+)?%$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))/100, z:"0.0%"};
+      else if(ri>0 && /^-?[\d,]+(\.\d+)?$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))};
+      else cell = {t:"s", v:v};
+      ws[addr] = cell; }); });
+    var cols = aoa[0].length;
+    ws["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:cols-1}});
+    ws["!cols"] = aoa[0].map(function(h, ci){ var w = 8; aoa.forEach(function(r){ w = Math.max(w, String(r[ci]||"").length+2); }); return {wch: Math.min(w, 50)}; });
+    ws["!autofilter"] = {ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:cols-1}})};
+    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, (title||"Table").replace(/[\\\/\?\*\[\]:]/g," ").slice(0,31));
+    var info = XLSX.utils.aoa_to_sheet([[title||"Table"],["Range", range],["Downloaded", new Date().toLocaleString("en-IN")],["Source","Apollo 24|7 Audit Dashboard — Full Dashboard"]]);
+    info["!cols"] = [{wch:14},{wch:60}]; XLSX.utils.book_append_sheet(wb, info, "About");
+    XLSX.writeFile(wb, name+".xlsx"); return true;
+  }
+  (function addTableDownloads(){
+    Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(panel){
+      var table = panel.querySelector("table"); if(!table || table.id==="doctorWiseTable" || panel.querySelector(".xlsx-dl")) return;
+      if(table.closest(".panel")!==panel) return;   /* a nested panel handles its own table */
+      var lab = panel.querySelector(".section-label, h2"), title = lab ? lab.textContent.replace(/^\s*\d+\s*/,"").replace(/‑/g,"-").trim() : "Table";
+      var btn = document.createElement("button"); btn.type = "button"; btn.className = "xlsx-dl"; btn.textContent = "⇩ Excel";
+      btn.title = "Download this table as an Excel file (current range and filters)";
+      btn.style.cssText = "position:absolute;top:14px;right:16px;z-index:2;font:600 11px/1 var(--font-mono,monospace);letter-spacing:.04em;padding:6px 10px;border-radius:6px;border:1px solid var(--line-strong,rgba(127,127,127,.4));background:var(--surface,transparent);color:var(--ink,inherit);cursor:pointer";
+      if(getComputedStyle(panel).position==="static") panel.style.position = "relative";
+      btn.addEventListener("click", function(){ if(!tableToXlsx(table, title)){ btn.textContent = "Still loading…"; setTimeout(function(){ btn.textContent = "⇩ Excel"; }, 2000); } });
+      panel.appendChild(btn);
+    });
+  })();
 
   document.getElementById("refreshBtn").style.display = "inline-block";
   document.getElementById("refreshBtn").addEventListener("click", refreshAll);
