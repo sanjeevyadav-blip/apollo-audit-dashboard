@@ -39,7 +39,7 @@
   <div id="content"><div class="loading">Reading the audit, ticket and order sheets…</div></div>
 
 
-  <div class="section-label"><span class="n">05</span>How to read this page &middot; what each number means and why it matters</div>
+  <div class="section-label"><span class="n">06</span>How to read this page &middot; what each number means and why it matters</div>
   <div class="howto">
     <div class="hcard"><h3><span class="no">A</span>The score (0&ndash;100)</h3>
       <p>Every period starts at <b>100</b>, which would mean no problems were found in audits or in patient tickets. Each problem found takes points away, and the more serious the problem, the more points it costs.</p>
@@ -107,7 +107,7 @@
   </footer>
 </div>
 
-<script src="cc-core.js?v=20261019a"></script>
+<script src="cc-core.js?v=20261024a"></script>
 <script>
 (function(){
   "use strict";
@@ -178,9 +178,12 @@
     });
     html += '</div>';
 
+    /* ---- score by business line ---- */
+    html += buSection(R, P, pv, auditCmp);
+
     /* ---- business lines ---- */
     var worst = T.lines.filter(function(b){ return b.ptsLost!=null; }).sort(function(a,b){ return b.ptsLost-a.ptsLost; })[0];
-    html += '<div class="section-label"><span class="n">02</span>Patient escalations by business line &middot; points lost to High + Medium tickets</div><div class="bucards">';
+    html += '<div class="section-label"><span class="n">03</span>Patient escalations by business line &middot; points lost to High + Medium tickets</div><div class="bucards">';
     T.lines.forEach(function(b,i){
       var pb = PT ? PT.lines[i] : null;
       var hp = b.highPer1k!=null ? CC.CFG.D_HIGH*b.highPer1k : 0, mp = b.medPer1k!=null ? CC.CFG.D_MEDIUM*b.medPer1k : 0, tot = hp+mp || 1;
@@ -195,8 +198,8 @@
 
     /* ---- key points + trend ---- */
     html += '<div class="grid2" style="margin-top:0">';
-    html += '<div><div class="section-label"><span class="n">03</span>Key points for the board</div><div class="panel"><ul class="points">'+keyPoints(R,P,pv).join("")+'</ul></div></div>';
-    html += '<div><div class="section-label"><span class="n">04</span>Weekly score trend</div><div class="panel">'+trendChart()+'</div></div>';
+    html += '<div><div class="section-label"><span class="n">04</span>Key points for the board</div><div class="panel"><ul class="points">'+keyPoints(R,P,pv).join("")+'</ul></div></div>';
+    html += '<div><div class="section-label"><span class="n">05</span>Score trend &middot; <span id="trendModeLbl">'+(TREND_MODE==="month"?"monthly":"weekly")+'</span></div><div class="panel"><div class="trend-toggle" style="display:flex;gap:6px;margin-bottom:10px"><button type="button" class="chip'+(TREND_MODE==="month"?" on":"")+'" data-tm="month">Monthly</button><button type="button" class="chip'+(TREND_MODE==="week"?" on":"")+'" data-tm="week">Weekly</button></div><div id="trendBox">'+trendChart()+'</div></div></div>';
     html += '</div>';
 
     document.getElementById("content").innerHTML = html;
@@ -243,6 +246,39 @@
     return html;
   }
 
+  /* Score by business line: each line scored on its own audits and tickets, same weights as the overall score */
+  var BU_ORDER = ["pharma","consult","diagnostics"];
+  var BU_WHAT = { pharma:"PDS + PDS&ndash;Mounjaro (WLP) + WLP&ndash;Non Pharma (GLP) audits + Pharmacy tickets",
+                  consult:"Non Pharma audits + Consult tickets", diagnostics:"Diagnostics tickets only (no audits)" };
+  function buSection(R, P, pv, auditCmp){
+    var h = '<div class="section-label"><span class="n">02</span>Score by business line &middot; each line&rsquo;s own audits and tickets</div><div class="bucards">';
+    BU_ORDER.forEach(function(k){
+      var b = R.bu[k], pb = P ? P.bu[k] : null, d = b.ded, au = b.audit, t = b.tickets || {};
+      var hasAud = b.types.length>0, cmpOk = pb && pb.score!=null && b.score!=null && (!hasAud || auditCmp);
+      var parts = [["critical","var(--sev-critical)"],["high","var(--sev-high)"],["medium","var(--sev-medium)"],["others","var(--sev-others)"]];
+      var tot = d.total || 1;
+      h += '<div class="bucard"><div class="t"><b>'+esc(b.label)+'</b><span class="rag '+b.rag+'" style="font-size:10.5px">'+ragLabel(b.rag)+'</span></div>'+
+        '<div style="font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.4">'+BU_WHAT[k]+'</div>'+
+        '<div class="big tnum">'+f1(b.score)+'<small>/ 100</small></div>'+
+        '<div style="font-size:11.5px">'+(cmpOk ? delta(b.score,pb.score,1,true)+' <span style="color:var(--ink-soft)">vs '+esc(pv.label)+'</span>' : '<span class="delta flat">no comparison</span>')+'</div>'+
+        '<div class="mini" title="Points lost by type">'+parts.map(function(pp){ var v=d[pp[0]].pts||0; return v>0 ? '<i style="width:'+(v/tot*100).toFixed(1)+'%;background:'+pp[1]+'"></i>' : ''; }).join("")+'</div>'+
+        '<div class="rows" style="grid-template-columns:1fr auto auto">'+
+          '<span>Critical errors</span><b>'+(hasAud ? fi(au.zero)+' of '+fi(au.scored)+' audits' : '—')+'</b><b>'+(d.critical.pts!=null ? '&minus;'+f1(d.critical.pts) : '—')+'</b>'+
+          '<span>Other audit misses</span><b>'+(hasAud && b.nonZeroAvg!=null ? 'avg '+f1(b.nonZeroAvg,1)+'%' : '—')+'</b><b>'+(d.others.pts!=null ? '&minus;'+f1(d.others.pts) : '—')+'</b>'+
+          '<span>High tickets</span><b>'+(t.orders ? fi(t.high)+' &middot; '+f1(t.highPer1k,2)+'/1k' : '—')+'</b><b>'+(d.high.pts!=null ? '&minus;'+f1(d.high.pts) : '—')+'</b>'+
+          '<span>Medium tickets</span><b>'+(t.orders ? fi(t.medium)+' &middot; '+f1(t.medPer1k,2)+'/1k' : '—')+'</b><b>'+(d.medium.pts!=null ? '&minus;'+f1(d.medium.pts) : '—')+'</b>'+
+        '</div><div style="font-size:11px;color:var(--ink-soft);margin-top:8px">'+fi(t.orders||0)+' orders'+(hasAud?' &middot; '+fi(au.audits)+' audits':'')+'</div></div>';
+    });
+    h += '</div>';
+    /* month by month */
+    var months = CC.periods(DATA), rowsH = months.map(function(m){ var r = CC.compute(DATA, m.start, m.end);
+      function cell(v, rg){ return '<td class="num tnum"><span class="rag '+rg+'" style="font-size:11px">'+f1(v)+'</span></td>'; }
+      return '<tr><td>'+esc(m.short)+(m.partial?' <span style="color:var(--ink-soft)">(MTD)</span>':'')+(r.audit.incomplete?' *':'')+'</td>'+cell(r.overall, r.rag)+BU_ORDER.map(function(k){ return cell(r.bu[k].score, r.bu[k].rag); }).join("")+'</tr>'; }).join("");
+    h += '<div class="panel" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:13px">Month by month</h3><div class="tbl-wrap"><table><thead><tr><th>Month</th><th class="num">Overall</th><th class="num">Pharmacy</th><th class="num">Consult</th><th class="num">Diagnostics</th></tr></thead><tbody>'+rowsH+'</tbody></table></div>'+
+      '<div class="legend" style="margin-top:8px"><span>Each line: 100 &minus; 6 &times; critical-error % &minus; 4 &times; High per 1,000 orders &minus; 2 &times; Medium per 1,000 orders &minus; 1 &times; other audit misses, using only that line&rsquo;s audits and tickets. Diagnostics has no audits, so only its tickets count. * = audit data incomplete that month.</span></div></div>';
+    return h;
+  }
+
   function keyPoints(R,P,pv){
     var out=[], A=R.audit, T=R.tickets, D=R.deductions;
     var cls = R.rag==="green"?"":(R.rag==="amber"?"warn":"crit");
@@ -264,22 +300,26 @@
   }
 
   /* weekly overall score, all weeks with data; weeks whose audit data is incomplete are drawn hollow + dashed */
-  var CHART_PTS = [];
+  var CHART_PTS = [], TREND_MODE = "month";
+  try{ TREND_MODE = localStorage.getItem("cc_trend")==="week" ? "week" : "month"; }catch(e){}
   function trendChart(){
-    var first = CC.CFG.FIRST_MONTH+"-01", wk = CC.weeks(first, DATA.through);
-    CHART_PTS = wk.map(function(w){ var r=CC.compute(DATA,w.start,w.end); return {w:w, v:r.overall, inc:r.audit.incomplete, lost:r.deductions.total}; }).filter(function(x){ return x.v!=null; });
+    var first = CC.CFG.FIRST_MONTH+"-01";
+    var buckets = TREND_MODE==="month"
+      ? CC.periods(DATA).map(function(p){ return {start:p.start, end:p.end, lbl:p.short+(p.partial?" (MTD)":""), axis:p.short.replace(/ 20\d\d$/,"")+(p.partial?"*":"")}; })
+      : CC.weeks(first, DATA.through).map(function(w){ return {start:w.start, end:w.end, lbl:U.shortDate(w.start)+" – "+U.shortDate(w.end), axis:U.shortDate(w.start)}; });
+    CHART_PTS = buckets.map(function(w){ var r=CC.compute(DATA,w.start,w.end); return {w:w, v:r.overall, inc:r.audit.incomplete, lost:r.deductions.total, bu:r.bu}; }).filter(function(x){ return x.v!=null; });
     if(!CHART_PTS.length) return '<div class="empty">Not enough data yet.</div>';
     var W=560, H=230, L=34, Rm=10, Tm=12, B=26, lo=50, hi=100, G=CC.CFG.RAG;
     function X(i){ return L + (CHART_PTS.length===1 ? (W-L-Rm)/2 : i*(W-L-Rm)/(CHART_PTS.length-1)); }
     function Y(v){ return Tm + (hi-Math.max(lo,Math.min(hi,v)))/(hi-lo)*(H-Tm-B); }
-    var s = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Weekly clinical compliance score">';
+    var s = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Clinical compliance score trend">';
     s += '<rect x="'+L+'" y="'+Y(hi)+'" width="'+(W-L-Rm)+'" height="'+(Y(G.green)-Y(hi))+'" fill="var(--band-green)" opacity=".08"/>';
     s += '<rect x="'+L+'" y="'+Y(G.green)+'" width="'+(W-L-Rm)+'" height="'+(Y(G.amber)-Y(G.green))+'" fill="var(--band-amber)" opacity=".10"/>';
     s += '<rect x="'+L+'" y="'+Y(G.amber)+'" width="'+(W-L-Rm)+'" height="'+(Y(lo)-Y(G.amber))+'" fill="var(--band-red)" opacity=".07"/>';
     s += '<g class="grid">'+[50,60,70,80,90,100].map(function(t){ return '<line x1="'+L+'" x2="'+(W-Rm)+'" y1="'+Y(t)+'" y2="'+Y(t)+'"/>'; }).join("")+'</g>';
     s += '<g class="axis">'+[50,60,70,80,90,100].map(function(t){ return '<text x="'+(L-6)+'" y="'+(Y(t)+3.5)+'" text-anchor="end">'+t+'</text>'; }).join("");
     var step = Math.max(1, Math.ceil(CHART_PTS.length/7));
-    CHART_PTS.forEach(function(p,i){ if(i%step===0 || i===CHART_PTS.length-1) s += '<text x="'+X(i)+'" y="'+(H-8)+'" text-anchor="middle">'+U.shortDate(p.w.start)+'</text>'; });
+    CHART_PTS.forEach(function(p,i){ if(i%step===0 || i===CHART_PTS.length-1) s += '<text x="'+X(i)+'" y="'+(H-8)+'" text-anchor="middle">'+esc(p.w.axis)+'</text>'; });
     s += '</g>';
     for(var i=1;i<CHART_PTS.length;i++){
       var a=CHART_PTS[i-1], b=CHART_PTS[i], dashed = a.inc||b.inc;
@@ -293,15 +333,22 @@
     s += '<text x="'+X(CHART_PTS.length-1)+'" y="'+(Y(last.v)-11)+'" text-anchor="end" style="font-family:var(--font-mono);font-size:12px;font-weight:600;fill:var(--ink)">'+f1(last.v)+'</text>';
     s += '</svg>';
     return '<div class="chart" id="trendChart">'+s+'<div class="tip" id="trendTip"></div></div>'+
-      '<div class="legend"><span><i style="background:var(--accent)"></i>Weekly score</span><span><i style="background:var(--surface);border:2px solid var(--ink-soft)"></i>Audit data incomplete that week</span><span><i style="background:var(--band-green);opacity:.4"></i>&ge;'+G.green+'</span><span><i style="background:var(--band-amber);opacity:.4"></i>'+G.amber+'&ndash;'+G.green+'</span><span><i style="background:var(--band-red);opacity:.35"></i>&lt;'+G.amber+'</span></div>';
+      '<div class="legend"><span><i style="background:var(--accent)"></i>'+(TREND_MODE==="month"?"Monthly score (* = month to date)":"Weekly score")+'</span><span><i style="background:var(--surface);border:2px solid var(--ink-soft)"></i>Audit data incomplete that '+(TREND_MODE==="month"?"month":"week")+'</span><span><i style="background:var(--band-green);opacity:.4"></i>&ge;'+G.green+'</span><span><i style="background:var(--band-amber);opacity:.4"></i>'+G.amber+'&ndash;'+G.green+'</span><span><i style="background:var(--band-red);opacity:.35"></i>&lt;'+G.amber+'</span></div>';
   }
   function wireChart(){
-    var box=document.getElementById("trendChart"); if(!box) return;
+    Array.prototype.forEach.call(document.querySelectorAll(".trend-toggle .chip"), function(btn){
+      btn.addEventListener("click", function(){ TREND_MODE = btn.dataset.tm; try{ localStorage.setItem("cc_trend", TREND_MODE); }catch(e){}
+        document.getElementById("trendBox").innerHTML = trendChart(); document.getElementById("trendModeLbl").textContent = TREND_MODE==="month"?"monthly":"weekly";
+        Array.prototype.forEach.call(document.querySelectorAll(".trend-toggle .chip"), function(b){ b.classList.toggle("on", b.dataset.tm===TREND_MODE); });
+        wireChart(); });
+    });
+    var box=document.getElementById("trendChart"); if(!box || box.dataset.wired) return; box.dataset.wired="1";
     var tip=document.getElementById("trendTip"), svg=box.querySelector("svg");
     box.addEventListener("mousemove", function(e){
       var t=e.target; if(!t.classList || !t.classList.contains("hit")){ tip.style.opacity=0; return; }
       var p=CHART_PTS[+t.dataset.i], rb=box.getBoundingClientRect(), rt=t.getBoundingClientRect();
-      tip.innerHTML = U.shortDate(p.w.start)+' &ndash; '+U.shortDate(p.w.end)+'<br>Score <b>'+f1(p.v)+'</b> &middot; '+f1(p.lost)+' pts lost'+(p.inc?'<br><i>audit data incomplete</i>':'');
+      var bu = p.bu ? '<br>Pharmacy '+f1(p.bu.pharma.score)+' &middot; Consult '+f1(p.bu.consult.score)+' &middot; Diagnostics '+f1(p.bu.diagnostics.score) : '';
+      tip.innerHTML = esc(p.w.lbl)+'<br>Score <b>'+f1(p.v)+'</b> &middot; '+f1(p.lost)+' pts lost'+bu+(p.inc?'<br><i>audit data incomplete</i>':'');
       tip.style.left=(rt.left-rb.left+rt.width/2)+"px"; tip.style.top=(e.clientY-rb.top)+"px"; tip.style.opacity=1;
     });
     box.addEventListener("mouseleave", function(){ tip.style.opacity=0; });

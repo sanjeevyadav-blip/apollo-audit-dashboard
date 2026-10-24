@@ -94,6 +94,7 @@
   function cutByDate(live, arc, key){ var m=null; live.forEach(function(r){ var d=r[key]; if(d && (!m||d<m)) m=d; }); return m ? arc.filter(function(r){ return r[key] && r[key]<m; }) : arc; }
   var PROJECTS = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   var SCORED_SET = {"PDS":1,"PDS- Mounjaro":1,"Non Pharma":1,"WLP - Non Pharma":1};
+  var BU_AUDITS = { pharma:["PDS","PDS- Mounjaro","WLP - Non Pharma"], consult:["Non Pharma"], diagnostics:[] };
 
   /* ---------- helpers ---------- */
   function pad2(n){ n=parseInt(n,10); return n<10?"0"+n:""+n; }
@@ -432,7 +433,32 @@
     var noOrders = !!(oT && s>oT);
     var overall = (have && !noOrders) ? Math.max(0, 100 - lost) : null;
     A.nonZeroAvg = nz ? nzSum/nz*100 : null; A.nzN = nz;
-    return {ticketsWaiting:waiting, ordersThrough:oT, noOrders:noOrders, start:s, end:e, audit:A, tickets:T, deductions:D, overall:overall, rag:rag(overall), partialInputs:(have<4)};
+
+    /* ---- score by business line (agreed 2026-10-24) — same weights, each line scored on its own:
+       Pharmacy    = PDS + PDS- Mounjaro (WLP) + WLP - Non Pharma (GLP) audits + Pharmacy tickets
+       Consult     = Non Pharma audits + Consult tickets
+       Diagnostics = Diagnostics tickets only (no audits) */
+    var BU = {};
+    BUS.forEach(function(bd){
+      var types = BU_AUDITS[bd.key]||[], tset={}; types.forEach(function(t){ tset[t]=1; });
+      var au={audits:0, scored:0, zero:0, nz:0, nzSum:0, sum:0};
+      if(types.length) data.audits.forEach(function(a){ if(!inR(a.date) || !tset[a.type]) return; au.audits++;
+        if(a.score!==null){ au.scored++; au.sum+=a.score; if(a.score===0) au.zero++; else { au.nz++; au.nzSum+=a.score; } } });
+      var line = T.lines.filter(function(b){ return b.key===bd.key; })[0];
+      var dd = {
+        critical: {rate: au.scored ? au.zero/au.scored*100 : null, weight:CFG.D_CRITICAL},
+        high:     {rate: line && line.orders ? line.highPer1k : null, weight:CFG.D_HIGH},
+        medium:   {rate: line && line.orders ? line.medPer1k : null, weight:CFG.D_MEDIUM},
+        others:   {rate: au.nz ? 100 - au.nzSum/au.nz*100 : null, weight:CFG.D_OTHERS}
+      };
+      var bl=0, bh=0; Object.keys(dd).forEach(function(k){ var x=dd[k]; x.pts = x.rate==null ? null : x.rate*x.weight; if(x.pts!=null){ bl+=x.pts; bh++; } });
+      dd.total = bl;
+      var ticketsOk = !!(line && line.orders) && !noOrders;
+      var sc = (bh && ticketsOk) ? Math.max(0, 100-bl) : null;
+      BU[bd.key] = {key:bd.key, label:bd.label, types:types, audit:au, avgScore: au.scored ? au.sum/au.scored*100 : null, nonZeroAvg: au.nz ? au.nzSum/au.nz*100 : null,
+                    tickets:line, ded:dd, score:sc, rag:rag(sc)};
+    });
+    return {bu:BU, ticketsWaiting:waiting, ordersThrough:oT, noOrders:noOrders, start:s, end:e, audit:A, tickets:T, deductions:D, overall:overall, rag:rag(overall), partialInputs:(have<4)};
   }
 
   /* weekly buckets (Mon-Sun) inside a window, for trend tables */
@@ -443,6 +469,6 @@
     return out;
   }
 
-  root.CC = { CFG:CFG, BUS:BUS, HIGH:HIGH, HIGH_LABELS:HIGH_LABELS, PROJECTS:PROJECTS, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, ticketEndFor:ticketEndFor, compute:compute, weeks:weeks, rag:rag,
+  root.CC = { CFG:CFG, BUS:BUS, HIGH:HIGH, HIGH_LABELS:HIGH_LABELS, PROJECTS:PROJECTS, BU_AUDITS:BU_AUDITS, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, ticketEndFor:ticketEndFor, compute:compute, weeks:weeks, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);
