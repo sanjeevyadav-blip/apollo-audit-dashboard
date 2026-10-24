@@ -26,12 +26,36 @@
 .vtxt{font-size:12.5px;line-height:1.5;margin:10px 0 0}
 tr.sub td{font-size:11.5px}
 .stack>.panel{margin-bottom:14px}
+.cmp-ctl{display:flex;flex-wrap:wrap;gap:6px 6px;align-items:center;margin-bottom:12px}
+.cmp-ctl .lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft);margin:0 2px 0 10px} .cmp-ctl .lbl:first-child{margin-left:0}
+.cmp-wrap{overflow:auto;max-height:640px;border:1px solid var(--line);border-radius:10px}
+#cmpTable{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100%}
+#cmpTable th,#cmpTable td{white-space:nowrap;padding:7px 10px;border-bottom:1px solid var(--line)}
+#cmpTable thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);vertical-align:bottom}
+#cmpTable .stick{position:sticky;left:0;z-index:1;background:var(--surface);min-width:300px;max-width:380px;white-space:normal;box-shadow:1px 0 0 var(--line)}
+#cmpTable thead th.stick{z-index:3;background:var(--surface-2)}
+#cmpTable tr.k-bu td{background:var(--surface-2);font-weight:600} #cmpTable tr.k-bu td.stick{background:var(--surface-2)}
+#cmpTable tr.k-all td{font-weight:700}
+#cmpTable .pc{font-size:10.5px;color:var(--ink-soft);font-weight:500}
+#cmpTable td.thin{color:var(--ink-soft);opacity:.6}
+#cmpTable .ind{display:inline-block;width:22px} #cmpTable .ind1{display:inline-block;width:10px}
+
+</style>
+<style id="nav8">
+/* 8-page menu: always fits inside the screen */
+.page-toggle-wrap{margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);padding:0 16px}
+.page-toggle-wrap .page-toggle{max-width:calc(100vw - 32px);flex-wrap:wrap;justify-content:center;row-gap:4px}
+.page-toggle-wrap .page-toggle a{padding:8px 13px;gap:6px}
+.page-toggle-wrap .page-toggle .pg{display:none}
+@media (max-width:1380px){ .page-toggle-wrap .page-toggle a{padding:7px 9px;font-size:12px;gap:5px} .page-toggle-wrap .page-toggle{border-radius:20px} }
+@media (max-width:1100px){ .page-toggle-wrap .page-toggle svg{display:none} }
 </style>
 </head>
 <body>
 <script>window.__AUDIT_NAV__ = "<div class=\"page-toggle-wrap\"><nav class=\"page-toggle\" aria-label=\"Switch page\"><a href=\"index.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M2 11.5a6 6 0 0 1 12 0\" stroke-linecap=\"round\"/><path d=\"M8 11.5 10.8 7\" stroke-linecap=\"round\"/><circle cx=\"8\" cy=\"11.5\" r=\"1.1\" fill=\"currentColor\"/></svg><span class=\"pg\">PAGE 1</span>Compliance Scorecard</a><a href=\"deepdive.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M2 3.5h12M2 8h8M2 12.5h5\" stroke-linecap=\"round\"/><circle cx=\"12.5\" cy=\"11.5\" r=\"2.2\"/><path d=\"M14.1 13.1 15 14\" stroke-linecap=\"round\"/></svg><span class=\"pg\">PAGE 2</span>Compliance Deep-dive</a><a href=\"dashboard.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><rect x=\"1.5\" y=\"1.5\" width=\"5.5\" height=\"7\" rx=\"1.2\"/><rect x=\"9\" y=\"1.5\" width=\"5.5\" height=\"4\" rx=\"1.2\"/><rect x=\"9\" y=\"7.5\" width=\"5.5\" height=\"7\" rx=\"1.2\"/><rect x=\"1.5\" y=\"10.5\" width=\"5.5\" height=\"4\" rx=\"1.2\"/></svg><span class=\"pg\">PAGE 3</span>Full Dashboard</a><a href=\"report.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M3.5 1.5h6l3 3v10h-9z\" stroke-linejoin=\"round\"/><path d=\"M9.5 1.5v3h3\"/><path d=\"M5.5 12.5v-2.5M8 12.5V8M10.5 12.5V9.5\" stroke-linecap=\"round\"/></svg><span class=\"pg\">PAGE 4</span>Audit Coverage Report</a><a href=\"insights.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.8\"/><path d=\"M10.6 10.6 14.5 14.5\" stroke-linecap=\"round\"/><path d=\"M4.8 8.2 6.4 6.6 7.6 7.8 9.4 5.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span class=\"pg\">PAGE 5</span>Quality Insights</a><a href=\"governance.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M8 1.5 13.5 3.5v4.2c0 3.2-2.3 5.6-5.5 6.8-3.2-1.2-5.5-3.6-5.5-6.8V3.5z\" stroke-linejoin=\"round\"/><path d=\"M5.6 8.1 7.3 9.8 10.5 6.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span class=\"pg\">PAGE 6</span>Clinical Governance</a><a href=\"drivers.html\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M2 13.5h12\" stroke-linecap=\"round\"/><path d=\"M4 11V7M8 11V4M12 11V8.5\" stroke-linecap=\"round\"/><path d=\"M10.5 2.5 12.5 4.5 14.5 2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span class=\"pg\">PAGE 7</span>Score Drivers</a><a href=\"times.html\" aria-current=\"page\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8.5\" r=\"5.8\"/><path d=\"M8 5.2v3.5l2.3 1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M6.3 1.5h3.4\" stroke-linecap=\"round\"/></svg><span class=\"pg\">PAGE 8</span>Ticket Times</a></nav></div>";</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://sanjeevyadav-blip.github.io/apollo-clinical-compliance/assets/core.js?v=8"></script>
 <script src="https://sanjeevyadav-blip.github.io/apollo-clinical-compliance/assets/ui.js?v=8"></script>
-<script src="times.js?v=20261024a"></script>
+<script src="times.js?v=20261026a"></script>
 </body>
 </html>
