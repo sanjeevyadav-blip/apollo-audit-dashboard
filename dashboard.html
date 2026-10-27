@@ -525,6 +525,17 @@
       </div>
     </div>
 
+    <div class="panel">
+      <h2>Doctor Type Wise Audit report</h2>
+      <p class="desc" id="scoreDtDesc">Score&#8209;band distribution by doctor type, selected range.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Doctor Type</th><th class="num">&lt;90%</th><th class="num">90&ndash;94%</th><th class="num">95&ndash;100%</th><th class="num">Zero(0)</th><th class="num">Grand Total</th></tr></thead>
+          <tbody id="scoreDtBody"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -1248,6 +1259,24 @@
   }
 
   /* ---------- render ---------- */
+  /* Doctor Type Wise Audit report — same score bands as the Project Wise Audit report, grouped by the
+     audited doctor's Doctor Type (CLINIC_247, PAYROLL, ATHS_PHARMA, …) across all scored audit types.
+     PDS Cancellation rows carry no doctor type or score, so they aren't in this table. */
+  function aggregateScoreBandsByDoctorType(auditRows, start, end){
+    var by = {};
+    auditRows.forEach(function(r){
+      var date=r[0], score=r[3], dt=(r[5]||"").trim()||"Not recorded";
+      if(!date || date<start || date>end) return;
+      var b = by[dt] || (by[dt] = {name:dt, zero:0, s95:0, s90:0, sub90:0, total:0});
+      b.total += 1;
+      if(score===null || score===undefined) return;
+      if(score<=0) b.zero += 1;
+      else if(score>=0.95) b.s95 += 1;
+      else if(score>=0.90) b.s90 += 1;
+      else b.sub90 += 1;
+    });
+    return Object.keys(by).map(function(k){ return by[k]; }).sort(function(a,b){ return (a.name==="Not recorded")-(b.name==="Not recorded") || b.total-a.total; });
+  }
   function computeTotals(byType){
     /* PDS Cancellation is excluded — it isn't points-scored, so it shouldn't dilute the "auto-scored"
        total, zero-score rate, or pass rate. grandTotal (used only for the score-band table's Grand
@@ -1483,8 +1512,23 @@
       return '<tr><td>'+esc(r.name)+'</td><td class="num tnum">'+fmtInt(r.sub90)+'</td><td class="num tnum">'+fmtInt(r.s90)+'</td>'+
         '<td class="num tnum">'+fmtInt(r.s95)+'</td><td class="num tnum" style="'+(r.zero>0?'color:var(--crit)':'')+'">'+fmtInt(r.zero)+'</td><td class="num tnum">'+fmtInt(r.total)+'</td></tr>';
     }).join("");
-    scoreRowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.grandTotal)+'</td></tr>';
+    var sub90Total = scoreByType.reduce(function(a,r){ return a + (r.name==="PDS Cancellation" ? 0 : (r.sub90||0)); }, 0);
+    scoreRowsHtml += '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">'+fmtInt(sub90Total)+'</td><td class="num tnum">'+fmtInt(totals.s90)+'</td><td class="num tnum">'+fmtInt(totals.s95)+'</td><td class="num tnum">'+fmtInt(totals.zero)+'</td><td class="num tnum">'+fmtInt(totals.grandTotal)+'</td></tr>';
     document.getElementById("scoreBody").innerHTML = scoreRowsHtml;
+
+    /* Doctor Type Wise Audit report */
+    if(auditLive){
+      var dtRows = aggregateScoreBandsByDoctorType(combinedAuditRows, state.filter.start, state.filter.end);
+      var dtT = dtRows.reduce(function(a,r){ a.sub90+=r.sub90; a.s90+=r.s90; a.s95+=r.s95; a.zero+=r.zero; a.total+=r.total; return a; }, {sub90:0,s90:0,s95:0,zero:0,total:0});
+      document.getElementById("scoreDtDesc").textContent = "Score-band distribution by doctor type, "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — PDS, PDS-Mounjaro, Non Pharma and WLP-Non Pharma audits (PDS Cancellation has no doctor type or score).";
+      document.getElementById("scoreDtBody").innerHTML = dtRows.length ? dtRows.map(function(r){
+        return '<tr><td>'+esc(r.name)+'</td><td class="num tnum">'+fmtInt(r.sub90)+'</td><td class="num tnum">'+fmtInt(r.s90)+'</td>'+
+          '<td class="num tnum">'+fmtInt(r.s95)+'</td><td class="num tnum" style="'+(r.zero>0?'color:var(--crit)':'')+'">'+fmtInt(r.zero)+'</td><td class="num tnum">'+fmtInt(r.total)+'</td></tr>';
+      }).join("") + '<tr style="font-weight:600"><td>Grand Total</td><td class="num tnum">'+fmtInt(dtT.sub90)+'</td><td class="num tnum">'+fmtInt(dtT.s90)+'</td><td class="num tnum">'+fmtInt(dtT.s95)+'</td><td class="num tnum">'+fmtInt(dtT.zero)+'</td><td class="num tnum">'+fmtInt(dtT.total)+'</td></tr>'
+        : '<tr><td colspan="6" class="empty-note">No audits in this range.</td></tr>';
+    } else {
+      document.getElementById("scoreDtBody").innerHTML = '<tr><td colspan="6" class="empty-note">Connecting to the live audit sheets…</td></tr>';
+    }
 
     /* Auditor leaderboard */
     var sortedAuditors = leaderboardRows.slice().sort(function(a,b){return b.count-a.count;});
