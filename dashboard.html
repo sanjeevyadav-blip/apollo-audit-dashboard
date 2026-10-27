@@ -300,7 +300,7 @@
   <div class="top-meta">
     <span class="status-chip off" id="statusChip"><span class="dot"></span><span id="statusText">Loading&hellip;</span></span>
     <span>Data through: <b id="periodLabel">&mdash;</b></span>
-    <span id="asOfLine">Snapshot: <b id="asOfLabel">&mdash;</b> <button class="refresh-btn" id="refreshBtn" type="button" style="display:none">Refresh</button></span>
+    <span id="asOfLine">Snapshot: <b id="asOfLabel">&mdash;</b> <button class="refresh-btn" id="refreshBtn" type="button" style="display:none">Refresh</button> <button class="refresh-btn" id="xlsxAllBtn" type="button" title="Every table on this page in one Excel file, one sheet per table (current range and filters)">&#8681; Download all (Excel)</button></span>
   </div>
 </div>
 
@@ -3130,6 +3130,52 @@
   /* "⇩ Excel" on every table panel: downloads the table exactly as it is drawn on screen (current
      range, filters and sort), turning "2,66,538" into a number and "89%" into a % cell so the file
      can be summed and filtered. The Doctor-wise Audit Summary keeps its own richer export. */
+  function aoaFromTable(table){
+    var aoa = [];
+    Array.prototype.forEach.call(table.querySelectorAll("tr"), function(tr){
+      if(tr.querySelector("td.empty-note")) return;
+      var row = Array.prototype.map.call(tr.querySelectorAll("th,td"), function(c){ return (c.tagName==="TH" ? c.textContent : (c.innerText||c.textContent||"")).replace(/\s+/g," ").replace(/[⇅▲▼]/g,"").trim(); });
+      if(row.length) aoa.push(row);
+    });
+    return aoa;
+  }
+  function sheetFromAoa(aoa){
+    var ws = XLSX.utils.aoa_to_sheet([]);
+    aoa.forEach(function(r, ri){ r.forEach(function(v, ci){
+      var addr = XLSX.utils.encode_cell({r:ri, c:ci}), cell;
+      if(ri>0 && (v==="—" || v==="–")) cell = {t:"s", v:""};
+      else if(ri>0 && /^-?[\d,]+(\.\d+)?%$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))/100, z:"0.0%"};
+      else if(ri>0 && /^-?[\d,]+(\.\d+)?$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))};
+      else cell = {t:"s", v:v};
+      ws[addr] = cell; }); });
+    var cols = Math.max.apply(null, aoa.map(function(r){ return r.length; }));
+    ws["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:cols-1}});
+    ws["!cols"] = aoa[0].map(function(h, ci){ var w = 8; aoa.forEach(function(r){ w = Math.max(w, String(r[ci]||"").length+2); }); return {wch: Math.min(w, 50)}; });
+    ws["!autofilter"] = {ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:cols-1}})};
+    return ws;
+  }
+  function panelTitle(panel){ var lab = panel.querySelector(".section-label, h2"); return lab ? lab.textContent.replace(/^\s*\d+\s*/,"").replace(/\u2011/g,"-").replace(/\s+/g," ").trim() : "Table"; }
+  /* every table on the page in one workbook, one sheet each, in page order */
+  function downloadAllXlsx(btn){
+    var range = state.filter && state.filter.start ? state.filter.start+" to "+state.filter.end : "";
+    if(!window.XLSX){ if(btn){ btn.textContent = "Excel library still loading…"; setTimeout(function(){ btn.innerHTML = "&#8681; Download all (Excel)"; }, 2500); } return; }
+    var wb = XLSX.utils.book_new(), used = {}, list = [];
+    Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(panel){
+      var table = panel.querySelector("table"); if(!table || table.closest(".panel")!==panel) return;
+      var aoa = aoaFromTable(table); if(aoa.length < 2) return;
+      var title = panelTitle(panel), nm = title.split(" — ")[0].replace(/[\\\/\?\*\[\]:]/g," ").replace(/\s+/g," ").trim().slice(0,31).trim() || "Table", base = nm, k = 2;
+      while(used[nm.toLowerCase()]){ nm = base.slice(0,28)+" "+(k++); }
+      used[nm.toLowerCase()] = 1;
+      XLSX.utils.book_append_sheet(wb, sheetFromAoa(aoa), nm); list.push([nm, title, aoa.length-1]);
+    });
+    if(!list.length){ if(btn){ btn.textContent = "Still loading…"; setTimeout(function(){ btn.innerHTML = "&#8681; Download all (Excel)"; }, 2000); } return; }
+    var kpis = Array.prototype.map.call(document.querySelectorAll(".kpi, .kpi-card, .stat"), function(k){ return k.innerText.replace(/\s+/g," ").trim(); }).filter(Boolean).slice(0,8);
+    var about = [["Apollo 24|7 Audit Dashboard — Full Dashboard"],["Range", range],["Downloaded", new Date().toLocaleString("en-IN")],[""],["Sheet","Table","Rows"]].concat(list);
+    var info = XLSX.utils.aoa_to_sheet(about); info["!cols"] = [{wch:30},{wch:60},{wch:8}];
+    XLSX.utils.book_append_sheet(wb, info, "Contents");
+    wb.SheetNames.unshift(wb.SheetNames.pop());   /* Contents first */
+    XLSX.writeFile(wb, "Apollo_Full_Dashboard"+(range?"_"+range.replace(/ to /,"_to_"):"")+".xlsx");
+  }
   function tableToXlsx(table, title){
     var range = state.filter && state.filter.start ? state.filter.start+" to "+state.filter.end : "";
     var aoa = [];
@@ -3161,6 +3207,7 @@
     info["!cols"] = [{wch:14},{wch:60}]; XLSX.utils.book_append_sheet(wb, info, "About");
     XLSX.writeFile(wb, name+".xlsx"); return true;
   }
+  document.getElementById("xlsxAllBtn").addEventListener("click", function(){ downloadAllXlsx(this); });
   (function addTableDownloads(){
     Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(panel){
       var table = panel.querySelector("table"); if(!table || table.id==="doctorWiseTable" || panel.querySelector(".xlsx-dl")) return;
