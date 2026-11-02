@@ -71,10 +71,13 @@
     {type:"PDS", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"PDS Audit Sheet", headers:3},
     {type:"PDS", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"PDS Audit Sheet", headers:3},
     {type:"PDS", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1KYyHeEQr1IMrZEYvZevvLTj5-Hs3n6HOknAUF6h5u20", sheet:"PDS Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1KYyHeEQr1IMrZEYvZevvLTj5-Hs3n6HOknAUF6h5u20", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"PDS- Mounjaro", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"PDS Mounjaro Audits from Jun 26", headers:0, hdrFix:{at:15, label:"Patient identification - -Age, Weight, Height, Marital Status, LMP (female patients)"}},
+    {type:"PDS- Mounjaro", file:"1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA", sheet:"WLP_Audit_PDS-Mounjaro_Import", headers:0},   /* Sep–Oct 2026 Mounjaro (the live PDS-Mounjaro tab was reset in Nov) */
     {type:"WLP - Non Pharma", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"BS WLP from Feb 2026", headers:0}
   ];
   var ARCHIVE_CANCEL = {file:"13GgExKCC_7Gstbwl-TOSSSvNzuQ7YNDFvs5KvR903fc", sheet:"PDS Cancellation Sheet"};
@@ -84,9 +87,9 @@
   function arcCachePut(key, d){ return arcIdb().then(function(db){ try{ db.transaction("kv","readwrite").objectStore("kv").put({t:Date.now(), d:d}, key); }catch(e){} }).catch(function(){}); }
   function arcSeq(list, fn){ var out=[], p=Promise.resolve(); list.forEach(function(x,i){ p=p.then(function(){ return fn(x,i); }).then(function(v){ out[i]=v; }); }); return p.then(function(){ return out; }); }
   function loadArchivesAll(){
-    return arcCacheGet("cc_v2").then(function(hit){ if(hit) return hit;
+    return arcCacheGet("cc_v3").then(function(hit){ if(hit) return hit;
       return arcSeq(ARCHIVE_SOURCES, function(s){ return loadChecklist(s).catch(function(){ return null; }); }).then(function(list){
-        if(list.every(function(x){ return x; })) arcCachePut("cc_v2", list); return list.map(function(x){ return x||[]; }); }); });
+        if(list.every(function(x){ return x; })) arcCachePut("cc_v3", list); return list.map(function(x){ return x||[]; }); }); });
   }
   /* the archived Mounjaro tab's header row is missing the "Patient identification" label, so every label from
      column P onward sits one column to the left of its data; hdrFix puts the missing label back */
