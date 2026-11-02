@@ -2390,13 +2390,13 @@
   function arcIdb(){ return new Promise(function(res,rej){ if(!window.indexedDB) return rej(new Error("no idb")); var q; try{ q=indexedDB.open("apollo_archive",1); }catch(e){ return rej(e); } q.onupgradeneeded=function(){ q.result.createObjectStore("kv"); }; q.onsuccess=function(){ res(q.result); }; q.onerror=function(){ rej(q.error); }; }); }
   function arcCacheGet(key){ return arcIdb().then(function(db){ return new Promise(function(res){ try{ var q=db.transaction("kv").objectStore("kv").get(key); q.onsuccess=function(){ var v=q.result; res(v && (Date.now()-v.t)<86400000 ? v.d : null); }; q.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }).catch(function(){ return null; }); }
   function arcCachePut(key, d){ return arcIdb().then(function(db){ try{ db.transaction("kv","readwrite").objectStore("kv").put({t:Date.now(), d:d}, key); }catch(e){} }).catch(function(){}); }
-  function arcSeq(list, fn){ var out=[], p=Promise.resolve(); list.forEach(function(x,i){ p=p.then(function(){ return fn(x,i); }).then(function(v){ out[i]=v; }); }); return p.then(function(){ return out; }); }
+  function arcSeq(list, fn, failVal){ var out=[], p=Promise.resolve(); list.forEach(function(x,i){ p=p.then(function(){ /* a past sheet that doesn't answer in 45s counts as failed, so one slow file can't hold up the page */ return Promise.race([fn(x,i), new Promise(function(res){ setTimeout(function(){ res(failVal===undefined?null:failVal); }, 45000); })]); }).then(function(v){ out[i]=v; }); }); return p.then(function(){ return out; }); }
   var ARCHIVE_PROMISE = null;
   function archiveOnce(){
     if(ARCHIVE_PROMISE) return ARCHIVE_PROMISE;
     var cancelUrl="https://docs.google.com/spreadsheets/d/"+ARCHIVE_CANCEL.file+"/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(ARCHIVE_CANCEL.sheet);
     ARCHIVE_PROMISE = arcCacheGet("dash_v3").then(function(hit){ if(hit) return hit;
-     return arcSeq(ARCHIVE_SOURCES, function(s){ return loadArchiveSource(s).catch(function(){ return {audits:[],leads:[],times:[],failed:true}; }); }).then(function(list){
+     return arcSeq(ARCHIVE_SOURCES, function(s){ return loadArchiveSource(s).catch(function(){ return {audits:[],leads:[],times:[],failed:true}; }); }, {audits:[],leads:[],times:[],failed:true}).then(function(list){
       return fetch(cancelUrl+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }).then(parseCancellationCsv).catch(function(){ return null; })
         .then(function(c){ return list.concat([c]); }); }).then(function(res){
       var cancelFailed = res[res.length-1]===null; if(cancelFailed) res[res.length-1]=[];
