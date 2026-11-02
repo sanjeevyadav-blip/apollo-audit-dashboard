@@ -71,11 +71,11 @@
     {type:"PDS", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"PDS Audit Sheet", headers:3},
     {type:"PDS", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"PDS Audit Sheet", headers:3},
     {type:"PDS", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"PDS Audit Sheet", headers:3},
-    {type:"PDS", file:"1KYyHeEQr1IMrZEYvZevvLTj5-Hs3n6HOknAUF6h5u20", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1JgnvytRhNYKEyRepjo9mQC2xn0xXT4JWK6j3Vy0SxFY", sheet:"PDS Audit Sheet", headers:3},   /* Oct 2026 PDS light copy */
     {type:"Non Pharma", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"Non Pharma Audit Sheet", headers:3},
-    {type:"Non Pharma", file:"1KYyHeEQr1IMrZEYvZevvLTj5-Hs3n6HOknAUF6h5u20", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1evS7P62DSEsrOed1Zf4T_Etf1QIRoIFchuA3YeYJtls", sheet:"Non Pharma Audit Sheet", headers:3},   /* Oct 2026 Non Pharma light copy */
     {type:"PDS- Mounjaro", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"PDS Mounjaro Audits from Jun 26", headers:0, hdrFix:{at:15, label:"Patient identification - -Age, Weight, Height, Marital Status, LMP (female patients)"}},
     {type:"PDS- Mounjaro", file:"1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA", sheet:"WLP_Audit_PDS-Mounjaro_Import", headers:0},   /* Sep–Oct 2026 Mounjaro (the live PDS-Mounjaro tab was reset in Nov) */
     {type:"WLP - Non Pharma", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"BS WLP from Feb 2026", headers:0}
@@ -87,9 +87,9 @@
   function arcCachePut(key, d){ return arcIdb().then(function(db){ try{ db.transaction("kv","readwrite").objectStore("kv").put({t:Date.now(), d:d}, key); }catch(e){} }).catch(function(){}); }
   function arcSeq(list, fn, failVal){ var out=[], p=Promise.resolve(); list.forEach(function(x,i){ p=p.then(function(){ /* a past sheet that doesn't answer in 45s counts as failed, so one slow file can't hold up the page */ return Promise.race([fn(x,i), new Promise(function(res){ setTimeout(function(){ res(failVal===undefined?null:failVal); }, 45000); })]); }).then(function(v){ out[i]=v; }); }); return p.then(function(){ return out; }); }
   function loadArchivesAll(){
-    return arcCacheGet("cc_v3").then(function(hit){ if(hit) return hit;
+    return arcCacheGet("cc_v4").then(function(hit){ if(hit) return hit;
       return arcSeq(ARCHIVE_SOURCES, function(s){ return loadChecklist(s).catch(function(){ return null; }); }).then(function(list){
-        if(list.every(function(x){ return x; })) arcCachePut("cc_v3", list); return list.map(function(x){ return x||[]; }); }); });
+        if(list.every(function(x){ return x; })) arcCachePut("cc_v4", list); return list.map(function(x){ return x||[]; }); }); });
   }
   /* the archived Mounjaro tab's header row is missing the "Patient identification" label, so every label from
      column P onward sits one column to the left of its data; hdrFix puts the missing label back */

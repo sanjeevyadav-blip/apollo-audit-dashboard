@@ -2334,11 +2334,11 @@
     {type:"PDS", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"PDS Audit Sheet", headers:3},
     {type:"PDS", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"PDS Audit Sheet", headers:3},
     {type:"PDS", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"PDS Audit Sheet", headers:3},
-    {type:"PDS", file:"1KYyHeEQr1IMrZEYvZevvLTj5-Hs3n6HOknAUF6h5u20", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1JgnvytRhNYKEyRepjo9mQC2xn0xXT4JWK6j3Vy0SxFY", sheet:"PDS Audit Sheet", headers:3},   /* Oct 2026 PDS light copy */
     {type:"Non Pharma", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"Non Pharma Audit Sheet", headers:3},
     {type:"Non Pharma", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"Non Pharma Audit Sheet", headers:3},
-    {type:"Non Pharma", file:"1KYyHeEQr1IMrZEYvZevvLTj5-Hs3n6HOknAUF6h5u20", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1evS7P62DSEsrOed1Zf4T_Etf1QIRoIFchuA3YeYJtls", sheet:"Non Pharma Audit Sheet", headers:3},   /* Oct 2026 Non Pharma light copy */
     {type:"PDS- Mounjaro", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"PDS Mounjaro Audits from Jun 26", headers:0, hdrFix:{at:15, label:"Patient identification - -Age, Weight, Height, Marital Status, LMP (female patients)"}},
     {type:"PDS- Mounjaro", file:"1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA", sheet:"WLP_Audit_PDS-Mounjaro_Import", headers:0},   /* Sep–Oct 2026 Mounjaro (the live PDS-Mounjaro tab was reset in Nov) */
     {type:"WLP - Non Pharma", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"BS WLP from Feb 2026", headers:0}
@@ -2395,7 +2395,7 @@
   function archiveOnce(){
     if(ARCHIVE_PROMISE) return ARCHIVE_PROMISE;
     var cancelUrl="https://docs.google.com/spreadsheets/d/"+ARCHIVE_CANCEL.file+"/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(ARCHIVE_CANCEL.sheet);
-    ARCHIVE_PROMISE = arcCacheGet("dash_v3").then(function(hit){ if(hit) return hit;
+    ARCHIVE_PROMISE = arcCacheGet("dash_v4").then(function(hit){ if(hit) return hit;
      return arcSeq(ARCHIVE_SOURCES, function(s){ return loadArchiveSource(s).catch(function(){ return {audits:[],leads:[],times:[],failed:true}; }); }, {audits:[],leads:[],times:[],failed:true}).then(function(list){
       return fetch(cancelUrl+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }).then(parseCancellationCsv).catch(function(){ return null; })
         .then(function(c){ return list.concat([c]); }); }).then(function(res){
@@ -2405,7 +2405,7 @@
       out.cancels.forEach(function(r){ r.arc=1; });
       /* lead rows for PDS Cancellation come from the archive cancel sheet: appointment date, or audit date − 1 */
       out.cancels.forEach(function(r){ var d=r.appt || (r.date ? addDaysIso(r.date,-1) : null); if(d) out.leads.push([d, "PDS Cancellation", 1]); });
-      if(!out.failed && !cancelFailed) arcCachePut("dash_v3", out);
+      if(!out.failed && !cancelFailed) arcCachePut("dash_v4", out);
       return out;
     }); });
     return ARCHIVE_PROMISE;
