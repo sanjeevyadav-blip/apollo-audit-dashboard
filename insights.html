@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quality Insights</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -245,6 +246,8 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
 .act-box .k{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:5px;padding:1px 7px;margin-right:6px;background:var(--accent-soft);color:var(--accent-ink,var(--accent))}
 .act-box .k.do{background:var(--warn-soft);color:var(--warn)}
 .act-box p{margin:3px 0}
+.can-dl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px}
+.ins-copy:disabled{opacity:.5;cursor:default}
 .ins-copy{font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer}
 </style>
 <style id="nav8">
@@ -388,7 +391,11 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
 
 <div class="panel">
   <div class="panel-head"><div><h2>9 &middot; Cancellation review by doctor</h2>
-    <p class="desc">PDS cancellations audited in the range (PDS Cancellation sheet). Sorted by not-genuine cancellations.</p></div></div>
+    <p class="desc">PDS cancellations audited in the range (PDS Cancellation sheet). Sorted by not-genuine cancellations.</p></div>
+    <div class="can-dl"><span class="muted">Raw data (Excel):</span>
+      <button class="ins-copy" type="button" data-candl="gen">Genuine</button>
+      <button class="ins-copy" type="button" data-candl="ng">Not genuine</button>
+      <button class="ins-copy" type="button" data-candl="both">Both (2 sheets)</button></div></div>
   <div class="tiles" id="canTiles"></div>
   <div class="tbl-wrap scroll" style="max-height:420px">
     <table><thead><tr><th>Doctor</th><th class="num">Audited</th><th class="num">Not genuine</th><th class="num">Genuine %</th><th class="num">Reason not recorded correctly</th><th class="num">Doctor didn&rsquo;t call</th><th class="num">Patient didn&rsquo;t respond</th></tr></thead>
@@ -658,7 +665,7 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
         var s0=parseTimeAMPM(g("st")), e0=parseTimeAMPM(g("en")), mins=null;
         if(s0!==null&&e0!==null){ var dd=e0-s0; if(dd<0) dd+=86400; if(dd>0&&dd<=3600) mins=dd/60; }
         out.push({t:"PDS Cancellation", a:a, p:ap, d:g("doc"), dt:g("dtype")||"—", sp:g("spec")||"—", au:canonicalAuditorName(g("auditor")), mins:a?mins:null,
-          gen:g("gen"), call:g("call"), reason:g("reason"), resp:g("resp")});
+          gen:g("gen"), call:g("call"), reason:g("reason"), resp:g("resp"), raw:r, hdr:hdr});
       }
       return out;
     });
@@ -759,6 +766,35 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
       try { localStorage.setItem("ins_cov_sort", JSON.stringify(COV_SORT)); } catch(e){}
       drawCovBody();
     });
+  });
+  /* 9 — raw cancellation rows for the selected range, split by "Genuine cancellation" = Yes / No */
+  function canSheet(rows){
+    var cols=[], seen={};
+    rows.forEach(function(r){ (r.hdr||[]).forEach(function(h){ if(h && !seen[h]){ seen[h]=1; cols.push(h); } }); });
+    var aoa=[cols];
+    rows.slice().sort(function(a,b){ return ((a.a||a.p||"")<(b.a||b.p||"")?-1:1); }).forEach(function(r){
+      var m={}; (r.hdr||[]).forEach(function(h,i){ if(h && m[h]===undefined) m[h]=r.raw[i]; });
+      aoa.push(cols.map(function(h){ var v=m[h]; return v==null?"":v; }));
+    });
+    var ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"]=cols.map(function(h){ return {wch:Math.min(40,Math.max(10,String(h).length+2))}; });
+    if(aoa.length>1) ws["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length-1,c:cols.length-1}})};
+    return ws;
+  }
+  function downloadCancelRaw(kind, btn){
+    if(typeof XLSX==="undefined"){ alertBtn(btn,"Excel library not loaded"); return; }
+    var gen=CAN_LAST.filter(function(r){ return /^yes$/i.test(r.gen); }), ng=CAN_LAST.filter(function(r){ return /^no$/i.test(r.gen); }),
+        other=CAN_LAST.filter(function(r){ return !/^(yes|no)$/i.test(r.gen); });
+    var wb=XLSX.utils.book_new(), tag={gen:"Genuine", ng:"Not genuine", both:"Genuine and not genuine"}[kind];
+    if(kind!=="ng") XLSX.utils.book_append_sheet(wb, canSheet(gen), "Genuine");
+    if(kind!=="gen") XLSX.utils.book_append_sheet(wb, canSheet(ng), "Not genuine");
+    if(kind==="both" && other.length) XLSX.utils.book_append_sheet(wb, canSheet(other), "Not marked");
+    if(!(kind==="gen"?gen.length:kind==="ng"?ng.length:CAN_LAST.length)){ alertBtn(btn,"No rows in this range"); return; }
+    XLSX.writeFile(wb, "PDS cancellations - "+tag+" ("+state.filter.start+" to "+state.filter.end+").xlsx");
+  }
+  function alertBtn(btn,msg){ var t=btn.textContent; btn.textContent=msg; btn.disabled=true; setTimeout(function(){ btn.textContent=t; btn.disabled=false; },2200); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-candl]"), function(b){
+    b.addEventListener("click", function(){ downloadCancelRaw(b.getAttribute("data-candl"), b); });
   });
   document.getElementById("paramTypeSel").innerHTML = SCORED.map(function(t){ return '<option>'+esc(t)+'</option>'; }).join("");
 
@@ -1015,7 +1051,9 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
   }
 
   /* 9 — cancellation review */
+  var CAN_LAST = [];
   function renderCancel(cancelIn){
+    CAN_LAST = cancelIn.slice();
     var tiles=document.getElementById("canTiles"), body=document.getElementById("canBody");
     if(!(state.type==="all"||state.type==="PDS Cancellation")){ tiles.innerHTML=""; body.innerHTML='<tr><td colspan="7" class="empty-note">Choose "All projects" or "PDS Cancellation" to see this view.</td></tr>'; return; }
     var n=cancelIn.length; function cnt(f,v){ return cancelIn.filter(function(r){ return r[f]===v; }).length; }
