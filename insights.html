@@ -205,6 +205,10 @@
   .grp-row td{background:var(--surface-2);font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);padding:6px 10px}
   .scroll{max-height:460px;overflow-y:auto}
   .scroll thead th{position:sticky;top:0;background:var(--surface);z-index:1}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--ink)}
+  .sort-arrow{display:inline-block;margin-left:4px;font-size:9px;opacity:.4}
+  .sort-arrow.active{opacity:1;color:var(--accent-ink)}
   .heat{font-family:var(--font-mono);text-align:right}
   .dev-pos{color:var(--div-pos);font-weight:600}
   .dev-neg{color:var(--div-neg);font-weight:600}
@@ -339,7 +343,7 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
   </div>
   <div class="tiles" id="covTiles"></div>
   <div class="tbl-wrap scroll">
-    <table><thead><tr><th>Doctor</th><th>Network</th><th class="num">Orders</th><th class="num">Audits</th><th class="num">Audit %</th><th class="num">Avg score</th><th></th></tr></thead>
+    <table id="covTable"><thead><tr><th class="sortable" data-sort="d">Doctor<span class="sort-arrow" data-arrow="d"></span></th><th class="sortable" data-sort="net">Network<span class="sort-arrow" data-arrow="net"></span></th><th class="num sortable" data-sort="o">Orders<span class="sort-arrow" data-arrow="o"></span></th><th class="num sortable" data-sort="n">Audits<span class="sort-arrow" data-arrow="n"></span></th><th class="num sortable" data-sort="pct">Audit %<span class="sort-arrow" data-arrow="pct"></span></th><th class="num sortable" data-sort="avg">Avg score<span class="sort-arrow" data-arrow="avg"></span></th><th></th></tr></thead>
     <tbody id="covBody"></tbody></table>
   </div>
 </div>
@@ -747,6 +751,15 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
   document.getElementById("filterStart").addEventListener("change", function(e){ activeChip=null; if(e.target.value) state.filter.start=e.target.value; render(); });
   document.getElementById("filterEnd").addEventListener("change", function(e){ activeChip=null; if(e.target.value) state.filter.end=e.target.value; render(); });
   ["paramTypeSel","watchMinSel","covMinSel","tatBySel"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ render(); }); });
+  Array.prototype.forEach.call(document.querySelectorAll("#covTable th.sortable"), function(th){
+    th.addEventListener("click", function(){
+      var col=th.getAttribute("data-sort");
+      if(COV_SORT.col===col) COV_SORT.dir = COV_SORT.dir==="asc" ? "desc" : "asc";
+      else { COV_SORT.col=col; COV_SORT.dir=COV_SORT_DEFAULT_DIR[col]||"asc"; }
+      try { localStorage.setItem("ins_cov_sort", JSON.stringify(COV_SORT)); } catch(e){}
+      drawCovBody();
+    });
+  });
   document.getElementById("paramTypeSel").innerHTML = SCORED.map(function(t){ return '<option>'+esc(t)+'</option>'; }).join("");
 
   /* tooltip for any element with data-tip */
@@ -908,6 +921,26 @@ table.ins a.go{font-family:var(--font-mono,monospace);font-size:11px;text-decora
     if(list.length){ var nz=list.filter(function(x){return x.n===0;}).sort(function(a,b){ return b.o-a.o; });
       addIns("4", none?"High":(under1?"Medium":"Low"), "Audit coverage", (none?'<b>'+fmtInt(none)+'</b> of '+fmtInt(list.length)+' high-volume doctors ('+min+'+ orders) were not audited at all and ':'All '+fmtInt(list.length)+' high-volume doctors ('+min+'+ orders) have audits, but ')+'<b>'+fmtInt(under1)+'</b> are under 1% audited'+(nz[0]?'; biggest gap '+esc(nz[0].d)+' ('+fmtInt(nz[0].o)+' orders, 0 audits)':'')+'.',
         (none||under1) ? 'Add these doctors to tomorrow&rsquo;s audit lead list so every high-volume doctor has at least 1% of consults audited (minimum 3 audits a month).' : 'Coverage is fine for high-volume doctors; keep the current lead allocation.', "Audit team lead"); }
+    COV_LIST = list; COV_MIN = min; drawCovBody();
+  }
+  /* sortable columns (same ▲ ▼ ⇅ arrows as the Doctor-wise table on the Full Dashboard) */
+  var COV_LIST = [], COV_MIN = 250, COV_SORT = {col:"o", dir:"desc"};
+  try { var cs = JSON.parse(localStorage.getItem("ins_cov_sort")||"null"); if(cs && cs.col) COV_SORT = cs; } catch(e){}
+  var COV_SORT_DEFAULT_DIR = { d:"asc", net:"asc", o:"desc", n:"desc", pct:"desc", avg:"desc" };
+  function drawCovBody(){
+    var body=document.getElementById("covBody"), list=COV_LIST.slice(), col=COV_SORT.col, dir=COV_SORT.dir==="asc"?1:-1;
+    list.sort(function(a,b){
+      var av=a[col], bv=b[col];
+      if(col==="d" || col==="net"){ av=(av||"").toLowerCase(); bv=(bv||"").toLowerCase(); if(av!==bv) return dir*(av<bv?-1:1); }
+      else { if(av==null && bv==null){} else if(av==null) return 1; else if(bv==null) return -1; else if(av!==bv) return dir*(av-bv); }
+      return b.o-a.o || ((a.d||"")<(b.d||"")?-1:1);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#covTable .sort-arrow"), function(el){
+      var on = el.getAttribute("data-arrow")===col;
+      el.textContent = on ? (COV_SORT.dir==="asc" ? "▲" : "▼") : "⇅";
+      el.className = on ? "sort-arrow active" : "sort-arrow";
+    });
+    var min=COV_MIN;
     body.innerHTML = list.length ? list.slice(0,60).map(function(x){
       return '<tr><td>'+esc(x.d)+'</td><td class="muted" style="font-size:11.5px">'+esc(x.net||"—")+'</td><td class="num tnum">'+fmtInt(x.o)+'</td><td class="num tnum">'+fmtInt(x.n)+'</td><td class="num tnum">'+meterCell(Math.min(x.pct,100),2,x.pct<1)+'</td><td class="num tnum">'+scoreCell(x.avg,0)+'</td><td>'+(x.n===0?'<span class="tag warn">Not audited</span>':(x.pct<1?'<span class="tag warn">&lt;1%</span>':''))+'</td></tr>';
     }).join("") : '<tr><td colspan="7" class="empty-note">No doctor has '+min+'+ orders in this range.</td></tr>';
