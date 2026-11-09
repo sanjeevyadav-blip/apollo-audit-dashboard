@@ -327,7 +327,7 @@
   <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
+      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num" title="Extract 1 consults with Status Completed only, for every audit type (WLP - Non Pharma included). PDS Cancellation has no completed consults by definition.">Completed Consult Orders</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
       <tbody id="projectTableBody"></tbody>
       <!-- Patient Tickets, CSAT Audits and Training are appended as extra rows at render time (not
            scored audit types, so they carry no Avg Audit Score) — see the "2. Project-wise Audit
@@ -1678,8 +1678,13 @@
          the selected audit window shifted one day back (audits 1–24 Sep ↔ consults 31 Aug–23 Sep). */
       var consultStart = addDaysIso(state.filter.start, -1), consultEnd = addDaysIso(state.filter.end, -1);
       var consultByType = aggregateTotalConsultByType(state.totalConsultRows, consultStart, consultEnd);
+      var completedByType = aggregateCompletedConsultByType(state.totalConsultRows, consultStart, consultEnd);
+      function completedConsultCell(type){
+        var v = completedByType[type];
+        return (totalConsultLive && v) ? fmtInt(v) : "—";
+      }
       var cwEl = document.getElementById("consultWindowNote");
-      if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> counts only <b>Completed</b> consults from Extract 1, except <b>WLP - Non Pharma</b> at <b>booked</b> level (Completed + Cancelled + Pending) and <b>PDS Cancellation</b> (PDS consults with Status <b>Cancelled</b>). Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
+      if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> counts only <b>Completed</b> consults from Extract 1, except <b>WLP - Non Pharma</b> at <b>booked</b> level (Completed + Cancelled + Pending) and <b>PDS Cancellation</b> (PDS consults with Status <b>Cancelled</b>). <b>Completed Consult Orders</b> counts only Status <b>Completed</b> for every type (so it differs from Total Consult only for WLP - Non Pharma and PDS Cancellation). Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
       function totalConsultCell(type){
         var denom = consultByType[type];
         return (totalConsultLive && denom) ? fmtInt(denom) : "—";
@@ -1710,7 +1715,7 @@
         return fmtPct(pct, 1);
       }
       var projRowsHtml = agg.byType.map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+completedConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
       }).join("");
       /* Patient Tickets and CSAT Audits aren't scored audit types, so they show "—" for Avg Audit
          Score; both fold into the Total row's count below (matching Total Assigned in the Allocation
@@ -1723,7 +1728,7 @@
         {type:"CSAT Audits", count:csatInRange},
         {type:"Training", count:trainingInRange}
       ].map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">—</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">—</td><td class="num tnum">—</td><td class="num tnum">—</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">—</td><td class="num tnum">—</td></tr>';
       }).join("");
       var projGrandTotal = ov.count + ticketsInRange + csatInRange;
       /* Total row's Total Consult / % Audited compare like-for-like: ov.count (the same audit-type
@@ -1735,9 +1740,11 @@
       var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
       var leadGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (leadByType[k]||0); }, 0);
       var totalConsultTxt = (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—";
+      var completedGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (completedByType[k]||0); }, 0);
+      var completedTotalTxt = (totalConsultLive && completedGrandTotal) ? fmtInt(completedGrandTotal) : "—";
       var totalLeadTxt = (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—";
       var totalAuditPct = (totalConsultLive && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 1) : "—";
-      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
+      projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+completedTotalTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
       document.getElementById("projectTableBody").innerHTML = projRowsHtml;
 
       /* 3. Auditor-wise Allocation Summary */
@@ -1762,7 +1769,7 @@
       document.getElementById("mtdRangeLabel").textContent = "Connecting for live audit summary data…";
       document.getElementById("mtdStats").innerHTML = "";
       document.getElementById("overallKpiRow").innerHTML = '<div class="kpi"><div class="lbl">Status</div><div class="val" style="font-size:14px">Connecting…</div></div>';
-      document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="6" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
+      document.getElementById("projectTableBody").innerHTML = '<tr><td colspan="7" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
       document.getElementById("auditorTableBody").innerHTML = '<tr><td colspan="12" class="empty-note">Connecting to the live audit summary sheet…</td></tr>';
     }
 
@@ -2823,11 +2830,23 @@
                  : type === "WLP - Non Pharma" ? true
                  : /^completed$/i.test(status);
         if(!keep) return;
-        out.push([iso, type, total]);
+        /* 4th value: the Completed-status part of this row, for the "Completed Consult Orders" column
+           (explicit request 2026-11-09) — same as Total Consult except WLP - Non Pharma, where Total
+           Consult is booked level, and PDS Cancellation, which has no completed consults. */
+        out.push([iso, type, total, (type !== "PDS Cancellation" && /^completed$/i.test(status)) ? total : 0]);
       });
       if(!out.length) throw new Error("no rows parsed");
       return out;
     });
+  }
+  function aggregateCompletedConsultByType(rows, start, end){
+    var sums = {};
+    TYPE_ORDER.forEach(function(t){ sums[t] = 0; });
+    (rows||[]).forEach(function(r){
+      if(r[0]<start || r[0]>end || sums[r[1]]===undefined) return;
+      sums[r[1]] += (r[3]||0);
+    });
+    return sums;
   }
   function aggregateTotalConsultByType(rows, start, end){
     var sums = {};
