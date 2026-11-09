@@ -327,7 +327,7 @@
   <p class="section-label" style="margin-bottom:14px"><span class="n">02</span> Project&#8209;wise Audit Summary</p>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Audit Type</th><th class="num">Total Consult</th><th class="num" title="Extract 1 consults with Status Completed only, for every audit type (WLP - Non Pharma included). PDS Cancellation has no completed consults by definition.">Completed Consult Orders</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
+      <thead><tr><th>Audit Type</th><th class="num" title="Booked level: every Extract 1 status (Completed + Cancelled + Pending)">Total Consult</th><th class="num" title="Extract 1 consults with Status Completed only — the % Audited denominator. PDS Cancellation: its cancelled-consult pool.">Completed Consult</th><th class="num">Total Lead</th><th class="num">Audits Completed</th><th class="num">Avg Audit Score</th><th class="num">% Audited</th></tr></thead>
       <tbody id="projectTableBody"></tbody>
       <!-- Patient Tickets, CSAT Audits and Training are appended as extra rows at render time (not
            scored audit types, so they carry no Avg Audit Score) — see the "2. Project-wise Audit
@@ -1684,7 +1684,7 @@
         return (totalConsultLive && v) ? fmtInt(v) : "—";
       }
       var cwEl = document.getElementById("consultWindowNote");
-      if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> counts only <b>Completed</b> consults from Extract 1, except <b>WLP - Non Pharma</b> at <b>booked</b> level (Completed + Cancelled + Pending) and <b>PDS Cancellation</b> (PDS consults with Status <b>Cancelled</b>). <b>Completed Consult Orders</b> counts only Status <b>Completed</b> for every type (so it differs from Total Consult only for WLP - Non Pharma and PDS Cancellation). Audits are done on D&minus;1 consults, so <b>Total Consult</b> and <b>Total Lead</b> use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
+      if(cwEl) cwEl.innerHTML = '<b>Total Consult</b> is booked level (Completed + Cancelled + Pending) and <b>Completed Consult</b> is Status <b>Completed</b> only, from Extract 1, for every audit type. <b>% Audited</b> = Audits Completed &divide; Completed Consult. <b>PDS Cancellation</b> uses its pool of cancelled PDS consults for both (left out of the Total Consult total, since PDS already includes them). Audits are done on D&minus;1 consults, so the consult and lead columns use appointment dates one day earlier than the audit dates selected: audits '+fmtDateLabel(state.filter.start)+' &ndash; '+fmtDateLabel(state.filter.end)+' &harr; consults '+fmtDateLabel(consultStart)+' &ndash; '+fmtDateLabel(consultEnd)+'.';
       function totalConsultCell(type){
         var denom = consultByType[type];
         return (totalConsultLive && denom) ? fmtInt(denom) : "—";
@@ -1706,11 +1706,13 @@
          number that's arithmetically correct but built on a denominator we know is short, this shows
          "—" for those cases too (with a tooltip) — same treatment as no denominator at all. */
       function auditPctCell(type, count){
-        var denom = consultByType[type];
+        var denom = completedByType[type];
         if(!totalConsultLive || !denom) return "—";
         var pct = count/denom*100;
         if(pct > 100){
-          return '<span style="color:var(--warn)" title="Completed audits ('+fmtInt(count)+') exceed this type’s consult total in Extract 1 ('+fmtInt(denom)+') for this range, so this % would read over 100% — Extract 1 is probably not a complete count of consults for this type. Showing — instead of a misleading number; worth checking with whoever owns that sheet.">— ⚠️</span>';
+          /* With Completed Consult as the denominator for every type (2026-11-09), WLP - Non Pharma can go over 100%:
+             Extract 1 marks some audited GLP consults Cancelled/Pending. Show the real figure, flagged, rather than hide it. */
+          return '<span style="color:var(--warn)" title="Audits Completed ('+fmtInt(count)+') is more than this type’s Completed Consult in Extract 1 ('+fmtInt(denom)+') for this range — some audited consults are marked Cancelled or Pending in Extract 1.">'+fmtPct(pct, 1)+' ⚠️</span>';
         }
         return fmtPct(pct, 1);
       }
@@ -1737,13 +1739,14 @@
          table. The grand total itself still includes PDS- Mounjaro / WLP - Non Pharma's consult
          volume even though those two rows show "—" individually, since the mismatch is specific to
          those two rows, not to the overall total (which stays under 100% either way). */
-      var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (consultByType[k]||0); }, 0);
+      /* Total Consult total leaves out the PDS Cancellation row: those cancelled consults are already inside PDS's booked count. */
+      var consultGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return k==="PDS Cancellation" ? sum : sum + (consultByType[k]||0); }, 0);
       var leadGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (leadByType[k]||0); }, 0);
       var totalConsultTxt = (totalConsultLive && consultGrandTotal) ? fmtInt(consultGrandTotal) : "—";
       var completedGrandTotal = TYPE_ORDER.reduce(function(sum,k){ return sum + (completedByType[k]||0); }, 0);
       var completedTotalTxt = (totalConsultLive && completedGrandTotal) ? fmtInt(completedGrandTotal) : "—";
       var totalLeadTxt = (totalLeadLive && leadGrandTotal) ? fmtInt(leadGrandTotal) : "—";
-      var totalAuditPct = (totalConsultLive && consultGrandTotal) ? fmtPct(ov.count/consultGrandTotal*100, 1) : "—";
+      var totalAuditPct = (totalConsultLive && completedGrandTotal) ? fmtPct(ov.count/completedGrandTotal*100, 1) : "—";
       projRowsHtml += '<tr style="font-weight:600"><td>Total</td><td class="num tnum">'+totalConsultTxt+'</td><td class="num tnum">'+completedTotalTxt+'</td><td class="num tnum">'+totalLeadTxt+'</td><td class="num tnum">'+fmtInt(projGrandTotal)+'</td><td class="num tnum">'+fmtPct(ov.avgScore,1)+'</td><td class="num tnum">'+totalAuditPct+'</td></tr>';
       document.getElementById("projectTableBody").innerHTML = projRowsHtml;
 
@@ -2824,16 +2827,16 @@
            "PDS" and Status "Cancelled" — the same count as the team's Total_Consults sheet (Sep: 8,457 for
            the D-1 window 31 Aug–29 Sep). Extract 1's separate, much smaller "PDS Cancellation" Consult_Type
            bucket is no longer counted. */
+        /* Definitions (explicit request 2026-11-09), same for every audit type:
+             r[2] Total Consult  = BOOKED level — every Extract 1 status (Completed + Cancelled + Pending)
+             r[3] Completed Consult = Status "Completed" only — the % Audited denominator
+           PDS Cancellation audits the cancelled PDS consults, so its pool is Consult_Type "PDS" + Status
+           "Cancelled" (the team's Total_Consults count, explicit request 2026-10-03) and that pool is both its
+           Total and its Completed Consult. Extract 1's small separate "PDS Cancellation" bucket isn't used. */
         if(rawType === "PDS Cancellation") return;
-        if(rawType === "PDS" && /^cancel/i.test(status)) type = "PDS Cancellation";
-        var keep = type === "PDS Cancellation" ? true
-                 : type === "WLP - Non Pharma" ? true
-                 : /^completed$/i.test(status);
-        if(!keep) return;
-        /* 4th value: the Completed-status part of this row, for the "Completed Consult Orders" column
-           (explicit request 2026-11-09) — same as Total Consult except WLP - Non Pharma, where Total
-           Consult is booked level, and PDS Cancellation, which has no completed consults. */
-        out.push([iso, type, total, (type !== "PDS Cancellation" && /^completed$/i.test(status)) ? total : 0]);
+        var isCompleted = /^completed$/i.test(status);
+        out.push([iso, type, total, isCompleted ? total : 0]);
+        if(rawType === "PDS" && /^cancel/i.test(status)) out.push([iso, "PDS Cancellation", total, total]);
       });
       if(!out.length) throw new Error("no rows parsed");
       return out;
