@@ -489,8 +489,9 @@
 
     <div class="panel" id="docAllocPanel">
       <h2>Doctor Allocation &mdash; Problem Doctors vs Good Doctors with Spare Capacity</h2>
-      <p class="desc">Each audited doctor placed on two axes: <b>consult volume</b> (Orders = Completed consults, D&minus;1 window) and <b>quality</b> (average audit score). Uses the same range and Auditor / Project / Doctor-type filters as the Doctor-wise table above. <b>Potential problem</b> = high consults with a low score (or any critical error); <b>Give more consults</b> = high score but low consults. Use the right-hand list to move consults away from the left-hand list.</p>
+      <p class="desc">Each audited doctor placed on two axes: <b>consult volume</b> (Orders = Completed consults, D&minus;1 window) and <b>quality</b> (average audit score). Uses the same range and Auditor / Doctor-type filters as the Doctor-wise table above; the <b>Project type</b> filter here picks the project for both the score and the orders (orders are split by project type from Extract 1). <b>Potential problem</b> = high consults with a low score (or any critical error); <b>Give more consults</b> = high score but low consults. Use the right-hand list to move consults away from the left-hand list.</p>
       <div class="da-ctl">
+        <label>Project type <select id="daProj"><option value="">All project types</option><option>PDS</option><option>PDS- Mounjaro</option><option>Non Pharma</option><option>WLP - Non Pharma</option></select></label>
         <label>Good score from <select id="daScore"><option value="80">80%</option><option value="85" selected>85%</option><option value="90">90%</option><option value="95">95%</option></select></label>
         <label>Min audits <select id="daMin"><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select></label>
         <label>High volume = <select id="daVol"><option value="type" selected>Above median orders of the same doctor type</option><option value="all">Above median orders of all doctors</option></select></label>
@@ -1083,13 +1084,17 @@
   /* Orders — per-doctor order volume from the dedicated Orders sheet (date, doctor FULLNAME, Orders),
      summed within the selected range. Matched onto Doctor-wise Audit Summary rows by normalizeDoctorKey
      since the two sheets don't spell doctor names identically. */
-  function aggregateDoctorOrders(orderRows, start, end){
+  function aggregateDoctorOrders(orderRows, start, end, types){
     var by = {};
     (orderRows||[]).forEach(function(r){
       if(!r.date || r.date<start || r.date>end || !r.doctor) return;
       var key = normalizeDoctorKey(r.doctor);
       if(!key) return;
       var b = by[key] || (by[key] = {orders: 0, total: 0});
+      if(types && types.length){   /* only these project types' consults */
+        types.forEach(function(t){ var x = r.bt && r.bt[t]; if(x){ b.orders += x.orders; b.total += x.total; } });
+        return;
+      }
       b.orders += (r.orders||0);
       b.total += (r.total||0);
     });
@@ -1694,7 +1699,8 @@
       ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(!state.doctorWiseTypeFilter.length ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter.join(" + ").replace("__none__","no project type")+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     state.doctorWiseExport = {rows: doctorWiseRows, start: state.filter.start, end: state.filter.end, filters: doctorWiseFilterParts.slice()};
-    try { renderDoctorAllocation(doctorWiseRows); } catch(e){ if(window.console) console.error(e); }
+    state.daCtx = {rows: combinedAuditRows, aud: dwAud, docTypes: dwDocTypes, live: auditLive};
+    try { renderDoctorAllocation(); } catch(e){ if(window.console) console.error(e); }
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
       return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum"'+(d.critical?' style="color:var(--bad,#d9534f);font-weight:600"':'')+'>'+fmtInt(d.critical||0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum" title="'+(d.totalConsults===null?'':fmtInt(d.orders)+' completed of '+fmtInt(d.totalConsults)+' total consults')+'">'+(d.fulfillPct===null?'—':fmtPct(d.fulfillPct,1))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
     }).join("") : '<tr><td colspan="8" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
@@ -2000,8 +2006,18 @@
      "High volume" = orders above the median of the same doctor type (default) or of all doctors. */
   var DA_LAST = null;
   function daMedian(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y;}), m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
-  function renderDoctorAllocation(rows){
+  function daRows(proj){
+    var C = state.daCtx; if(!C || !C.live || !C.rows) return [];
+    var types = proj ? [proj] : [];
+    var rows = aggregateDoctorWise(C.rows, state.filter.start, state.filter.end, C.aud, types)
+      .filter(function(d){ return !C.docTypes.length || C.docTypes.indexOf(d.doctorType||"—")!==-1; });
+    var byKey = state.orderRows ? aggregateDoctorOrders(state.orderRows, addDaysIso(state.filter.start,-1), addDaysIso(state.filter.end,-1), types) : null;
+    rows.forEach(function(d){ var o = byKey ? byKey[normalizeDoctorKey(d.doctor)] : null; d.orders = byKey ? (o ? o.orders : 0) : null; });
+    return rows;
+  }
+  function renderDoctorAllocation(){
     var tiles=document.getElementById("daTiles"); if(!tiles) return;
+    var proj=document.getElementById("daProj").value, rows=daRows(proj);
     var cut=parseFloat(document.getElementById("daScore").value), minA=parseInt(document.getElementById("daMin").value,10), byType=document.getElementById("daVol").value==="type";
     var have = (rows||[]).filter(function(d){ return d.orders!==null && d.orders!==undefined; });
     if(!have.length){ tiles.innerHTML='<p class="empty-note">Waiting for audit and Orders data…</p>'; ["daBadBody","daGoodBody"].forEach(function(id){ document.getElementById(id).innerHTML=""; }); document.getElementById("daPlot").innerHTML=""; DA_LAST=null; return; }
@@ -2055,10 +2071,10 @@
     svg+='</svg>';
     document.getElementById("daPlot").innerHTML=svg;
     var medTxt = byType ? Object.keys(medT).sort().map(function(k){ return esc(k)+' '+fmtInt(medT[k]); }).join(" · ") : fmtInt(medAll);
-    document.getElementById("daNote").innerHTML = 'Median orders used for &ldquo;high volume&rdquo;: '+medTxt+'. Doctors need at least '+minA+' audits in the range to be grouped. Hover a dot or a doctor name for details / Dr ID.';
-    DA_LAST = {list:list, G:G, cut:cut, minA:minA, byType:byType, start:state.filter.start, end:state.filter.end};
+    document.getElementById("daNote").innerHTML = (proj ? '<b>'+esc(proj)+'</b> only: audits and orders of this project type. ' : '')+'Median orders used for &ldquo;high volume&rdquo;: '+medTxt+'. Doctors need at least '+minA+' audits in the range to be grouped. Hover a dot or a doctor name for details / Dr ID.';
+    DA_LAST = {list:list, G:G, cut:cut, minA:minA, byType:byType, proj:proj, start:state.filter.start, end:state.filter.end};
   }
-  ["daScore","daMin","daVol"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("change", function(){ renderDoctorAllocation(state.doctorWiseExport ? state.doctorWiseExport.rows : []); }); });
+  ["daProj","daScore","daMin","daVol"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("change", function(){ renderDoctorAllocation(); }); });
   document.getElementById("daXlsx").addEventListener("click", function(){
     var D=DA_LAST, btn=this; if(!D || !window.XLSX){ btn.textContent="Still loading…"; setTimeout(function(){ btn.innerHTML="&#8681; Download Excel"; },2000); return; }
     var lab={bad:"Potential problem",good:"Give more consults",star:"Strong & busy",coach:"Coach",low:"Not enough audits"};
@@ -2071,9 +2087,9 @@
     XLSX.utils.book_append_sheet(wb, sheet(rows(D.G.bad)), "Potential problem");
     XLSX.utils.book_append_sheet(wb, sheet(rows(D.G.good)), "Give more consults");
     XLSX.utils.book_append_sheet(wb, sheet(rows(all)), "All doctors");
-    var info=XLSX.utils.aoa_to_sheet([["Doctor Allocation"],["Range",D.start+" to "+D.end],["Good score from",D.cut+"%"],["Min audits",D.minA],["High volume","Orders above the median of "+(D.byType?"the same doctor type":"all doctors")],["Potential problem","High volume and score below the cut-off, or any critical error"],["Give more consults","Low volume, score at/above the cut-off, no critical error"],["Orders","Completed consults, appointment dates D-1 of the audit range (Total_Consults Extract 1)"]]);
+    var info=XLSX.utils.aoa_to_sheet([["Doctor Allocation"],["Range",D.start+" to "+D.end],["Project type",D.proj||"All project types"],["Good score from",D.cut+"%"],["Min audits",D.minA],["High volume","Orders above the median of "+(D.byType?"the same doctor type":"all doctors")],["Potential problem","High volume and score below the cut-off, or any critical error"],["Give more consults","Low volume, score at/above the cut-off, no critical error"],["Orders","Completed consults, appointment dates D-1 of the audit range (Total_Consults Extract 1)"]]);
     info["!cols"]=[{wch:20},{wch:80}]; XLSX.utils.book_append_sheet(wb, info, "About");
-    XLSX.writeFile(wb, "Doctor_Allocation_"+D.start+"_to_"+D.end+".xlsx");
+    XLSX.writeFile(wb, "Doctor_Allocation_"+(D.proj?D.proj.replace(/[^A-Za-z0-9]+/g,"_")+"_":"")+D.start+"_to_"+D.end+".xlsx");
   });
   /* rows for the Doctor-wise Excel (its own button and the "Download all" workbook) — Dr ID right after the name */
   function doctorWiseAoa(X){
@@ -2883,11 +2899,14 @@
         else if(lab === "status") L.status = letter;
         else if(lab === "doctor_name") L.doctor = letter;
         else if(lab === "total_consult") L.total = letter;
+        else if(lab === "consult_type") L.ctype = letter;
       });
       if(!L.date || !L.status || !L.doctor || !L.total) throw new Error("could not resolve Extract 1 columns");
       var floor = isoDateNDaysAgo(400);
       /* every status, so Fulfillment (Completed ÷ all consults) can be computed alongside Orders (Completed) */
-      return getJson("select " + L.date + ", " + L.doctor + ", " + L.status + ", sum(" + L.total + ") where " + L.date + " >= " + consultDateLiteral(floor, isDate) + " group by " + L.date + ", " + L.doctor + ", " + L.status);
+      /* Consult_Type too (2026-11-23), so Orders can be split by project type for the Doctor Allocation view */
+      var ct = L.ctype ? ", " + L.ctype : "";
+      return getJson("select " + L.date + ", " + L.doctor + ", " + L.status + ct + ", sum(" + L.total + ") where " + L.date + " >= " + consultDateLiteral(floor, isDate) + " group by " + L.date + ", " + L.doctor + ", " + L.status + ct);
     }).then(function(d){
       var byKey = {}, out = [];
       (d.table && d.table.rows ? d.table.rows : []).forEach(function(row){
@@ -2895,12 +2914,17 @@
         var iso = consultCellIso(c[0]);
         var doctor = c[1] && c[1].v ? String(c[1].v).trim() : "";
         var status = c[2] && c[2].v ? String(c[2].v).trim() : "";
-        var n = (c[3] && typeof c[3].v === "number") ? c[3].v : 0;
+        var hasCt = c.length >= 5, rawCt = hasCt && c[3] && c[3].v ? String(c[3].v).trim() : "";
+        var nc = hasCt ? c[4] : c[3];
+        var n = (nc && typeof nc.v === "number") ? nc.v : 0;
         if(!iso || !doctor) return;
         var k = iso + "|" + doctor;
-        var rec = byKey[k] || (byKey[k] = {date: iso, doctor: doctor, orders: 0, total: 0});
+        var rec = byKey[k] || (byKey[k] = {date: iso, doctor: doctor, orders: 0, total: 0, bt: {}});
         rec.total += n;                                  /* all statuses = Total consult */
-        if(/^completed$/i.test(status)) rec.orders += n; /* Completed = Orders */
+        var comp = /^completed$/i.test(status);
+        if(comp) rec.orders += n;                        /* Completed = Orders */
+        var pt = rawCt ? CONSULT_TYPE_MAP[rawCt] : null; /* project-type split (PDS / PDS- Mounjaro / Non Pharma / WLP - Non Pharma) */
+        if(pt && pt !== "PDS Cancellation"){ var b = rec.bt[pt] || (rec.bt[pt] = {orders: 0, total: 0}); b.total += n; if(comp) b.orders += n; }
       });
       for(var k in byKey) out.push(byKey[k]);
       if(!out.length) throw new Error("no rows parsed");
