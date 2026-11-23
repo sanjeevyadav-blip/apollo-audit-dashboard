@@ -994,21 +994,26 @@
      aggregateDoctorCoverage above), across every audit type combined. Feeds the "Doctor-wise Audit
      Summary" panel. */
   function aggregateDoctorWise(auditRows, start, end, auditorFilter, typeFilter){
-    var by = {};
+    var by = {}, idByKey = {};
+    /* Dr ID: taken from the audit rows themselves ([7]); a doctor whose in-range rows carry no ID falls back
+       to any ID seen for the same (normalized) name in the other loaded rows. */
+    auditRows.forEach(function(r){ var id=(r[7]||"").trim(), k=r[4]?normalizeDoctorKey(r[4]):""; if(id && k){ (idByKey[k]=idByKey[k]||{})[id]=1; } });
     auditRows.forEach(function(r){
       var date=r[0], type=r[1], auditor=r[2], score=r[3], doctorName=r[4], doctorType=r[5];
       if(date<start || date>end || !doctorName) return;
       if(typeFilter && typeFilter.length && typeFilter.indexOf(type)===-1) return;
       if(auditorFilter && auditorFilter.length && auditorFilter.indexOf(auditor)===-1) return;
-      if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0, critical:0};
+      if(!by[doctorName]) by[doctorName] = {doctor:doctorName, doctorType:doctorType||"—", count:0, weighted:0, scoredCount:0, critical:0, ids:{}};
       var b = by[doctorName];
       b.count += 1;
+      if(r[7]) b.ids[String(r[7]).trim()] = 1;
       if(doctorType && (!b.doctorType || b.doctorType==="—")) b.doctorType = doctorType;
       if(score!==null){ b.weighted += score; b.scoredCount += 1; if(score===0) b.critical += 1; }   /* critical error = audit scored 0 */
     });
     return Object.keys(by).map(function(k){
       var b = by[k];
-      return { doctor:b.doctor, doctorType:b.doctorType, count:b.count, critical:b.critical, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
+      var ids = Object.keys(b.ids); if(!ids.length) ids = Object.keys(idByKey[normalizeDoctorKey(b.doctor)]||{});
+      return { doctor:b.doctor, drId:ids.join(", "), doctorType:b.doctorType, count:b.count, critical:b.critical, avgScore: b.scoredCount ? b.weighted/b.scoredCount*100 : null };
     }).sort(function(a,b){
       /* Descending by audits completed; ties broken alphabetically by doctor name so the ranking is
          fully deterministic instead of depending on object key insertion order. */
@@ -1924,17 +1929,21 @@
      here rather than re-bound on every render. */
   /* Doctor-wise Audit Summary → Excel: exactly the rows on screen (filters + sort), numbers kept as
      numbers so they can be summed/filtered in Excel. Falls back to CSV if the Excel library didn't load. */
+  /* rows for the Doctor-wise Excel (its own button and the "Download all" workbook) — Dr ID right after the name */
+  function doctorWiseAoa(X){
+    function r1(v){ return v===null||v===undefined||isNaN(v) ? "" : Math.round(v*10)/10; }
+    var head = ["Doctor Name","Dr ID","Doctor Type","Audits Completed","Avg Score %","Critical Errors","Orders","Fulfillment %","Audit %"];
+    return [head].concat(X.rows.map(function(d){ return [d.doctor, d.drId||"", d.doctorType, d.count, r1(d.avgScore), d.critical||0, d.orders===null||d.orders===undefined?"":d.orders, r1(d.fulfillPct), r1(d.auditPct)]; }));
+  }
   document.getElementById("doctorWiseXlsx").addEventListener("click", function(){
     var X = state.doctorWiseExport;
     if(!X || !X.rows || !X.rows.length){ alertNote("Nothing to download yet — wait for the table to load."); return; }
-    var head = ["Doctor Name","Doctor Type","Audits Completed","Avg Score %","Critical Errors","Orders","Fulfillment %","Audit %"];
-    function r1(v){ return v===null||v===undefined||isNaN(v) ? "" : Math.round(v*10)/10; }
-    var data = [head].concat(X.rows.map(function(d){ return [d.doctor, d.doctorType, d.count, r1(d.avgScore), d.critical||0, d.orders===null?"":d.orders, r1(d.fulfillPct), r1(d.auditPct)]; }));
+    var data = doctorWiseAoa(X);
     var name = "Doctor-wise_Audit_Summary_"+X.start+"_to_"+X.end;
     if(window.XLSX){
       var ws = XLSX.utils.aoa_to_sheet(data);
-      ws["!cols"] = [{wch:34},{wch:22},{wch:16},{wch:12},{wch:14},{wch:10},{wch:13},{wch:10}];
-      ws["!autofilter"] = {ref: "A1:H"+data.length};
+      ws["!cols"] = [{wch:34},{wch:38},{wch:22},{wch:16},{wch:12},{wch:14},{wch:10},{wch:13},{wch:10}];
+      ws["!autofilter"] = {ref: "A1:I"+data.length};
       var info = XLSX.utils.aoa_to_sheet([["Doctor-wise Audit Summary"],["Range", X.start+" to "+X.end],["Filters", X.filters.length ? X.filters.join(" · ").replace(/__none__/g,"none") : "None"],["Doctors", X.rows.length],["Critical error","An audit that scored 0%"],["Orders","Completed consults in the same range (D-1), Total_Consults Extract 1"],["Downloaded", new Date().toLocaleString("en-IN")]]);
       info["!cols"] = [{wch:16},{wch:70}];
       var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Doctor-wise"); XLSX.utils.book_append_sheet(wb, info, "About");
@@ -2211,7 +2220,7 @@
      export. */
   function loadAuditSummaryLive(){
     var floor = isoDateNDaysAgo(400);
-    var tq = "select N,O,Q,S,H,L where O >= date '"+floor+"' and N <> 'PDS Cancellation' and N <> 'Non Pharma Audit'";
+    var tq = "select N,O,Q,S,H,L,D where O >= date '"+floor+"' and N <> 'PDS Cancellation' and N <> 'Non Pharma Audit'";   /* D = Dr ID */
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(MERGE_SHEET_NAME) + "&tq=" + encodeURIComponent(tq);
     return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
@@ -2235,7 +2244,7 @@
         }
         var doctorName = (r[4]||"").trim();
         var doctorType = (r[5]||"").trim();
-        out.push([iso, type, auditor, score, doctorName, doctorType]);
+        out.push([iso, type, auditor, score, doctorName, doctorType, "", (r[6]||"").trim()]);   /* [6] appt id (n/a here), [7] Dr ID */
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -2280,7 +2289,8 @@
         attained: find(/attained/i),
         doctorName: find(/^doctor name$/i),
         doctorType: find(/^doctor type$/i),
-        apptId: find(/appt id/i)
+        apptId: find(/appt id/i),
+        drId: find(/^dr id$/i)
       };
       if(!map.dateOfAudit || !map.auditorName || !map.doctorName || !map.doctorType){
         throw new Error("could not resolve WLP columns for " + sheetName);
@@ -2303,13 +2313,13 @@
     return resolveWlpColumns(sheetName, gid).then(function(cols){
       var attainedCol = cols.attained || cols.dateOfAudit; /* fall back rather than break the whole fetch if score header text ever changes */
       var apptCol = cols.apptId; /* optional 7th field, used only for cross-tab dedup below */
-      var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType].concat(apptCol ? [apptCol] : []).join(",");
+      var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType, apptCol || cols.dateOfAudit].concat(cols.drId ? [cols.drId] : []).join(",");
       var tq = "select " + selectCols;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
       return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
-      }).then(function(csvText){ return {csvText: csvText, hasAppt: !!apptCol}; });
+      }).then(function(csvText){ return {csvText: csvText, hasAppt: !!apptCol, hasDrId: !!cols.drId}; });
     }).then(function(res){
       var rows = parseCSV(res.csvText);
       if(rows.length < 2) throw new Error("no rows parsed");
@@ -2328,7 +2338,8 @@
         var doctorName = (r[3]||"").trim();
         var doctorType = (r[4]||"").trim();
         var apptId = res.hasAppt ? (r[5]||"").trim() : "";
-        out.push([iso, typeLabel, auditor, score, doctorName, doctorType, apptId]);
+        var drId = res.hasDrId ? (r[6]||"").trim() : "";
+        out.push([iso, typeLabel, auditor, score, doctorName, doctorType, apptId, drId]);
       }
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -2375,7 +2386,7 @@
     return arcFetch(src.file, src.sheet, src.headers, "select * limit 1").then(function(h){
       var hdr=fixHdr((h[0]||[]).map(function(x){ return String(x).replace(/\s+/g," ").trim(); }), src);
       function f(re){ for(var i=0;i<hdr.length;i++){ if(re.test(hdr[i])) return i; } return -1; }
-      var ix={appt:f(/^date of appointment/i), aud:f(/^date of audit$/i), au:f(/^auditor name$/i), att:f(/^attained %$/i), doc:f(/^doctor name$/i), dt:f(/^doctor type$/i), id:f(/^appt id$/i), st:f(/^audit start time$/i), en:f(/^audit end time$/i)};
+      var ix={appt:f(/^date of appointment/i), aud:f(/^date of audit$/i), au:f(/^auditor name$/i), att:f(/^attained %$/i), doc:f(/^doctor name$/i), dt:f(/^doctor type$/i), id:f(/^appt id$/i), drid:f(/^dr id$/i), st:f(/^audit start time$/i), en:f(/^audit end time$/i)};
       if(ix.aud<0||ix.au<0) throw new Error("columns not found in "+src.sheet);
       var keys=Object.keys(ix).filter(function(k){ return ix[k]>=0; });
       return arcFetch(src.file, src.sheet, src.headers, "select "+keys.map(function(k){ return colIndexToLetter(ix[k]); }).join(",")).then(function(rows){
@@ -2387,7 +2398,7 @@
           var lead=p || (a ? addDaysIso(a,-1) : null); if(lead) leads.push([lead, src.type, 1]);
           if(!a || !au) continue;
           var sc=null, raw=g("att"); if(raw){ var n=parseFloat(raw.replace("%","")); if(!isNaN(n) && n>=0 && n<=200) sc=n/100; }
-          audits.push([a, src.type, au, sc, g("doc"), g("dt"), g("id")]);
+          audits.push([a, src.type, au, sc, g("doc"), g("dt"), g("id"), g("drid")]);
           var s0=parseTimeAMPM(g("st")), e0=parseTimeAMPM(g("en")), mins=null;
           if(s0!==null && e0!==null){ var dd=e0-s0; if(dd<0) dd+=86400; if(dd/60>0 && dd/60<=180) mins=dd/60; }
           times.push({date:a, genuine:"", reason:"", auditor:au, minutes:mins, startSec:s0, endSec:e0, project:src.type});
@@ -2405,7 +2416,7 @@
   function archiveOnce(){
     if(ARCHIVE_PROMISE) return ARCHIVE_PROMISE;
     var cancelUrl="https://docs.google.com/spreadsheets/d/"+ARCHIVE_CANCEL.file+"/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(ARCHIVE_CANCEL.sheet);
-    ARCHIVE_PROMISE = arcCacheGet("dash_v4").then(function(hit){ if(hit) return hit;
+    ARCHIVE_PROMISE = arcCacheGet("dash_v5").then(function(hit){ if(hit) return hit;
      return arcSeq(ARCHIVE_SOURCES, function(s){ return loadArchiveSource(s).catch(function(){ return {audits:[],leads:[],times:[],failed:true}; }); }, {audits:[],leads:[],times:[],failed:true}).then(function(list){
       return fetch(cancelUrl+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }).then(parseCancellationCsv).catch(function(){ return null; })
         .then(function(c){ return list.concat([c]); }); }).then(function(res){
@@ -2415,7 +2426,7 @@
       out.cancels.forEach(function(r){ r.arc=1; });
       /* lead rows for PDS Cancellation come from the archive cancel sheet: appointment date, or audit date − 1 */
       out.cancels.forEach(function(r){ var d=r.appt || (r.date ? addDaysIso(r.date,-1) : null); if(d) out.leads.push([d, "PDS Cancellation", 1]); });
-      if(!out.failed && !cancelFailed) arcCachePut("dash_v4", out);
+      if(!out.failed && !cancelFailed) arcCachePut("dash_v5", out);
       return out;
     }); });
     return ARCHIVE_PROMISE;
@@ -2458,6 +2469,7 @@
     var idxAuditDate = idxAuditor - 1;
     var idxDoctorName = header.indexOf("Doctor Name");
     var idxDoctorType = header.indexOf("Doctor Type");
+    var idxDrId = header.indexOf("Dr ID");
     var idxAttained = idxAuditor + 31;
     var out = [];
     for(var i=headerRowIdx+1;i<rows.length;i++){
@@ -2475,7 +2487,7 @@
         var num = parseFloat(scoreRaw.replace("%",""));
         if(!isNaN(num) && num>=0 && num<=200) score = num/100;
       }
-      out.push([iso, "Non Pharma", auditor, score, doctorName, doctorType]);
+      out.push([iso, "Non Pharma", auditor, score, doctorName, doctorType, "", idxDrId!==-1 ? (r[idxDrId]||"").trim() : ""]);
     }
     return out;
   }
@@ -3168,6 +3180,8 @@
     var ws = XLSX.utils.aoa_to_sheet([]);
     aoa.forEach(function(r, ri){ r.forEach(function(v, ci){
       var addr = XLSX.utils.encode_cell({r:ri, c:ci}), cell;
+      if(typeof v === "number"){ ws[addr] = isNaN(v) ? {t:"s", v:""} : {t:"n", v:v}; return; }
+      v = v==null ? "" : String(v);
       if(ri>0 && (v==="—" || v==="–")) cell = {t:"s", v:""};
       else if(ri>0 && /^-?[\d,]+(\.\d+)?%$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))/100, z:"0.0%"};
       else if(ri>0 && /^-?[\d,]+(\.\d+)?$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))};
@@ -3187,7 +3201,8 @@
     var wb = XLSX.utils.book_new(), used = {}, list = [];
     Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(panel){
       var table = panel.querySelector("table"); if(!table || table.closest(".panel")!==panel) return;
-      var aoa = aoaFromTable(table); if(aoa.length < 2) return;
+      var aoa = (table.id==="doctorWiseTable" && state.doctorWiseExport && state.doctorWiseExport.rows && state.doctorWiseExport.rows.length) ? doctorWiseAoa(state.doctorWiseExport) : aoaFromTable(table);
+      if(aoa.length < 2) return;
       var title = panelTitle(panel), nm = title.split(" — ")[0].replace(/[\\\/\?\*\[\]:]/g," ").replace(/\s+/g," ").trim().slice(0,31).trim() || "Table", base = nm, k = 2;
       while(used[nm.toLowerCase()]){ nm = base.slice(0,28)+" "+(k++); }
       used[nm.toLowerCase()] = 1;
@@ -3218,6 +3233,8 @@
     var ws = XLSX.utils.aoa_to_sheet([]);
     aoa.forEach(function(r, ri){ r.forEach(function(v, ci){
       var addr = XLSX.utils.encode_cell({r:ri, c:ci}), cell;
+      if(typeof v === "number"){ ws[addr] = isNaN(v) ? {t:"s", v:""} : {t:"n", v:v}; return; }
+      v = v==null ? "" : String(v);
       if(ri>0 && (v==="—" || v==="–")) cell = {t:"s", v:""};
       else if(ri>0 && /^-?[\d,]+(\.\d+)?%$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))/100, z:"0.0%"};
       else if(ri>0 && /^-?[\d,]+(\.\d+)?$/.test(v)) cell = {t:"n", v:parseFloat(v.replace(/,/g,""))};
