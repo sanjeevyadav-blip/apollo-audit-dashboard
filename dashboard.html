@@ -112,6 +112,38 @@
      table (via its own .tbl-wrap{overflow-x:auto}) force this panel — and the grid/flex track it
      sits in — wider than its share, pushing the whole page into horizontal scroll. With this set,
      an overflowing table scrolls inside its own .tbl-wrap instead of moving anything else sideways. */
+
+  /* Doctor allocation view */
+  .da-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px}
+  .da-ctl label{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .da-ctl select{font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 8px;background:var(--surface);color:var(--ink)}
+  .da-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .da-tile{border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:10px;padding:11px 13px;background:var(--surface)}
+  .da-tile .k{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .da-tile .v{font-family:var(--font-mono);font-size:24px;font-weight:600;margin:4px 0 2px}
+  .da-tile .s{font-size:11.5px;color:var(--ink-soft)}
+  .da-tile.bad{border-left-color:var(--crit)} .da-tile.bad .v{color:var(--crit)}
+  .da-tile.good{border-left-color:var(--good)} .da-tile.good .v{color:var(--good)}
+  .da-tile.star{border-left-color:var(--accent)} .da-tile.star .v{color:var(--accent-ink)}
+  .da-tile.coach{border-left-color:var(--warn)} .da-tile.coach .v{color:var(--warn)}
+  .da-plot{border:1px solid var(--line);border-radius:10px;padding:8px 8px 4px;margin-bottom:16px;background:var(--surface-2)}
+  .da-plot svg{display:block;width:100%;height:auto}
+  .da-plot text{font-family:var(--font-mono);font-size:10px;fill:var(--ink-soft)}
+  .da-plot .ql{font-family:var(--font-body);font-size:11px;font-weight:700}
+  .da-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+  .da-grid>div{min-width:0}
+  .da-grid .tbl-wrap{overflow-x:auto}
+  .da-grid td,.da-grid th{padding-left:6px;padding-right:6px}
+  .da-grid td{white-space:normal}
+  .da-grid td.num{white-space:nowrap}
+  .da-grid .dt{font-size:10.5px;color:var(--ink-soft);margin-top:1px}
+  .da-grid h3{font-size:13px;margin:0 0 4px}
+  .da-grid .hint{font-size:11.5px;color:var(--ink-soft);margin:0 0 8px}
+  .da-pill{display:inline-block;font-size:10.5px;font-weight:700;border-radius:99px;padding:1px 8px;white-space:nowrap}
+  .da-pill.bad{background:var(--crit-soft);color:var(--crit)} .da-pill.good{background:var(--good-soft);color:var(--good)}
+  .da-pill.star{background:var(--accent-soft);color:var(--accent-ink)} .da-pill.coach{background:var(--warn-soft);color:var(--warn)}
+  .da-pill.low{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line)}
+  @media (max-width:900px){ .da-tiles{grid-template-columns:repeat(2,1fr)} }
   .panel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; box-shadow:var(--shadow); min-width:0; }
   .panel h2{ font-family:var(--font-display); font-size:16px; font-weight:600; margin:0 0 3px; }
   .panel .desc{font-size:12px;color:var(--ink-soft);margin:0 0 16px}
@@ -452,6 +484,33 @@
           <tbody id="doctorWiseBody"></tbody>
         </table>
       </div>
+    </div>
+
+
+    <div class="panel" id="docAllocPanel">
+      <h2>Doctor Allocation &mdash; Problem Doctors vs Good Doctors with Spare Capacity</h2>
+      <p class="desc">Each audited doctor placed on two axes: <b>consult volume</b> (Orders = Completed consults, D&minus;1 window) and <b>quality</b> (average audit score). Uses the same range and Auditor / Project / Doctor-type filters as the Doctor-wise table above. <b>Potential problem</b> = high consults with a low score (or any critical error); <b>Give more consults</b> = high score but low consults. Use the right-hand list to move consults away from the left-hand list.</p>
+      <div class="da-ctl">
+        <label>Good score from <select id="daScore"><option value="80">80%</option><option value="85" selected>85%</option><option value="90">90%</option><option value="95">95%</option></select></label>
+        <label>Min audits <select id="daMin"><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select></label>
+        <label>High volume = <select id="daVol"><option value="type" selected>Above median orders of the same doctor type</option><option value="all">Above median orders of all doctors</option></select></label>
+        <button type="button" class="ms-btn" id="daXlsx" style="margin-left:auto;width:auto;cursor:pointer;background-image:none;padding-right:12px;font-weight:600" title="Both lists plus every doctor with its group, as one Excel file">&#8681; Download Excel</button>
+      </div>
+      <div class="da-tiles" id="daTiles"></div>
+      <div class="da-plot" id="daPlot"></div>
+      <div class="da-grid">
+        <div>
+          <h3 style="color:var(--crit)">&#9888; Potential problem doctors</h3>
+          <p class="hint">High consults, score below the cut-off, or a critical error. Ranked by consults at risk (orders &times; points below the cut-off). Action: review / coach, and route fewer new consults to them until the score recovers.</p>
+          <div class="tbl-wrap" style="max-height:380px;overflow-y:auto"><table><thead><tr><th>Doctor / type</th><th class="num">Orders</th><th class="num">Audits</th><th class="num">Score</th><th class="num">Critical</th></tr></thead><tbody id="daBadBody"></tbody></table></div>
+        </div>
+        <div>
+          <h3 style="color:var(--good)">&#10003; Good doctors with spare capacity</h3>
+          <p class="hint">Score at or above the cut-off, no critical error, but low consults. Ranked by score, then most room (orders below comparable doctors&rsquo; median). Action: share more consults with these doctors.</p>
+          <div class="tbl-wrap" style="max-height:380px;overflow-y:auto"><table><thead><tr><th>Doctor / type</th><th class="num">Orders</th><th class="num">Audits</th><th class="num">Score</th><th class="num" title="How many orders below the median of comparable doctors">Room</th></tr></thead><tbody id="daGoodBody"></tbody></table></div>
+        </div>
+      </div>
+      <p class="desc" id="daNote" style="margin:12px 0 0"></p>
     </div>
 
     <div class="panel">
@@ -1635,6 +1694,7 @@
       ? (fmtInt(doctorWiseRows.length)+" doctors audited "+fmtDateLabel(state.filter.start)+" – "+fmtDateLabel(state.filter.end)+" — "+(!state.doctorWiseTypeFilter.length ? "across PDS, PDS–Mounjaro, Non Pharma and WLP–Non Pharma combined" : state.doctorWiseTypeFilter.join(" + ").replace("__none__","no project type")+" only")+". Sorted by "+(DOCTOR_WISE_COL_LABEL[state.doctorWiseSortCol]||state.doctorWiseSortCol)+" ("+doctorWiseSortDirLabel+")."+doctorWiseFilterMsg)
       : "Connecting for live audit data…";
     state.doctorWiseExport = {rows: doctorWiseRows, start: state.filter.start, end: state.filter.end, filters: doctorWiseFilterParts.slice()};
+    try { renderDoctorAllocation(doctorWiseRows); } catch(e){ if(window.console) console.error(e); }
     document.getElementById("doctorWiseBody").innerHTML = doctorWiseRows.length ? doctorWiseRows.map(function(d){
       return '<tr><td>'+esc(d.doctor)+'</td><td>'+esc(d.doctorType)+'</td><td class="num tnum">'+fmtInt(d.count)+'</td><td class="num tnum">'+fmtPct(d.avgScore,0)+'</td><td class="num tnum"'+(d.critical?' style="color:var(--bad,#d9534f);font-weight:600"':'')+'>'+fmtInt(d.critical||0)+'</td><td class="num tnum">'+(d.orders===null?'—':fmtInt(d.orders))+'</td><td class="num tnum" title="'+(d.totalConsults===null?'':fmtInt(d.orders)+' completed of '+fmtInt(d.totalConsults)+' total consults')+'">'+(d.fulfillPct===null?'—':fmtPct(d.fulfillPct,1))+'</td><td class="num tnum">'+(d.auditPct===null?'—':fmtPct(d.auditPct,1))+'</td></tr>';
     }).join("") : '<tr><td colspan="8" class="empty-note">'+(auditLive ? "No audited doctors found for this range"+doctorWiseFilterMsg.replace(/^ Filtered to/, " for") : "Connecting to the live audit summary sheet…")+'</td></tr>';
@@ -1929,6 +1989,92 @@
      here rather than re-bound on every render. */
   /* Doctor-wise Audit Summary → Excel: exactly the rows on screen (filters + sort), numbers kept as
      numbers so they can be summed/filtered in Excel. Falls back to CSV if the Excel library didn't load. */
+
+  /* ---------- Doctor Allocation view (explicit request 2026-11-23) ----------
+     Quadrants on volume (Orders) × quality (avg audit score) for the doctors in the Doctor-wise table:
+       bad   = high volume + score below cut-off (or any critical error)   → potential problem
+       good  = low volume + score at/above cut-off, no critical            → give more consults
+       star  = high volume + good score                                    → keep
+       coach = low volume + low score (or critical)                        → coach
+       low   = fewer audits than "Min audits" (not enough evidence yet)
+     "High volume" = orders above the median of the same doctor type (default) or of all doctors. */
+  var DA_LAST = null;
+  function daMedian(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y;}), m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+  function renderDoctorAllocation(rows){
+    var tiles=document.getElementById("daTiles"); if(!tiles) return;
+    var cut=parseFloat(document.getElementById("daScore").value), minA=parseInt(document.getElementById("daMin").value,10), byType=document.getElementById("daVol").value==="type";
+    var have = (rows||[]).filter(function(d){ return d.orders!==null && d.orders!==undefined; });
+    if(!have.length){ tiles.innerHTML='<p class="empty-note">Waiting for audit and Orders data…</p>'; ["daBadBody","daGoodBody"].forEach(function(id){ document.getElementById(id).innerHTML=""; }); document.getElementById("daPlot").innerHTML=""; DA_LAST=null; return; }
+    var eligible = have.filter(function(d){ return d.count>=minA && d.avgScore!==null; });
+    var medAll = daMedian(eligible.map(function(d){ return d.orders; })), medT = {};
+    eligible.forEach(function(d){ (medT[d.doctorType]=medT[d.doctorType]||[]).push(d.orders); });
+    Object.keys(medT).forEach(function(k){ medT[k]=daMedian(medT[k]); });
+    var list = have.map(function(d){
+      var med = byType ? (medT[d.doctorType]!==undefined ? medT[d.doctorType] : medAll) : medAll;
+      var x = {doctor:d.doctor, drId:d.drId||"", doctorType:d.doctorType, orders:d.orders, count:d.count, avgScore:d.avgScore, critical:d.critical||0, med:med};
+      if(d.count<minA || d.avgScore===null){ x.g="low"; return x; }
+      var hi = d.orders > med, okQ = d.avgScore>=cut && !x.critical;
+      x.g = hi ? (okQ?"star":"bad") : (okQ?"good":"coach");
+      x.risk = Math.max(0, cut-d.avgScore) * d.orders + (x.critical? d.orders*5 : 0);
+      x.room = Math.max(0, Math.round(med - d.orders));
+      return x;
+    });
+    var G={bad:[],good:[],star:[],coach:[],low:[]}; list.forEach(function(x){ G[x.g].push(x); });
+    G.bad.sort(function(a,b){ return b.risk-a.risk || b.orders-a.orders; });
+    G.good.sort(function(a,b){ return Math.round(b.avgScore)-Math.round(a.avgScore) || b.room-a.room; });
+    var totO=list.reduce(function(s,x){return s+x.orders;},0);
+    function sumO(a){ return a.reduce(function(s,x){return s+x.orders;},0); }
+    function share(a){ return totO ? fmtPct(sumO(a)/totO*100,0) : "—"; }
+    function avgS(a){ var n=0,t=0; a.forEach(function(x){ t+=x.avgScore*x.count; n+=x.count; }); return n?fmtPct(t/n,0):"—"; }
+    tiles.innerHTML =
+      '<div class="da-tile bad"><div class="k">Potential problem</div><div class="v">'+fmtInt(G.bad.length)+'</div><div class="s">'+fmtInt(sumO(G.bad))+' orders ('+share(G.bad)+') · avg '+avgS(G.bad)+'</div></div>'+
+      '<div class="da-tile good"><div class="k">Give more consults</div><div class="v">'+fmtInt(G.good.length)+'</div><div class="s">'+fmtInt(sumO(G.good))+' orders ('+share(G.good)+') · avg '+avgS(G.good)+'</div></div>'+
+      '<div class="da-tile star"><div class="k">Strong &amp; busy</div><div class="v">'+fmtInt(G.star.length)+'</div><div class="s">'+fmtInt(sumO(G.star))+' orders ('+share(G.star)+') · avg '+avgS(G.star)+'</div></div>'+
+      '<div class="da-tile coach"><div class="k">Coach (low score, low volume)</div><div class="v">'+fmtInt(G.coach.length)+'</div><div class="s">'+fmtInt(sumO(G.coach))+' orders · '+fmtInt(G.low.length)+' doctors with &lt;'+minA+' audits not grouped</div></div>';
+    function nm(x){ return '<span title="'+esc(x.drId)+'">'+esc(x.doctor)+'</span>'; }
+    document.getElementById("daBadBody").innerHTML = G.bad.length ? G.bad.map(function(x){
+      return '<tr><td>'+nm(x)+'<div class="dt">'+esc(x.doctorType)+'</div></td><td class="num tnum">'+fmtInt(x.orders)+'</td><td class="num tnum">'+fmtInt(x.count)+'</td><td class="num tnum" style="color:var(--crit);font-weight:600">'+fmtPct(x.avgScore,0)+'</td><td class="num tnum"'+(x.critical?' style="color:var(--crit);font-weight:700"':'')+'>'+fmtInt(x.critical)+'</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="empty-note">No high-volume doctor is below '+cut+'% in this range.</td></tr>';
+    document.getElementById("daGoodBody").innerHTML = G.good.length ? G.good.map(function(x){
+      return '<tr><td>'+nm(x)+'<div class="dt">'+esc(x.doctorType)+'</div></td><td class="num tnum">'+fmtInt(x.orders)+'</td><td class="num tnum">'+fmtInt(x.count)+'</td><td class="num tnum" style="color:var(--good);font-weight:600">'+fmtPct(x.avgScore,0)+'</td><td class="num tnum" title="Orders below the median of comparable doctors ('+fmtInt(x.med)+')">+'+fmtInt(x.room)+'</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="empty-note">No low-volume doctor at '+cut+'%+ with '+minA+'+ audits in this range.</td></tr>';
+    /* scatter: x = orders (log), y = avg score */
+    var pts=list.filter(function(x){ return x.g!=="low"; });
+    var W=1000,H=330,L=46,R=12,T=14,B=34, maxO=Math.max(10, pts.reduce(function(m,x){return Math.max(m,x.orders);},0)), lo=Math.log10(1), hiL=Math.log10(maxO*1.15);
+    var minS=Math.max(0, Math.floor((pts.reduce(function(m,x){return Math.min(m,x.avgScore);},100)-5)/10)*10);
+    function X(o){ return L+(Math.log10(Math.max(1,o))-lo)/(hiL-lo)*(W-L-R); } function Y(v){ return T+(100-v)/(100-minS)*(H-T-B); }
+    var col={bad:"var(--crit)",good:"var(--good)",star:"var(--accent)",coach:"var(--warn)"};
+    var svg='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Orders vs average audit score">';
+    for(var v=minS; v<=100; v+=10){ svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(Y(v)+3)+'" text-anchor="end">'+v+'%</text>'; }
+    [1,10,100,1000,10000,100000].forEach(function(o){ if(o>maxO*1.15) return; svg+='<line y1="'+T+'" y2="'+(H-B)+'" x1="'+X(o)+'" x2="'+X(o)+'" stroke="var(--line)"/><text x="'+X(o)+'" y="'+(H-B+14)+'" text-anchor="middle">'+fmtInt(o)+'</text>'; });
+    svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(cut)+'" y2="'+Y(cut)+'" stroke="var(--ink-soft)" stroke-dasharray="5 4"/>';
+    if(!byType) svg+='<line y1="'+T+'" y2="'+(H-B)+'" x1="'+X(medAll)+'" x2="'+X(medAll)+'" stroke="var(--ink-soft)" stroke-dasharray="5 4"/>';
+    svg+='<text class="ql" x="'+(W-R-6)+'" y="'+(Y(cut)+16)+'" text-anchor="end" style="fill:var(--crit)">high volume · low score</text><text class="ql" x="'+(L+8)+'" y="'+(T+12)+'" style="fill:var(--good)">low volume · high score</text>';
+    svg+='<text x="'+((L+W-R)/2)+'" y="'+(H-4)+'" text-anchor="middle">Orders in range (log scale)'+(byType?' — groups use each doctor type&rsquo;s own median':'')+'</text>';
+    pts.forEach(function(x){ svg+='<circle cx="'+X(x.orders).toFixed(1)+'" cy="'+Y(x.avgScore).toFixed(1)+'" r="'+(x.g==="bad"||x.g==="good"?4.5:3.2)+'" fill="'+col[x.g]+'" fill-opacity="'+(x.g==="bad"||x.g==="good"?0.85:0.45)+'"><title>'+esc(x.doctor)+' ('+esc(x.doctorType)+') — '+fmtInt(x.orders)+' orders, '+fmtPct(x.avgScore,0)+' over '+x.count+' audits'+(x.critical?', '+x.critical+' critical':'')+'</title></circle>'; });
+    svg+='</svg>';
+    document.getElementById("daPlot").innerHTML=svg;
+    var medTxt = byType ? Object.keys(medT).sort().map(function(k){ return esc(k)+' '+fmtInt(medT[k]); }).join(" · ") : fmtInt(medAll);
+    document.getElementById("daNote").innerHTML = 'Median orders used for &ldquo;high volume&rdquo;: '+medTxt+'. Doctors need at least '+minA+' audits in the range to be grouped. Hover a dot or a doctor name for details / Dr ID.';
+    DA_LAST = {list:list, G:G, cut:cut, minA:minA, byType:byType, start:state.filter.start, end:state.filter.end};
+  }
+  ["daScore","daMin","daVol"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("change", function(){ renderDoctorAllocation(state.doctorWiseExport ? state.doctorWiseExport.rows : []); }); });
+  document.getElementById("daXlsx").addEventListener("click", function(){
+    var D=DA_LAST, btn=this; if(!D || !window.XLSX){ btn.textContent="Still loading…"; setTimeout(function(){ btn.innerHTML="&#8681; Download Excel"; },2000); return; }
+    var lab={bad:"Potential problem",good:"Give more consults",star:"Strong & busy",coach:"Coach",low:"Not enough audits"};
+    function r1(v){ return v===null||v===undefined||isNaN(v) ? "" : Math.round(v*10)/10; }
+    var head=["Doctor Name","Dr ID","Doctor Type","Orders","Audits","Avg Score %","Critical Errors","Median orders (comparison)","Group"];
+    function rows(a){ return [head].concat(a.map(function(x){ return [x.doctor,x.drId,x.doctorType,x.orders,x.count,r1(x.avgScore),x.critical,Math.round(x.med),lab[x.g]]; })); }
+    function sheet(aoa){ var ws=XLSX.utils.aoa_to_sheet(aoa); ws["!cols"]=[{wch:32},{wch:38},{wch:22},{wch:10},{wch:8},{wch:12},{wch:14},{wch:22},{wch:20}]; if(aoa.length>1) ws["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length-1,c:head.length-1}})}; return ws; }
+    var all=D.list.slice().sort(function(a,b){ return b.orders-a.orders; });
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet(rows(D.G.bad)), "Potential problem");
+    XLSX.utils.book_append_sheet(wb, sheet(rows(D.G.good)), "Give more consults");
+    XLSX.utils.book_append_sheet(wb, sheet(rows(all)), "All doctors");
+    var info=XLSX.utils.aoa_to_sheet([["Doctor Allocation"],["Range",D.start+" to "+D.end],["Good score from",D.cut+"%"],["Min audits",D.minA],["High volume","Orders above the median of "+(D.byType?"the same doctor type":"all doctors")],["Potential problem","High volume and score below the cut-off, or any critical error"],["Give more consults","Low volume, score at/above the cut-off, no critical error"],["Orders","Completed consults, appointment dates D-1 of the audit range (Total_Consults Extract 1)"]]);
+    info["!cols"]=[{wch:20},{wch:80}]; XLSX.utils.book_append_sheet(wb, info, "About");
+    XLSX.writeFile(wb, "Doctor_Allocation_"+D.start+"_to_"+D.end+".xlsx");
+  });
   /* rows for the Doctor-wise Excel (its own button and the "Download all" workbook) — Dr ID right after the name */
   function doctorWiseAoa(X){
     function r1(v){ return v===null||v===undefined||isNaN(v) ? "" : Math.round(v*10)/10; }
@@ -3200,6 +3346,13 @@
     if(!window.XLSX){ if(btn){ btn.textContent = "Excel library still loading…"; setTimeout(function(){ btn.innerHTML = "&#8681; Download all (Excel)"; }, 2500); } return; }
     var wb = XLSX.utils.book_new(), used = {}, list = [];
     Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(panel){
+      if(panel.id==="docAllocPanel"){   /* two lists in one panel — one sheet each */
+        [["Problem doctors","daBadBody"],["Give more consults","daGoodBody"]].forEach(function(p){
+          var t=document.getElementById(p[1]).closest("table"), a=aoaFromTable(t); if(a.length<2 || used[p[0].toLowerCase()]) return;
+          used[p[0].toLowerCase()]=1; XLSX.utils.book_append_sheet(wb, sheetFromAoa(a), p[0]); list.push([p[0], "Doctor Allocation — "+p[0], a.length-1]);
+        });
+        return;
+      }
       var table = panel.querySelector("table"); if(!table || table.closest(".panel")!==panel) return;
       var aoa = (table.id==="doctorWiseTable" && state.doctorWiseExport && state.doctorWiseExport.rows && state.doctorWiseExport.rows.length) ? doctorWiseAoa(state.doctorWiseExport) : aoaFromTable(table);
       if(aoa.length < 2) return;
