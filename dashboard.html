@@ -1764,7 +1764,16 @@
       var leadByType = aggregateTotalLeadByType(state.totalLeadRows, consultStart, consultEnd);
       function totalLeadCell(type){
         var lead = leadByType[type];
+        if(!(totalLeadLive && lead) && state.leadPending && state.leadPending[type] > 0) return '<span class="muted" title="Still loading this audit sheet">…</span>';
         return (totalLeadLive && lead) ? fmtInt(lead) : "—";
+      }
+      function auditsPending(type){
+        return (type === "PDS" && !state.auditRows && !lastError.project) || (type === "Non Pharma" && !state.nonPharmaSourceRows && !lastError.nonPharmaSource);
+      }
+      /* PDS comes from Merge Overall Sheet and Non Pharma from its own tab (both in the slow main workbook): show … until they arrive */
+      function auditsCell(type, count){
+        var pending = auditsPending(type);
+        return pending ? '<span title="Still loading this audit sheet">…</span>' : fmtInt(count);
       }
       /* Checked directly against the live source tabs (2026-09-25): the Audits Completed counts for
          PDS- Mounjaro and WLP - Non Pharma ("GLP" on screen) match their "Date of Audit" row counts
@@ -1788,7 +1797,7 @@
         return fmtPct(pct, 1);
       }
       var projRowsHtml = agg.byType.map(function(t){
-        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+completedConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+fmtInt(t.count)+'</td><td class="num tnum">'+fmtPct(t.avgScore,0)+'</td><td class="num tnum">'+auditPctCell(t.type, t.count)+'</td></tr>';
+        return '<tr><td>'+esc(t.type)+'</td><td class="num tnum">'+totalConsultCell(t.type)+'</td><td class="num tnum">'+completedConsultCell(t.type)+'</td><td class="num tnum">'+totalLeadCell(t.type)+'</td><td class="num tnum">'+auditsCell(t.type, t.count)+'</td><td class="num tnum">'+(auditsPending(t.type)?'…':fmtPct(t.avgScore,0))+'</td><td class="num tnum">'+(auditsPending(t.type)?'…':auditPctCell(t.type, t.count))+'</td></tr>';
       }).join("");
       /* Patient Tickets and CSAT Audits aren't scored audit types, so they show "—" for Avg Audit
          Score; both fold into the Total row's count below (matching Total Assigned in the Allocation
@@ -2341,6 +2350,31 @@
   }
 
   /* ---------- standalone live data: plain fetch() against public Google endpoints, no Claude involved ---------- */
+  /* Google Sheets fetch with retry (2026-11-26): the main audit workbook sometimes needs ~70 s to wake up, and a
+     request made while it recalculates can fail or come back as an error page — which blanked Total Lead and
+     showed PDS / Non Pharma audits as 0. Each attempt gets 150 s; a failed or error answer is retried twice. */
+  function sheetFetch(url, init){
+    if(!/docs\.google\.com\/spreadsheets/.test(String(url))) return fetch(url, init);
+    var tries = 0;
+    function once(){
+      tries++;
+      var ctl = window.AbortController ? new AbortController() : null, timer = ctl ? setTimeout(function(){ ctl.abort(); }, 150000) : null;
+      var u = String(url).replace(/([?&]_ts=)\d+/, "$1" + Date.now());
+      return fetch(u, Object.assign({}, init||{}, ctl ? {signal: ctl.signal} : {})).then(function(r){
+        if(!r.ok) throw new Error("http " + r.status);
+        return r.text();
+      }).then(function(t){
+        if(/^\s*<(!doctype|html)/i.test(t) || /"status"\s*:\s*"error"/.test(t.slice(0, 600))) throw new Error("sheet returned an error page");
+        if(timer) clearTimeout(timer);
+        return new Response(t, {status: 200});
+      }).catch(function(e){
+        if(timer) clearTimeout(timer);
+        if(tries >= 3) throw e;
+        return new Promise(function(res){ setTimeout(res, 8000); }).then(once);
+      });
+    }
+    return once();
+  }
   /* gid=0 on this file is a raw "Date of appointment" cancellation-request log with no audit tracking
      columns at all (no Date of Audit / Auditor Name / Genuine Cancellation) — it stopped being the
      right tab to read. "PDS Cancellation Sheet" (gid=909502922) is the tab actually maintained for
@@ -2384,7 +2418,7 @@
     var floor = isoDateNDaysAgo(400);
     var tq = "select N,O,Q,S,H,L,D where O >= date '"+floor+"' and N <> 'PDS Cancellation' and N <> 'Non Pharma Audit'";   /* D = Dr ID */
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_AUDIT + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(MERGE_SHEET_NAME) + "&tq=" + encodeURIComponent(tq);
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(csvText){
@@ -2437,7 +2471,7 @@
   function resolveWlpColumns(sheetName, gid){
     var base = gid ? ("gid=" + gid) : ("sheet=" + encodeURIComponent(sheetName));
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent("select * limit 1");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(t){
@@ -2478,7 +2512,7 @@
       var selectCols = [cols.dateOfAudit, cols.auditorName, attainedCol, cols.doctorName, cols.doctorType, apptCol || cols.dateOfAudit].concat(cols.drId ? [cols.drId] : []).join(",");
       var tq = "select " + selectCols;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_WLP_SOURCE + "/gviz/tq?tqx=out:csv&" + base + "&tq=" + encodeURIComponent(tq);
-      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
       }).then(function(csvText){ return {csvText: csvText, hasAppt: !!apptCol, hasDrId: !!cols.drId}; });
@@ -2654,7 +2688,7 @@
     return out;
   }
   function loadNonPharmaAuditLive(){
-    return fetch(NON_PHARMA_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(NON_PHARMA_CSV_URL + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(csvText){
@@ -2707,7 +2741,7 @@
   function cxDate(s){ s = String(s||"").trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; return parseFlexMDY(s); }
   function loadCancellationLive(){
     var newUrl = "https://docs.google.com/spreadsheets/d/" + FILE_CANCEL + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(CANCEL_NEW_TAB);
-    function getRows(url){ return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }).then(parseCancellationCsv); }
+    function getRows(url){ return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }).then(parseCancellationCsv); }
     return Promise.all([getRows(CANCEL_CSV_URL), getRows(newUrl).catch(function(){ return []; })]).then(function(res){
       var oldRows = res[0].filter(function(r){ var b = cancelBasisDate(r.appt, r.date); return !b || b < CANCEL_SWITCH_DATE; });
       var newRows = res[1].filter(function(r){ var b = cancelBasisDate(r.appt, r.date); return b && b >= CANCEL_SWITCH_DATE; });
@@ -2753,7 +2787,7 @@
       {url: NON_PHARMA_CSV_URL, project: "Non Pharma", cols: "N,O,P,Q"}
     ];
     function get(url, tries){
-      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
       }).catch(function(e){
@@ -2794,7 +2828,7 @@
      logged duration). A row naming two co-trainers credits both in full. */
   function loadTrainingLive(){
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_TRAINING + "/gviz/tq?tqx=out:csv&gid=" + TRAINING_GID + "&tq=" + encodeURIComponent("select C,D,I");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(csvText){
@@ -2821,7 +2855,7 @@
      working-time panels. Rows with no auditor assigned yet (blank Q — not yet worked) are skipped. */
   function loadTicketsLive(){
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_TICKETS + "/gviz/tq?tqx=out:csv&gid=" + TICKETS_GID + "&tq=" + encodeURIComponent("select I,Q,R,S");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(csvText){
@@ -2852,7 +2886,7 @@
      time rather than dropping the row (still counted in Allocation Summary, just not in time). */
   function loadCsatLive(){
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_CSAT + "/gviz/tq?tqx=out:csv&gid=" + CSAT_GID + "&tq=" + encodeURIComponent("select N,O,P,R");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(csvText){
@@ -2886,7 +2920,7 @@
   function loadOrdersLive(){
     var base = "https://docs.google.com/spreadsheets/d/" + FILE_ORDERS + "/gviz/tq?gid=" + ORDERS_GID + "&tqx=out:json&tq=";
     function getJson(tq){
-      return fetch(base + encodeURIComponent(tq) + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      return sheetFetch(base + encodeURIComponent(tq) + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
       }).then(function(t){ return JSON.parse(t.replace(/^[^\(]*\(/, "").replace(/\);\s*$/, "")); });
@@ -2960,7 +2994,7 @@
   }
   function resolveConsultColumns(){
     var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent("select * limit 1");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(t){
@@ -2986,7 +3020,7 @@
          pool), so for that type the Cancelled rows are what count; otherwise its Total Consult would be 0. */
       var tq = "select " + cols.date + ", " + cols.consultType + ", " + cols.status + ", sum(" + cols.totalConsult + ") where " + cols.date + " >= " + consultDateLiteral(floor, cols.dateIsDate) + " group by " + cols.date + ", " + cols.consultType + ", " + cols.status + " order by " + cols.date;
       var url = "https://docs.google.com/spreadsheets/d/" + FILE_TOTAL_CONSULT + "/gviz/tq?gid=" + TOTAL_CONSULT_GID + "&tqx=out:json&tq=" + encodeURIComponent(tq);
-      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
       });
@@ -3091,7 +3125,7 @@
   function resolveLeadDateColumns(src){
     var base = src.gid ? ("gid=" + src.gid) : ("sheet=" + encodeURIComponent(src.sheet));
     var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent("select * limit 1");
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(t){
@@ -3110,7 +3144,7 @@
     return resolveLeadDateColumns(src).then(function(cols){
       var tq = "select " + cols.appt + ", " + cols.audit + " where " + cols.appt + " >= date '" + floor + "' or " + cols.audit + " >= date '" + floor + "'";
       var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:json&" + base + "&tq=" + encodeURIComponent(tq);
-      return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+      return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
         if(!r.ok) throw new Error("http "+r.status);
         return r.text();
       });
@@ -3134,7 +3168,7 @@
   function loadChecklistLeadSource(src){
     var floor = isoDateNDaysAgo(400);
     var url = "https://docs.google.com/spreadsheets/d/" + src.file + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(src.sheet);
-    return fetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
+    return sheetFetch(url + "&_ts=" + Date.now(), {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(csvText){
@@ -3163,8 +3197,18 @@
   function loadTotalLeadOneSource(src){
     return src.kind === "checklist" ? loadChecklistLeadSource(src) : loadLabeledLeadSource(src);
   }
-  function loadTotalLeadLive(){
-    return Promise.all(TOTAL_LEAD_SOURCES.map(loadTotalLeadOneSource)).then(function(results){
+  /* each lead source reports as soon as it arrives, so one slow sheet doesn't hold back the others */
+  state.leadPending = {};
+  function loadTotalLeadLive(onPartial){
+    var got = [];
+    TOTAL_LEAD_SOURCES.forEach(function(src){ state.leadPending[src.type] = (state.leadPending[src.type]||0) + 1; });
+    return Promise.all(TOTAL_LEAD_SOURCES.map(function(src){
+      return loadTotalLeadOneSource(src).then(function(rows){
+        state.leadPending[src.type]--; got = got.concat(rows);
+        if(onPartial && got.length) onPartial(got.slice());
+        return rows;
+      });
+    })).then(function(results){
       var out = results.reduce(function(a,r){ return a.concat(r); }, []);
       if(!out.length) throw new Error("no rows parsed");
       return out;
@@ -3318,7 +3362,7 @@
       render();
     });
 
-    loadTotalLeadLive().then(function(rows){
+    loadTotalLeadLive(function(partial){ if(!liveOK.totalLead){ state.totalLeadRows = partial; render(); } }).then(function(rows){
       /* show the live leads straight away; past-data leads are merged in when the archive arrives */
       state.totalLeadRows = rows; render();
       return archiveOnce().then(function(arc){ return rows.concat(cutArchiveRows(rows, arc.leads, function(r){ return r[0]; }, function(r){ return r[1]; })); }, function(){ return rows; });
